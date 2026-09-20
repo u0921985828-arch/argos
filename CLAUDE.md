@@ -168,10 +168,15 @@ etiquetó de `coche` un andamio, una barandilla y una cara. Lo que salga de ahí
 va marcado con `klassSrc = "forma"` y la interfaz dice «movimiento», no una
 clase. Contadores, estatura y eventos de persona solo miran `klassSrc = "det"`.
 
-**Sin COOP/COEP, WASM va en un hilo.** `crossOriginIsolated` tiene que ser
-cierto o `ort.env.wasm.numThreads` no sirve de nada. El APK las emite desde el
-`WebViewAssetLoader`, con `credentialless` y no `require-corp`: con
-`require-corp` se caen las cámaras públicas de terceros.
+**En Android WebView no hay aislamiento entre orígenes, se manden o no las
+cabeceras.** `crossOriginIsolated` tiene que ser cierto o
+`ort.env.wasm.numThreads` no sirve de nada. El APK emite COOP y COEP desde el
+`WebViewAssetLoader` —con `credentialless` y no `require-corp`, que tiraría las
+cámaras públicas de terceros— y **llegan**: medido en el emulador, la propia
+página las lee con `fetch(location.href)`. Aun así `crossOriginIsolated` es
+falso y `SharedArrayBuffer` no existe, así que la inferencia va en un hilo.
+No es un fallo de la aplicación y no se arregla desde el contenedor. En un
+navegador de escritorio la misma página sí usa varios hilos.
 
 **Los dos caminos del detector no suprimían igual.** `detect` usaba soft-NMS
 con `softCut`, que es además el suelo de puntuación final; `detectIncremental`
@@ -237,4 +242,7 @@ entre cámaras, 62 fps con el detector en hilo propio.
 **Resultados negativos documentados** — no reintentar sin leer por qué falló:
 zoom por bandas de profundidad (27 vs 42 objetos), atención foveal como
 sustituto del barrido (40-50 % del recall), persistencia de cajas del detector
-entre barridos (residuos).
+entre barridos (residuos), fundir la escala del cuadro entero con la de teselas
+(el trozo puntúa más que el objeto y sobrevive a la supresión), reconstruir la
+respuesta del `WebViewAssetLoader` con línea de estado para conseguir el
+aislamiento (idéntico: las cabeceras ya llegaban).
