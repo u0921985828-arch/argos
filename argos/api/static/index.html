@@ -392,8 +392,9 @@ button:disabled{opacity:.34;cursor:default}
     <input id="modelFile" type="file" accept=".onnx">
     <label for="detZoom">Zoom de análisis</label>
     <select id="detZoom">
-      <option value="1" selected>×1 — el objeto ocupa 40 px o más</option>
-      <option value="2">×2 — el objeto ocupa entre 10 y 30 px</option>
+      <option value="completo" selected>Encuadre completo — el objeto se ve entero</option>
+      <option value="1">×1 — teselas, el objeto ocupa 40 px o más</option>
+      <option value="2">×2 — teselas, el objeto ocupa entre 10 y 30 px</option>
       <option value="3">×3 — límite útil</option>
       <option value="4">×4 — por encima del límite</option>
       <option value="6">×6 — por encima del límite</option>
@@ -402,10 +403,16 @@ button:disabled{opacity:.34;cursor:default}
       <option value="piramide">Pirámide — rejilla gruesa + fina adaptativa</option>
       <option value="escaner">Escáner — barrido visible de arriba abajo</option>
     </select>
-    <p class="note">Se elige por el tamaño del objeto, que es el número que sale arriba
-      como <b>alto mediano</b>. Con 40 px o más, ×1 gana: medido en una plaza real, ×1
-      dio 65 personas y ×2 solo 44 — y cuesta cuatro veces menos. El zoom ayuda cuando
-      el objeto es pequeño, no siempre.</p>
+    <p class="note"><b>Encuadre completo</b> mira el cuadro entero de una vez: una sola
+      inferencia por pasada. Es lo correcto cuando el objeto se ve entero — una cámara
+      de móvil, un interior, un coche cerca. Medido sobre fotos reales, con teselas
+      salían 2 objetos y sin el autobús en 2.571 ms; con el cuadro entero, 5 objetos
+      en 251 ms.</p>
+    <p class="note">Las <b>teselas</b> son para lo contrario: una cámara fija sobre una
+      escena amplia donde la gente ocupa pocos píxeles. Ahí recortar da píxeles al
+      modelo. Pero un objeto MAYOR que la tesela no se detecta en ninguna, y los trozos
+      que sobreviven salen como objetos falsos. Mira el <b>alto mediano</b> del panel:
+      si pasa de unos 200 px, estás en encuadre completo.</p>
     <p class="note" id="noteZoom" data-tone="warn" hidden></p>
 
     <label for="detAllow">Qué se admite</label>
@@ -1293,13 +1300,14 @@ async function loadDetector(source) {
         const bytes = typeof source === "string"
           ? new Uint8Array(await (await fetch(source)).arrayBuffer())
           : source;
-        const w = new DetectorWorker({mode: state.pyramid ? "piramide" : "multiscale",
+        const w = new DetectorWorker({mode: modoDetector(),
                                       ortUrl: state.ortUrl || ORT_CDN,
                                       wasmPaths: state.ortWasmPaths || ""});
         const info = await w.start(bytes, src,
           state.detFilter || {scoreThresh: 0.15,
                               classThresh: {person: 0.08, bicycle: 0.10}},
-          state.multiScale || state.pyramid ? 2 : Number($("detZoom").value) || 1);
+          state.fitFrame || state.multiScale || state.pyramid
+            ? "completo" : Number($("detZoom").value) || 1);
         w.onResult = (dets, m) => {
           noteDetStats(dets, m?.ms, m?.stats);
           state.brain?.mergeDetections({dets, tiles: [[0, 0, 1e6, 1e6]]});
@@ -1379,12 +1387,18 @@ function applyZoom() {
       + "BAJAR, porque ampliar no añade detalle y la tesela pierde el contexto que "
       + "el modelo necesita. Si no encuentras personas a ×2, el problema es la "
       + "resolución de la cámara, no el zoom.";
+  } else if (state.fitFrame) {
+    note.hidden = false;
+    delete note.dataset.tone;
+    note.textContent = "Una inferencia por pasada sobre el cuadro entero. Si lo que "
+      + "buscas son puntos pequeños en una escena amplia, pasa a teselas.";
   } else {
     note.hidden = true;
   }
   // Multiescala no fija un zoom: recorre varios y fusiona. Un solo zoom obliga
   // a elegir entre ver los vehículos o ver a la gente, porque sus tamaños
   // difieren en un orden de magnitud.
+  state.fitFrame = v === "completo";
   state.multiScale = v === "multi";
   state.pyramid = v === "piramide";
   state.scanner = v === "escaner";
@@ -1394,9 +1408,10 @@ function applyZoom() {
   // era ×2, que además cuesta cuatro veces más teselas por pasada. Quien mire
   // una escena de objetos pequeños lo sube, y ahora el panel le dice cuántos
   // píxeles tiene el objeto para decidirlo con un número.
-  const zAplicado = state.multiScale || state.pyramid ? 2 : Number(v) || 1;
+  const zAplicado = state.fitFrame ? "completo"
+    : state.multiScale || state.pyramid ? 2 : Number(v) || 1;
   if (state.detector) state.detector.setZoom(zAplicado);
-  state.detWorker?.tune(null, zAplicado);
+  state.detWorker?.tune(null, zAplicado, modoDetector());
 }
 
 /** Lee los controles de plausibilidad y los aplica donde esté el detector. */
@@ -1428,6 +1443,14 @@ for (const id of ["detAllow", "detMinScore", "detMinPx"]) {
   $(id).addEventListener("input", applyFilter);
 }
 applyFilter();   // deja los rótulos de los controles cuadrados con sus valores
+applyZoom();     // y `state.fitFrame` puesto antes de que nadie cargue el modelo
+
+/** Qué método del detector toca, según el selector. */
+function modoDetector() {
+  if (state.pyramid) return "piramide";
+  if (state.multiScale) return "multiscale";
+  return "completo";
+}
 
 $("detZoom").addEventListener("change", () => {
   applyZoom();
@@ -1436,7 +1459,9 @@ $("detZoom").addEventListener("change", () => {
     ? "Pirámide: barrido grueso que localiza, fino solo donde hace falta."
     : state.multiScale
       ? "Multiescala: más personas y vehículos, barrido más lento."
-      : `Zoom ×${$("detZoom").value}.`);
+      : state.fitFrame
+        ? "Encuadre completo: una pasada sobre todo el cuadro."
+        : `Teselas a ×${$("detZoom").value}.`);
 });
 
 /**

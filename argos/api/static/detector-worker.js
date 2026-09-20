@@ -110,11 +110,16 @@ self.onmessage = async (e) => {
       const src = {width: msg.bitmap.width, height: msg.bitmap.height,
                    bitmap: msg.bitmap};
       // El detector dibuja desde 'source'; un ImageBitmap sirve directamente.
+      // "completo" es el modo por defecto: una pasada sobre el cuadro entero.
+      // Los demás recortan teselas, que es lo que hace falta con objetos
+      // pequeños en una escena amplia --- y lo que pierde los objetos grandes.
       const dets = msg.mode === "piramide"
         ? await detector.detectPyramid(msg.bitmap, ort, msg.opts || {})
         : msg.mode === "foveal"
           ? await detector.detectFoveal(msg.bitmap, ort, msg.opts || {})
-          : await detector.detectMultiScale(msg.bitmap, ort, msg.opts || {});
+          : msg.mode === "multiscale"
+            ? await detector.detectMultiScale(msg.bitmap, ort, msg.opts || {})
+            : await detector.detect(msg.bitmap, ort, msg.opts || {});
       msg.bitmap.close?.();
       busy = false;
       self.postMessage({type: "result", id: msg.id, dets,
@@ -142,7 +147,7 @@ const WORKER_DEFAULTS = {
   // sustracción de fondo.
   ortUrl: "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.min.js",
   wasmPaths: "",
-  mode: "multiscale",
+  mode: "completo",
   webgpu: true,
   maxPending: 1,
 };
@@ -266,8 +271,9 @@ class DetectorWorker {
     }
   }
 
-  /** Ajusta umbrales y zoom sin recargar el modelo. */
-  tune(cfg, zoom) {
+  /** Ajusta umbrales, escala y método sin recargar el modelo. */
+  tune(cfg, zoom, mode) {
+    if (mode) this.cfg.mode = mode;
     if (!this.worker) return false;
     this.worker.postMessage({type: "tune", cfg, zoom});
     return true;

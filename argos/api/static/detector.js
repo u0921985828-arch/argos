@@ -276,7 +276,46 @@ class YoloxDetector {
     return this.cfg;
   }
 
+  /**
+   * Encuadre completo: el cuadro entero en una sola inferencia.
+   *
+   * Era la escala que FALTABA. Todos los modos partían de una tesela de lado
+   * fijo --- 416 px de la fuente a ×1, menos con más zoom --- y ninguno miraba
+   * nunca el cuadro entero. Sobre una cámara fija que vigila una plaza eso es
+   * correcto: los objetos son pequeños y la tesela les da píxeles. Sobre un
+   * móvil apuntando a lo que tiene delante es lo contrario, porque el objeto
+   * es MAYOR que la tesela y entonces:
+   *
+   *   · una caja que toca el borde interior de una tesela se descarta --- es
+   *     la invariante 1, y es correcta --- así que un objeto que no cabe en
+   *     ninguna tesela no se detecta en ninguna;
+   *   · los trozos que sí sobreviven salen como objetos independientes, y a
+   *     veces puntúan MÁS que la caja entera.
+   *
+   * Medido con yolox_nano sobre fotos reales, teselas de 416 contra cuadro
+   * completo:
+   *
+   *   bus.jpg 810x1080 (un autobús y cuatro personas)
+   *     teselas:  2 objetos, 12 inferencias, 2571 ms --- sin el autobús
+   *     completo: 5 objetos,  1 inferencia,   251 ms --- autobús 0,88
+   *   zidane.jpg 1280x720 (dos personas grandes)
+   *     teselas:  3 "personas", 15 inferencias --- tres trozos de dos personas
+   *     completo: 2 personas,    1 inferencia --- las cajas correctas
+   *
+   * Diez veces más barato y con los objetos que importan. Fundir las dos
+   * escalas se probó y es peor: el trozo puntúa más alto que el objeto entero
+   * y sobrevive a la supresión, por IoU y por contención.
+   */
+  setFrameFit(on = true) {
+    this.fitFrame = !!on;
+    this._plan.clear();
+    this._sched = null;
+    return this;
+  }
+
   setZoom(zoom) {
+    if (zoom === "completo" || zoom === 0) return this.setFrameFit(true);
+    this.fitFrame = false;
     // El suelo baja de 64 a 40 px de tesela: a ×6 sobre una entrada de 416 eso
     // son teselas de 69 px, y a ×10 de 41. Medido sobre una vista aérea con
     // peatones de 8-12 px, más allá de ×2 el recuento CAE --- 67 objetos a ×2,
@@ -338,6 +377,9 @@ class YoloxDetector {
   }
 
   _tiles(w, h) {
+    // Encuadre completo: una sola tesela con todo dentro. El letterbox de
+    // `_preprocess` se encarga de encajarlo en la entrada del modelo.
+    if (this.fitFrame) return [[0, 0, w, h]];
     // Camino rápido sin caché: un recorte que cabe entero en la tesela no
     // necesita plan. `detectFoveal` cambia `this.tile` en cada recorte, así
     // que cachear por (w,h,tile) generaba una entrada por recorte y luego se
@@ -717,8 +759,22 @@ class YoloxDetector {
 
     let dets = [];
     if (boxes.length) {
+      // La MISMA supresión que `detect`, no otra.
+      //
+      // Aquí se usaba `nmsClassAware` a secas mientras `detect` usaba soft-NMS
+      // con `softCut`. La diferencia no es de estilo: `softCut` es además el
+      // suelo de puntuación final, y sin él pasaba todo lo que superara el
+      // umbral por clase --- 0,08 para persona. Y `detectIncremental` es el
+      // camino que corre el bucle principal, así que el corte que la
+      // invariante 3 fijó midiendo («un corte demasiado bajo produjo +75 % de
+      // personas que eran conos y señales») no se estaba aplicando donde más
+      // importa. Medido sobre una foto con dos personas: 6 cajas por este
+      // camino, 2 por el otro. Las cuatro de más iban entre 0,09 y 0,13.
       const group = (l) => COARSE[this.cfg.classes[l]] || "other";
-      const keep = nmsClassAware(boxes, scores, labels, this.cfg.nmsIou, group);
+      const keep = this.cfg.soft
+        ? softNMS(boxes, scores, labels,
+                  {sigma: this.cfg.softSigma, cut: this.cfg.softCut, groupOf: group}).keep
+        : nmsClassAware(boxes, scores, labels, this.cfg.nmsIou, group);
       dets = keep.map((i) => {
         const fine = this.cfg.classes[labels[i]] || "object";
         return {b: boxes[i], score: scores[i], c: COARSE[fine] || "other", fine};

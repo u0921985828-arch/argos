@@ -87,22 +87,37 @@ estatura.
 Por encima de ×3 el recuento **baja**: ampliar no añade detalle y la tesela
 pierde el contexto que el modelo necesita.
 
-**3. Contar detecciones no es medir calidad.** Hay que estratificar por
+**3. Falta la escala del cuadro entero, y es la que más veces acierta.**
+Todos los modos partían de una tesela de lado fijo; ninguno miraba el cuadro
+completo. Con el objeto MAYOR que la tesela, la invariante 1 lo descarta en
+todas y los trozos que sobreviven salen como objetos falsos —a veces con más
+puntuación que la caja entera, así que fundir escalas tampoco lo arregla
+(probado por IoU y por contención). Medido con yolox_nano:
+
+| | teselas 416 | cuadro entero |
+|---|---|---|
+| bus.jpg 810×1080 | 2 obj, 12 inferencias, 2.571 ms | **5 obj, 1 inferencia, 251 ms** |
+| zidane.jpg 1280×720 | 3 «personas» (trozos de 2) | **2 personas, cajas correctas** |
+
+Cuadro entero por defecto; teselas cuando el objeto es pequeño en una escena
+amplia. Es la invariante 2 un peldaño más abajo: tampoco hay tesela universal.
+
+**4. Contar detecciones no es medir calidad.** Hay que estratificar por
 puntuación. Un corte de soft-NMS demasiado bajo produjo «+75 % de personas» que
 eran cajas sobre conos y señales. Lo cazó la comprobación visual, no el número.
 
-**4. Las clases finas de vehículo no son fiables.** `truck`→`car` se confundió
+**5. Las clases finas de vehículo no son fiables.** `truck`→`car` se confundió
 40 veces en un frame. Se agrupan en `person` / `vehicle` / `bike` y el NMS opera
 **dentro del grupo** — si no, la misma furgoneta sale como dos objetos.
 
-**5. Una celda sin muestras no opina.** Sin esa reserva, el primer día todo es
+**6. Una celda sin muestras no opina.** Sin esa reserva, el primer día todo es
 anómalo, el operador apaga las alertas y el sistema deja de existir.
 
-**6. La altura de cámara deducida es un control de calidad.** Sale de
+**7. La altura de cámara deducida es un control de calidad.** Sale de
 `a = estatura/altura_cámara`. Si da <2 m o >150 m, el modelo de perspectiva no
 es fiable y las velocidades y estaturas de esa sesión tampoco.
 
-**7. El bundle necesita ámbitos separados.** Los módulos declaran utilidades con
+**8. El bundle necesita ámbitos separados.** Los módulos declaran utilidades con
 los mismos nombres (`median`, `mad`, `rng`). Inlinados sin envoltorio, colisionan
 en el ámbito léxico global y **la página no carga**. `bundle.py` los envuelve y
 comprueba colisiones antes de escribir. Esto llegó a una entrega.
@@ -157,6 +172,13 @@ clase. Contadores, estatura y eventos de persona solo miran `klassSrc = "det"`.
 cierto o `ort.env.wasm.numThreads` no sirve de nada. El APK las emite desde el
 `WebViewAssetLoader`, con `credentialless` y no `require-corp`: con
 `require-corp` se caen las cámaras públicas de terceros.
+
+**Los dos caminos del detector no suprimían igual.** `detect` usaba soft-NMS
+con `softCut`, que es además el suelo de puntuación final; `detectIncremental`
+—el que corre el bucle principal— usaba `nmsClassAware` a secas y dejaba pasar
+todo lo que superara el umbral por clase, 0,08 para persona. Dos personas
+reales salían como seis cajas. El corte que fijó la invariante 4 no se estaba
+aplicando donde más importa.
 
 **`localStorage` no funciona en artefactos de Claude.** Aquí se usa IndexedDB.
 
