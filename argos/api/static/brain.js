@@ -638,7 +638,11 @@ class Brain {
     const push = (kind, extra) => {
       const last = track._lastEvent?.[kind] ?? -1e9;
       if (tSec - last < 5) return;                 // no repetir en ráfaga
-      (track._lastEvent ??= {})[kind] = tSec;
+      // Sin `??=`: ese operador es Chrome 85, y un WebView anterior no parsea
+      // el módulo entero --- la app arranca, enseña la cámara y no analiza
+      // nada. `minSdk` es 24, así que hay dispositivos donde esto pasa.
+      if (!track._lastEvent) track._lastEvent = {};
+      track._lastEvent[kind] = tSec;
       this.events.unshift({kind, id: track.id, cls: track.klass, t: tSec, ...extra});
       if (this.events.length > 60) this.events.pop();
     };
