@@ -1252,6 +1252,28 @@ async function ensureOrt() {
   return ORT_CDN;
 }
 
+/**
+ * Traduce el fallo del runtime a algo sobre lo que se pueda actuar.
+ *
+ * «no available backend found. ERR: [wasm] WebAssembly SIMD is not supported»
+ * es literalmente lo que devuelve ONNX Runtime en un WebView anterior a
+ * Chrome 91. No dice qué hacer, y lo que hay que hacer es actualizar el
+ * WebView desde Play Store: la versión de Android no importa, el componente se
+ * actualiza aparte. Desde la 1.19 el runtime ya no publica ningún artefacto
+ * sin SIMD, así que no es algo que se arregle empaquetando otra cosa.
+ */
+function motivoLegible(msg) {
+  if (/SIMD/i.test(msg)) {
+    return "el WebView de este dispositivo no soporta WebAssembly SIMD. "
+      + "Actualiza «Android System WebView» y Chrome desde Play Store: es un "
+      + "componente que se actualiza aparte de la versión de Android";
+  }
+  if (/WebAssembly/i.test(msg)) {
+    return `el WebView de este dispositivo no puede ejecutar el modelo (${msg})`;
+  }
+  return msg;
+}
+
 async function loadDetector(source) {
   const btn = $("btnLoadModel");
   btn.disabled = true;
@@ -1328,8 +1350,9 @@ async function loadDetector(source) {
     // sustracción de fondo, que no sabe qué es nada. Un toast se va solo a los
     // pocos segundos y deja al operador mirando cajas sin saber que lo que ve
     // son manchas. El motivo se queda fijo en el panel.
-    state.detStatus = {ok: false, motivo: err.message};
-    $("noteModel").textContent = `Sin detector neuronal: ${err.message}`;
+    const motivo = motivoLegible(err.message);
+    state.detStatus = {ok: false, motivo};
+    $("noteModel").textContent = `Sin detector neuronal: ${motivo}`;
     $("noteModel").dataset.tone = "warn";
     toast(err.message, "err");
   } finally {
@@ -1453,7 +1476,8 @@ async function autoLoadModel() {
     await loadDetector(bytes);
     return !!state.detStatus?.ok;
   } catch (err) {
-    state.detStatus = {ok: false, motivo: `no se pudo leer el modelo: ${err.message}`};
+    state.detStatus = {ok: false,
+                       motivo: `no se pudo leer el modelo: ${motivoLegible(err.message)}`};
     return false;
   }
 }

@@ -209,7 +209,16 @@ jobs:
 
       - uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 30
+          # API 34 y no 30.
+          #
+          # La imagen de API 30 trae un WebView de 2020, anterior a Chrome 91,
+          # y por tanto **sin WebAssembly SIMD**. ONNX Runtime 1.22 ya no
+          # publica ningún artefacto sin SIMD, así que ahí no hay backend
+          # posible: el detector no arranca y el fallo no tiene nada que ver
+          # con el APK. Ningún teléfono real está en ese estado --- el WebView
+          # se actualiza por Play Store --- así que comprobar contra API 30
+          # era comprobar contra un dispositivo que no existe.
+          api-level: 34
           arch: x86_64
           target: google_apis
           disable-animations: true
