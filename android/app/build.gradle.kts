@@ -26,6 +26,15 @@ android {
 }
 
 dependencies {
+    // AndroidX arrastra `kotlin-stdlib` 1.8.22 y, por otra rama, los viejos
+    // `kotlin-stdlib-jdk7/jdk8` 1.6.21. Hasta 1.8 esos dos artefactos llevaban
+    // clases propias; desde 1.8 viven dentro de `kotlin-stdlib`. Con las dos
+    // versiones en el classpath, `checkDebugDuplicateClasses` aborta con una
+    // veintena de "Duplicate class kotlin.*" y no se llega a empaquetar nada.
+    // El BOM alinea toda la familia en una sola versión y las duplicidades
+    // desaparecen sin tocar ninguna dependencia directa.
+    implementation(platform("org.jetbrains.kotlin:kotlin-bom:1.8.22"))
+
     implementation("androidx.appcompat:appcompat:1.7.0")
     // WebViewAssetLoader: sirve los assets bajo https://, que es lo que
     // convierte la página en contexto seguro y desbloquea la cámara.
