@@ -199,8 +199,11 @@ arena y compila los kernels en la primera ejecución. Si cae sobre el primer
 frame de cámara se ve como un tirón y, con la cola que descarta mientras hay
 trabajo en curso, se traga los primeros barridos. Se calienta al cargar, que
 además da el único número que convierte «va lenta» en un dato: lo que cuesta
-una inferencia EN ESE aparato. Medido en el emulador: 3.305 ms —dos núcleos,
-sin GPU, un hilo—.
+una inferencia EN ESE aparato. Medido en el emulador —dos núcleos, sin GPU, un
+hilo—: 3.305 ms pidiendo `webgpu` a ciegas, **687 ms** desde que se comprueba
+el adaptador antes de pedirlo. El proveedor mal declarado no solo mentía en el
+panel: costaba casi cinco veces la primera inferencia, porque ORT cargaba el
+artefacto de WebGPU de 21 MB e intentaba arrancarlo antes de caerse a WASM.
 
 **Un «ms de frame» no señala a nada.** Bajar el frame de la GPU
 (`drawImage`+`getImageData`) depende del tamaño de la FUENTE y del aparato, no
