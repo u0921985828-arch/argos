@@ -23,7 +23,18 @@ adb install -r "$APK"
 adb shell pm grant "$PKG" android.permission.CAMERA || true
 
 adb shell am start -n "$PKG/.MainActivity"
-sleep 15
+
+# Se espera a la marca del detector, no un tiempo fijo.
+#
+# Cargar ONNX Runtime y construir la sesión sobre un emulador sin aceleración
+# tarda lo que tarda, y un `sleep` generoso alarga todos los jobs para el caso
+# peor. Se sondea y se sale en cuanto hay veredicto, en un sentido o en otro.
+for _ in $(seq 1 60); do
+    adb logcat -d > logcat.txt
+    if grep -q 'ARGOS detector' logcat.txt; then break; fi
+    if grep -q 'FATAL EXCEPTION' logcat.txt; then break; fi
+    sleep 2
+done
 
 adb exec-out screencap -p > screenshot.png
 adb logcat -d > logcat.txt
@@ -74,4 +85,33 @@ if ! grep -q 'ARGOS listo:' logcat.txt; then
     exit 1
 fi
 
-echo "OK: instalado, arrancado, en primer plano y con los once módulos cargados."
+# El detector es la única función del programa, y hasta ahora nada lo
+# comprobaba.
+#
+# ONNX Runtime se descargaba de un CDN en tiempo de ejecución mientras el
+# modelo viajaba dentro del APK. Sin red el runtime no llegaba, no había
+# detector, y la aplicación seguía dibujando cajas --- las de la sustracción de
+# fondo, etiquetadas por la proporción de la mancha. En campo eso se vio como
+# «coche» sobre un andamio y sobre una cara. El APK pasó todas las
+# comprobaciones: instalaba, arrancaba, cargaba los once módulos.
+#
+# Ahora el runtime va dentro y esto lo exige. El emulador no tiene red de
+# salida garantizada, así que si esta línea aparece es porque la copia local
+# funciona, que es justo lo que hay que demostrar.
+if grep -q 'ARGOS detector NO' logcat.txt; then
+    echo "::error::el detector neuronal no cargó"
+    grep 'ARGOS detector NO' logcat.txt
+    exit 1
+fi
+
+if ! grep -q 'ARGOS detector activo:' logcat.txt; then
+    echo "::error::el detector no publicó su marca"
+    echo "(sin «ARGOS detector activo» ni «ARGOS detector NO»: la carga se quedó"
+    echo " colgada, o el modelo y el runtime no están en los assets)"
+    exit 1
+fi
+
+echo "--- detector ---"
+grep 'ARGOS detector activo:' logcat.txt
+
+echo "OK: instalado, arrancado, en primer plano, once módulos y detector neuronal vivo."

@@ -59,12 +59,20 @@ val webRoot = rootProject.file("../argos/api/static")
 // y es lo mismo que se entrega para escritorio. Una sola cosa que mantener.
 val bundle = rootProject.file("../argos.html")
 val modelFile = rootProject.file("../yolox_nano.onnx")
+// ONNX Runtime Web. Es el motor que ejecuta el modelo, y hasta ahora se
+// descargaba de un CDN en tiempo de ejecución: el modelo dentro del paquete y
+// el intérprete fuera. Sin red no había detector, la aplicación seguía
+// analizando por sustracción de fondo y bautizaba las manchas por su
+// proporción --- "coche" sobre un andamio. Los .wasm van junto al .js porque
+// es donde `ort.env.wasm.wasmPaths` los busca.
+val ortDir = rootProject.file("../ort")
 
 val syncWebApp by tasks.registering(Copy::class) {
     from(bundle) { rename { "index.html" } }
     // El modelo viaja dentro del APK: sin él hay que buscarlo en una release de
     // GitHub desde el móvil, que es justo donde peor se hace.
     if (modelFile.exists()) from(modelFile)
+    if (ortDir.isDirectory) from(ortDir)
     into(layout.projectDirectory.dir("src/main/assets"))
     doFirst {
         if (!bundle.exists()) {

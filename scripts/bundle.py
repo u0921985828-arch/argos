@@ -20,7 +20,11 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import re
+import os
+import shutil
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -94,6 +98,36 @@ def main() -> None:
     closes = html.count("</script>")
     if opens != closes:
         sys.exit(f"etiquetas script descuadradas: {opens} abren, {closes} cierran")
+
+    # Cada bloque tiene que parsear POR SEPARADO.
+    #
+    # Los módulos van en etiquetas propias justamente para que no compartan
+    # ámbito léxico, y eso significa que un error de sintaxis en uno no tumba a
+    # los demás: la página arranca, enseña la cámara y no hace nada. Ya ha
+    # pasado dos veces --- un `??=` que un WebView anterior a Chrome 85 no
+    # parsea, y un `const` redeclarado dentro de la misma función. Las dos
+    # llegaron a un APK.
+    #
+    # `node --check` lo coge en un segundo. Si no hay node, se avisa y se
+    # sigue: no es razón para no poder generar el bundle.
+    if shutil.which("node"):
+        malos = []
+        for i, bloque in enumerate(
+                re.findall(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", html, re.S)):
+            with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
+                                             encoding="utf-8") as f:
+                f.write(bloque)
+                ruta = f.name
+            r = subprocess.run(["node", "--check", ruta],
+                               capture_output=True, text=True)
+            os.unlink(ruta)
+            if r.returncode:
+                malos.append(f"bloque {i}: " + " / ".join(
+                    l.strip() for l in r.stderr.splitlines()[:3] if l.strip()))
+        if malos:
+            sys.exit("error de sintaxis en el bundle:\n  " + "\n  ".join(malos))
+    else:
+        print("  aviso: sin node, no se ha comprobado la sintaxis de los bloques")
 
     # Colisiones de ámbito global.
     #

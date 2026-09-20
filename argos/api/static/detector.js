@@ -86,6 +86,12 @@ const DET_DEFAULTS = {
   tileOverlap: 0.45,
   edgeMargin: 4,
   minTileFrac: 1.35,
+  // Filtro de plausibilidad. Ninguno de los dos inventa calidad: recortan lo
+  // que el modelo ya ha emitido. `minBoxPx` es el más honesto de los dos ---
+  // una caja de 6 px de alto no puede ser una persona a ninguna distancia, y
+  // el modelo no lo sabe porque no conoce la escena.
+  allow: ["person", "vehicle", "bike"],
+  minBoxPx: 0,
   maxTiles: 24,          // techo de coste por frame
   classes: COCO_NAMES,
 };
@@ -255,6 +261,21 @@ class YoloxDetector {
    *
    * El coste es cuadrático: al doble de zoom, cuatro veces más teselas.
    */
+  /**
+   * Cambia umbrales y filtros en caliente.
+   *
+   * Recargar el modelo para mover un umbral cuesta varios segundos y el
+   * operador deja de probar. `_floor` hay que recalcularlo: es el corte barato
+   * de `_decode` y si se queda con el valor viejo, bajar un umbral no tiene
+   * ningún efecto y parece que el control está roto.
+   */
+  tune(cfg = {}) {
+    Object.assign(this.cfg, cfg);
+    this._floor = Math.min(this.cfg.scoreThresh,
+      ...Object.values(this.cfg.classThresh || {}));
+    return this.cfg;
+  }
+
   setZoom(zoom) {
     // El suelo baja de 64 a 40 px de tesela: a ×6 sobre una entrada de 416 eso
     // son teselas de 69 px, y a ×10 de 41. Medido sobre una vista aérea con
@@ -409,6 +430,11 @@ class YoloxDetector {
       if (!(best in this.cfg.classes)) continue;
       const name = this.cfg.classes[best];
       if (score < (this.cfg.classThresh?.[name] ?? thr)) continue;
+      // Lista blanca por categoría gruesa, no por clase fina: la fina no es
+      // fiable a estos tamaños y filtrar por ella dejaría fuera la misma
+      // furgoneta según la etiquete "truck" o "car".
+      if (this.cfg.allow && this.cfg.allow.length
+          && !this.cfg.allow.includes(COARSE[name] || "other")) continue;
 
       // Decodificación de la rejilla: sin esto no hay detección válida.
       const s = st[i];
@@ -422,6 +448,7 @@ class YoloxDetector {
       const x2 = Math.min(tw, (cx + bw / 2) / ratio);
       const y2 = Math.min(th, (cy + bh / 2) / ratio);
       if (x2 - x1 < 2 || y2 - y1 < 2) continue;
+      if (this.cfg.minBoxPx && y2 - y1 < this.cfg.minBoxPx) continue;
 
       boxes.push([x1, y1, x2, y2]);
       scores.push(score);

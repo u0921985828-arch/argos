@@ -40,10 +40,14 @@
  * reutiliza su código fuente en lugar de duplicarlo. Duplicarlo sería
  * garantizar que las dos copias divergen.
  */
-function workerSource(detectorSource, ortUrl) {
+function workerSource(detectorSource, ortUrl, wasmPaths = "") {
   return `
 "use strict";
 importScripts(${JSON.stringify(ortUrl)});
+// Dónde están los .wasm del runtime. Con una copia local dentro del APK hay
+// que decirlo: por defecto ORT los busca junto al .js que se importó, y el
+// worker se construye desde un blob: cuya URL base no sirve para resolverlos.
+if (${JSON.stringify(wasmPaths)}) ort.env.wasm.wasmPaths = ${JSON.stringify(wasmPaths)};
 
 // El detector espera 'document' para su canvas interno. En un Worker no hay,
 // pero sí OffscreenCanvas, que hace exactamente lo mismo sin DOM.
@@ -76,7 +80,16 @@ self.onmessage = async (e) => {
       self.postMessage({type: "ready",
                         size: detector.size,
                         threads: ort.env.wasm.numThreads || 1,
+                        backend: sess.handler?._backendName || providers[0],
                         isolated: !!self.crossOriginIsolated});
+      return;
+    }
+
+    if (msg.type === "tune") {
+      if (detector) {
+        if (msg.cfg) detector.tune(msg.cfg);
+        if (msg.zoom) detector.setZoom(msg.zoom);
+      }
       return;
     }
 
@@ -122,7 +135,13 @@ self.onmessage = async (e) => {
    ========================================================================== */
 
 const WORKER_DEFAULTS = {
+  // Último recurso. Quien llama pasa la copia local cuando la hay --- en el
+  // APK la hay siempre, y depender de un CDN para la única función del
+  // programa es lo que hacía que la aplicación pareciera funcionar sin
+  // detectar nada: sin red, el runtime no llegaba y todo se quedaba en
+  // sustracción de fondo.
   ortUrl: "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.min.js",
+  wasmPaths: "",
   mode: "multiscale",
   webgpu: true,
   maxPending: 1,
@@ -156,7 +175,8 @@ class DetectorWorker {
     if (typeof Worker === "undefined") {
       throw new Error("este navegador no expone Workers");
     }
-    const blob = new Blob([workerSource(detectorSource, this.cfg.ortUrl)],
+    const blob = new Blob([workerSource(detectorSource, this.cfg.ortUrl,
+                                        this.cfg.wasmPaths)],
                           {type: "application/javascript"});
     const url = URL.createObjectURL(blob);
     this.worker = new Worker(url);
@@ -182,6 +202,7 @@ class DetectorWorker {
       this.ready = true;
       this.size = m.size;
       this.threads = m.threads;
+      this.backend = m.backend || "";
       this.isolated = m.isolated;
       this._resolveReady?.(m);
       return;
@@ -243,6 +264,13 @@ class DetectorWorker {
     } catch {
       return false;
     }
+  }
+
+  /** Ajusta umbrales y zoom sin recargar el modelo. */
+  tune(cfg, zoom) {
+    if (!this.worker) return false;
+    this.worker.postMessage({type: "tune", cfg, zoom});
+    return true;
   }
 
   report() {

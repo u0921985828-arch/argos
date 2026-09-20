@@ -91,6 +91,35 @@ jobs:
             https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_nano.onnx
           test "$(stat -c%s yolox_nano.onnx)" -gt 3000000
 
+      # ONNX Runtime Web viaja DENTRO del APK.
+      #
+      # Hasta ahora se traía de un CDN en tiempo de ejecución. El modelo iba
+      # dentro y el motor que lo ejecuta, fuera: sin red --- o con el CDN
+      # bloqueado, o con datos móviles malos --- el detector nunca cargaba y la
+      # aplicación se quedaba en sustracción de fondo, etiquetando manchas por
+      # su proporción. Desde fuera parece que funciona y se inventa las clases.
+      #
+      # Además, un recurso externo es incompatible con el aislamiento entre
+      # orígenes que hace falta para los hilos de WASM.
+      - name: Vendor ONNX Runtime Web
+        run: |
+          set -eu
+          npm pack onnxruntime-web@1.22.0 >/dev/null
+          tar xf onnxruntime-web-1.22.0.tgz
+          echo "--- dist/ tal cual lo publica el paquete ---"
+          ls -la package/dist/
+          mkdir -p ort
+          cp package/dist/ort.min.js ort/
+          # Todo lo de WASM menos los artefactos de entrenamiento, que no se
+          # usan aquí y pesan tanto como el resto junto.
+          find package/dist -maxdepth 1 \( -name 'ort-wasm*.wasm' -o -name 'ort-wasm*.mjs' \) \
+            ! -name '*training*' -exec cp {} ort/ \;
+          echo "--- lo que entra en el APK ---"
+          ls -la ort/
+          du -sh ort/
+          test -f ort/ort.min.js
+          ls ort/*.wasm >/dev/null
+
       # El wrapper incluye un .jar binario que no siempre conviene versionar.
       # Si falta, se genera aquí con el Gradle del runner: así el repositorio
       # queda solo con texto y la compilación sigue siendo reproducible.
@@ -114,6 +143,10 @@ jobs:
           APK=android/app/build/outputs/apk/debug/app-debug.apk
           unzip -l "$APK" | grep -q 'assets/index.html' || { echo "falta index.html"; exit 1; }
           unzip -l "$APK" | grep -q 'assets/yolox_nano.onnx' || { echo "falta el modelo"; exit 1; }
+          # El runtime pesa y es la pieza que faltaba: sin él el APK arranca,
+          # enseña la cámara y no clasifica nada.
+          unzip -l "$APK" | grep -q 'assets/ort.min.js' || { echo "falta ONNX Runtime"; exit 1; }
+          unzip -l "$APK" | grep -q 'assets/ort-wasm.*\.wasm' || { echo "faltan los .wasm"; exit 1; }
 
           # Que el fichero esté no basta: tiene que llevar los módulos dentro.
           # Comprobar solo el nombre dejaba pasar un bundle recortado, que

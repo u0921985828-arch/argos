@@ -141,6 +141,23 @@ en el fondo. Con detecciones protegiendo la placa: 33 % → 68 % de siluetas.
 **La sustracción de fondo no sirve con multitudes.** En una plaza llena, la
 multitud *es* el fondo: 0 cajas por frame frente a 65 del detector.
 
+**El modelo dentro y el runtime fuera.** ONNX Runtime Web se traía de un CDN en
+tiempo de ejecución mientras `yolox_nano.onnx` viajaba dentro del APK. Sin red
+no hay detector, y la aplicación **no falla**: sigue analizando por sustracción
+de fondo. Desde fuera parece que funciona y se inventa las clases. El runtime va
+empaquetado y `ort.env.wasm.wasmPaths` apunta a la copia local.
+
+**`classify()` no clasifica.** Es la proporción de la caja: más alta que ancha
+→ `person`, más ancha que alta → `car`. Sin detector eso es lo único que hay, y
+etiquetó de `coche` un andamio, una barandilla y una cara. Lo que salga de ahí
+va marcado con `klassSrc = "forma"` y la interfaz dice «movimiento», no una
+clase. Contadores, estatura y eventos de persona solo miran `klassSrc = "det"`.
+
+**Sin COOP/COEP, WASM va en un hilo.** `crossOriginIsolated` tiene que ser
+cierto o `ort.env.wasm.numThreads` no sirve de nada. El APK las emite desde el
+`WebViewAssetLoader`, con `credentialless` y no `require-corp`: con
+`require-corp` se caen las cámaras públicas de terceros.
+
 **`localStorage` no funciona en artefactos de Claude.** Aquí se usa IndexedDB.
 
 ---

@@ -392,20 +392,38 @@ button:disabled{opacity:.34;cursor:default}
     <input id="modelFile" type="file" accept=".onnx">
     <label for="detZoom">Zoom de análisis</label>
     <select id="detZoom">
-      <option value="1">×1 — vehículos y objetos grandes</option>
-      <option value="2" selected>×2 — recomendado para personas</option>
-      <option value="3">×3 — objetos muy pequeños</option>
-      <option value="4">×4 — extremo</option>
-      <option value="6">×6 — extremo</option>
-      <option value="10">×10 — máximo</option>
-      <option value="multi">×1 + ×2 — multiescala</option>
+      <option value="1" selected>×1 — el objeto ocupa 40 px o más</option>
+      <option value="2">×2 — el objeto ocupa entre 10 y 30 px</option>
+      <option value="3">×3 — límite útil</option>
+      <option value="4">×4 — por encima del límite</option>
+      <option value="6">×6 — por encima del límite</option>
+      <option value="10">×10 — por encima del límite</option>
+      <option value="multi">×1 + ×2 — multiescala, si la escena mezcla tamaños</option>
       <option value="piramide">Pirámide — rejilla gruesa + fina adaptativa</option>
       <option value="escaner">Escáner — barrido visible de arriba abajo</option>
     </select>
-    <p class="note">Recorta teselas más pequeñas y las amplía antes de mirarlas. Una
-      persona de 20 px llega al modelo a 40. Coste: al doble de zoom, cuatro veces más
-      teselas.</p>
+    <p class="note">Se elige por el tamaño del objeto, que es el número que sale arriba
+      como <b>alto mediano</b>. Con 40 px o más, ×1 gana: medido en una plaza real, ×1
+      dio 65 personas y ×2 solo 44 — y cuesta cuatro veces menos. El zoom ayuda cuando
+      el objeto es pequeño, no siempre.</p>
     <p class="note" id="noteZoom" data-tone="warn" hidden></p>
+
+    <label for="detAllow">Qué se admite</label>
+    <select id="detAllow">
+      <option value="person,vehicle,bike" selected>Personas, vehículos y bicis</option>
+      <option value="person">Solo personas</option>
+      <option value="vehicle,bike">Solo vehículos y bicis</option>
+      <option value="">Todo lo que dé el modelo</option>
+    </select>
+    <label for="detMinScore">Puntuación mínima: <b id="detMinScoreV">0,15</b></label>
+    <input id="detMinScore" type="range" min="0.05" max="0.60" step="0.01" value="0.15">
+    <label for="detMinPx">Alto mínimo de la caja: <b id="detMinPxV">0 px</b></label>
+    <input id="detMinPx" type="range" min="0" max="120" step="2" value="0">
+    <p class="note">Un filtro no arregla un detector que no está: si arriba pone
+      <b>Detector: NO</b>, lo que se ve son manchas de movimiento y esto no las toca.
+      Subir la puntuación mínima quita basura y también objetos reales pequeños; el
+      reparto de puntuaciones del panel dice cuál de las dos cosas está pasando.</p>
+
     <button id="btnLoadModel" type="button" class="ghost">Cargar detector neuronal</button>
     <p class="note">Pesos Apache-2.0 de YOLOX. El modelo se ejecuta aquí con ONNX Runtime
       Web: no sale nada del equipo.</p>
@@ -424,8 +442,14 @@ button:disabled{opacity:.34;cursor:default}
 
   <fieldset id="fsBrain" hidden>
     <legend>Escena</legend>
+    <div class="stat"><span>Detector</span><b id="bDet">comprobando…</b></div>
     <div class="stat"><span>Personas · vehículos</span><b id="bCounts">0 · 0</b></div>
+    <div class="stat"><span>Sin clasificar</span><b id="bNoClass">0</b></div>
+    <div class="stat"><span>Alto mediano del objeto</span><b id="bPx">— px</b></div>
+    <div class="stat"><span>Puntuación &gt;.5 · .2-.5 · &lt;.2</span><b id="bScores">—</b></div>
     <div class="stat"><span>Render</span><b id="bFps">— fps</b></div>
+    <div class="stat"><span>Detector por pasada</span><b id="bDetMs">—</b></div>
+    <p class="note" id="noteDet" hidden></p>
     <div class="stat"><span>Escala métrica</span><b id="bScale">aprendiendo</b></div>
     <div id="bTracks"></div>
     <p class="note" id="bEvents"></p>
@@ -507,8 +531,16 @@ const CFG = Object.freeze({
   bracketMaxPx:      14,
 });
 
+/*
+ * Las claves GRUESAS son las que emite el detector desde que el NMS opera por
+ * grupo (`vehicle`, `bike`, `animal`). Faltaban, así que una caja del modelo
+ * se dibujaba con la palabra inglesa cruda. Las finas se quedan porque siguen
+ * viajando como pista en `fine`.
+ */
 const CLASS_ES = Object.freeze({
-  person:"persona", car:"coche", truck:"camión", bus:"autobús",
+  person:"persona", vehicle:"vehículo", bike:"bici o moto", animal:"animal",
+  other:"objeto",
+  car:"coche", truck:"camión", bus:"autobús",
   bicycle:"bici", motorcycle:"moto", cat:"gato", dog:"perro", object:"objeto",
 });
 
@@ -792,7 +824,13 @@ function paint() {
       ctx.moveTo(X + k, Y + H);     ctx.lineTo(X, Y + H);     ctx.lineTo(X, Y + H - k);
       ctx.stroke();
 
-      const label = `${CLASS_ES[box.c] ?? box.c} ${box.id}`;
+      // Sin detector no hay clase, solo la proporción de la mancha. Decir
+      // "coche" a partir de eso es lo que produjo cajas etiquetadas coche
+      // sobre andamios y sobre una cara. Se dice "movimiento", que es lo
+      // único que el sistema sabe en ese momento.
+      const label = box.cs === "det"
+        ? `${CLASS_ES[box.c] ?? box.c} ${box.id}`
+        : `movimiento ${box.id}`;
       const tw = ctx.measureText(label).width;
       const ty = Y > 18 ? Y - 6 : Y + H + 14;
       ctx.fillStyle = "rgb(0 0 0 / .45)";
@@ -805,7 +843,8 @@ function paint() {
 }
 requestAnimationFrame(paint);
 
-const SIL_COLOR = {person: "#e8552d", car: "#2e6f9e", object: "#8a929e"};
+const SIL_COLOR = {person: "#e8552d", vehicle: "#2e6f9e", bike: "#c99a2e",
+                   animal: "#7a9e5c", car: "#2e6f9e", object: "#8a929e"};
 
 /** Contornos vectoriales suavizados sobre la escena en vivo. */
 function paintSilhouettes(dx, dy, scale) {
@@ -1162,24 +1201,64 @@ function detectorSource() {
   return null;
 }
 
+const ORT_CDN = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.min.js";
+
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    const sc = document.createElement("script");
+    sc.src = src;
+    sc.onload = () => res(src);
+    sc.onerror = () => rej(new Error(`no se pudo cargar ${src}`));
+    document.head.append(sc);
+  });
+}
+
+/**
+ * Deja `globalThis.ort` listo y devuelve de dónde salió.
+ *
+ * Primero la copia local, junto al propio fichero. En el APK viaja dentro del
+ * paquete, y ésa es la diferencia entre una aplicación que analiza y una que
+ * no: hasta ahora el runtime venía de un CDN, así que sin red --- o con red
+ * mala, o con el CDN bloqueado --- el detector nunca llegaba a cargarse. La
+ * aplicación seguía funcionando en apariencia porque la sustracción de fondo
+ * no necesita modelo, y etiquetaba las manchas por su proporción. De ahí
+ * "coche" sobre un andamio.
+ *
+ * El CDN se queda como último recurso para el uso en escritorio sin copia
+ * local. Si el servidor devuelve otra cosa en vez de un 404 --- un index.html
+ * de relleno, por ejemplo --- la etiqueta carga sin error y no define `ort`;
+ * por eso se comprueba el símbolo y no el evento.
+ */
+async function ensureOrt() {
+  if (globalThis.ort) return state.ortUrl || "ya cargado";
+  const local = /^https?:$/.test(location.protocol)
+    ? new URL("ort.min.js", location.href).href : null;
+  if (local) {
+    try { await loadScript(local); } catch { /* no hay copia local */ }
+    if (globalThis.ort) {
+      // Los .wasm del runtime van en la misma carpeta que el .js.
+      globalThis.ort.env.wasm.wasmPaths = new URL("./", location.href).href;
+      state.ortUrl = local;
+      state.ortWasmPaths = globalThis.ort.env.wasm.wasmPaths;
+      return local;
+    }
+  }
+  await loadScript(ORT_CDN).catch(() => {
+    throw new Error("ONNX Runtime no está en el paquete y no hay internet para traerlo");
+  });
+  if (!globalThis.ort) throw new Error("ONNX Runtime cargó pero no se inicializó");
+  state.ortUrl = ORT_CDN;
+  state.ortWasmPaths = "";
+  return ORT_CDN;
+}
+
 async function loadDetector(source) {
   const btn = $("btnLoadModel");
   btn.disabled = true;
   btn.textContent = "Cargando…";
   try {
     if (typeof YoloxDetector !== "function") throw new Error("detector.js no cargado");
-    if (!globalThis.ort) {
-      // ONNX Runtime se trae de CDN la primera vez y queda en caché. Es la
-      // única dependencia externa de toda la herramienta, y solo la usa quien
-      // active el detector.
-      await new Promise((res, rej) => {
-        const sc = document.createElement("script");
-        sc.src = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.min.js";
-        sc.onload = res;
-        sc.onerror = () => rej(new Error("no se pudo cargar ONNX Runtime (¿sin internet?)"));
-        document.head.append(sc);
-      });
-    }
+    await ensureOrt();
     // Primero se intenta el hilo aparte.
     //
     // Con el detector en el hilo de la interfaz, una inferencia de 120 ms se
@@ -1192,15 +1271,23 @@ async function loadDetector(source) {
         const bytes = typeof source === "string"
           ? new Uint8Array(await (await fetch(source)).arrayBuffer())
           : source;
-        const w = new DetectorWorker({mode: state.pyramid ? "piramide" : "multiscale"});
+        const w = new DetectorWorker({mode: state.pyramid ? "piramide" : "multiscale",
+                                      ortUrl: state.ortUrl || ORT_CDN,
+                                      wasmPaths: state.ortWasmPaths || ""});
         const info = await w.start(bytes, src,
-          {scoreThresh: 0.15, classThresh: {person: 0.08, bicycle: 0.10}},
-          state.multiScale || state.pyramid ? 2 : Number($("detZoom").value) || 2);
-        w.onResult = (dets) => {
+          state.detFilter || {scoreThresh: 0.15,
+                              classThresh: {person: 0.08, bicycle: 0.10}},
+          state.multiScale || state.pyramid ? 2 : Number($("detZoom").value) || 1);
+        w.onResult = (dets, m) => {
+          noteDetStats(dets, m?.ms, m?.stats);
           state.brain?.mergeDetections({dets, tiles: [[0, 0, 1e6, 1e6]]});
         };
         w.onError = (m) => console.error("worker:", m);
         state.detWorker = w;
+        state.detStatus = {ok: true, donde: "hilo propio", size: info.size,
+                           threads: info.threads, isolated: !!info.isolated,
+                           backend: info.backend || "wasm",
+                           origen: state.ortUrl === ORT_CDN ? "CDN" : "local"};
         $("noteModel").innerHTML = "";
         $("noteModel").textContent =
           `Detector en hilo propio (entrada ${info.size} px, `
@@ -1214,7 +1301,8 @@ async function loadDetector(source) {
       }
     }
 
-    state.detector = await YoloxDetector.load(source, globalThis.ort, {
+    state.detector = await YoloxDetector.load(source, globalThis.ort,
+      state.detFilter || {
       scoreThresh: 0.15,
       // Umbral más bajo para las clases difíciles. Una persona a media
       // distancia tiene menos píxeles, silueta variable y casi siempre está
@@ -1222,15 +1310,27 @@ async function loadDetector(source) {
       // produce "detecta furgonetas pero no gente".
       classThresh: {person: 0.08, bicycle: 0.10, motorcycle: 0.12},
     });
+    applyFilter();
     applyZoom();
     state.detBoxes = [];
     detectorLoop();
+    state.detStatus = {ok: true, donde: "hilo principal", size: state.detector.size,
+                       threads: 1, isolated: !!globalThis.crossOriginIsolated,
+                       backend: "wasm",
+                       origen: state.ortUrl === ORT_CDN ? "CDN" : "local"};
     $("noteModel").innerHTML =
       `Detector <b>neuronal</b> activo (entrada ${state.detector.size} px). `
       + "Ve objetos parados y da clases reales.";
     delete $("noteModel").dataset.tone;
     toast("Detector cargado. Ahora ve gente parada.");
   } catch (err) {
+    // Un fallo aquí NO es cosmético: sin detector el sistema se queda en
+    // sustracción de fondo, que no sabe qué es nada. Un toast se va solo a los
+    // pocos segundos y deja al operador mirando cajas sin saber que lo que ve
+    // son manchas. El motivo se queda fijo en el panel.
+    state.detStatus = {ok: false, motivo: err.message};
+    $("noteModel").textContent = `Sin detector neuronal: ${err.message}`;
+    $("noteModel").dataset.tone = "warn";
     toast(err.message, "err");
   } finally {
     btn.disabled = false;
@@ -1266,9 +1366,45 @@ function applyZoom() {
   state.pyramid = v === "piramide";
   state.scanner = v === "escaner";
   if (state.detector) state.detector.cfg.sweep = state.scanner;
-  if (!state.multiScale && state.detector) state.detector.setZoom(Number(v) || 2);
-  else if (state.detector) state.detector.setZoom(2);
+  // El defecto pasa a ×1. La invariante dice que no hay un zoom universal y
+  // que a 40 px o más ×1 gana --- 65 personas frente a 44 --- pero el defecto
+  // era ×2, que además cuesta cuatro veces más teselas por pasada. Quien mire
+  // una escena de objetos pequeños lo sube, y ahora el panel le dice cuántos
+  // píxeles tiene el objeto para decidirlo con un número.
+  const zAplicado = state.multiScale || state.pyramid ? 2 : Number(v) || 1;
+  if (state.detector) state.detector.setZoom(zAplicado);
+  state.detWorker?.tune(null, zAplicado);
 }
+
+/** Lee los controles de plausibilidad y los aplica donde esté el detector. */
+function applyFilter() {
+  const allowRaw = $("detAllow").value;
+  const allow = allowRaw ? allowRaw.split(",") : [];
+  const minScore = Number($("detMinScore").value);
+  const minBoxPx = Number($("detMinPx").value);
+  $("detMinScoreV").textContent = minScore.toFixed(2).replace(".", ",");
+  $("detMinPxV").textContent = `${minBoxPx} px`;
+
+  const cfg = {
+    allow,
+    minBoxPx,
+    scoreThresh: minScore,
+    // Los umbrales por clase existen porque una persona a media distancia es
+    // un objeto más difícil que un turismo. Se mantienen por debajo del
+    // general, no se igualan: igualarlos es lo que produce "detecta furgonetas
+    // pero no gente".
+    classThresh: {person: Math.min(0.08, minScore), bicycle: Math.min(0.10, minScore),
+                  motorcycle: Math.min(0.12, minScore)},
+  };
+  state.detFilter = cfg;
+  state.detector?.tune(cfg);
+  state.detWorker?.tune(cfg);
+}
+
+for (const id of ["detAllow", "detMinScore", "detMinPx"]) {
+  $(id).addEventListener("input", applyFilter);
+}
+applyFilter();   // deja los rótulos de los controles cuadrados con sus valores
 
 $("detZoom").addEventListener("change", () => {
   applyZoom();
@@ -1293,17 +1429,31 @@ $("detZoom").addEventListener("change", () => {
  * manual sigue donde estaba.
  */
 async function autoLoadModel() {
+  if (state.detector || state.detWorker) return true;
+  if (state._autoLoading) return state._autoLoading;
   // Solo tiene sentido servido por http(s): desde file:// un fetch relativo
   // está bloqueado y el fallo confundiría más que ayudar.
-  if (!/^https?:$/.test(location.protocol)) return false;
+  if (!/^https?:$/.test(location.protocol)) {
+    state.detStatus = {ok: false, motivo: `servido como ${location.protocol}, `
+      + "no se puede leer el modelo por fetch"};
+    return false;
+  }
   try {
     const res = await fetch("yolox_nano.onnx");
-    if (!res.ok) return false;
+    if (!res.ok) {
+      state.detStatus = {ok: false, motivo: `el modelo no está junto a la página (${res.status})`};
+      return false;
+    }
     const bytes = new Uint8Array(await res.arrayBuffer());
-    if (bytes.length < 1e6) return false;      // no es un modelo
+    if (bytes.length < 1e6) {      // no es un modelo
+      state.detStatus = {ok: false,
+                         motivo: `yolox_nano.onnx mide ${bytes.length} bytes: no es el modelo`};
+      return false;
+    }
     await loadDetector(bytes);
-    return true;
-  } catch {
+    return !!state.detStatus?.ok;
+  } catch (err) {
+    state.detStatus = {ok: false, motivo: `no se pudo leer el modelo: ${err.message}`};
     return false;
   }
 }
@@ -1577,6 +1727,7 @@ async function detectorLoop() {
       // Una barra decorativa que no coincide con dónde mira de verdad sería una
       // mentira sobre el estado del sistema.
       state.sweepBand = r.sweep || null;
+      noteDetStats(r.dets, r.ms, state.detector.stats);
       if (state.brain) state.brain.mergeDetections(r);
       else mergeDetections(r);
       // Se cede al menos tanto tiempo como ha costado la pasada: mantiene el
@@ -1591,6 +1742,40 @@ async function detectorLoop() {
     await new Promise((r) => setTimeout(r, interval));
   }
   state.detRunning = false;
+}
+
+/**
+ * Medidor del detector: píxeles por objeto y reparto de puntuaciones.
+ *
+ * `CLAUDE.md` abre diciendo que el presupuesto de píxeles manda sobre
+ * cualquier ajuste, y que por debajo de 10 px por persona no hay detección a
+ * ningún zoom. Aun así no había forma de ver ese número desde la aplicación:
+ * se tocaban umbrales a ciegas. Y contar detecciones no es medir calidad ---
+ * un corte bajo produjo una vez "+75 % de personas" que eran conos --- así que
+ * al lado del recuento va el reparto por puntuación, que es lo que distingue
+ * una mejora de un montón de basura con confianza 0,2.
+ *
+ * Se llama en cada pasada, venga del worker o del hilo principal.
+ */
+function noteDetStats(dets, ms, stats) {
+  const hs = [];
+  let hi = 0, mid = 0, lo = 0;
+  for (const d of dets || []) {
+    hs.push(d.b[3] - d.b[1]);
+    if (d.score > 0.5) hi++;
+    else if (d.score >= 0.2) mid++;
+    else lo++;
+  }
+  hs.sort((a, b) => a - b);
+  state.detStats = {
+    n: hs.length,
+    medianPx: hs.length ? Math.round(hs[hs.length >> 1]) : 0,
+    minPx: hs.length ? Math.round(hs[0]) : 0,
+    hi, mid, lo,
+    ms: Number.isFinite(ms) ? Math.round(ms) : null,
+    tiles: stats?.tiles ?? null,
+    frames: stats?.frames ?? null,
+  };
 }
 
 /**
@@ -1613,13 +1798,57 @@ function mergeDetections(r) {
   state.detBoxes = kept;
 }
 
+/** Estado del detector y medidor de píxeles, en el panel y sin desaparecer. */
+function paintDetStats(s) {
+  const d = state.detStatus;
+  const st = state.detStats;
+  const note = $("noteDet");
+
+  if (!d || !d.ok) {
+    $("bDet").textContent = "NO";
+    note.hidden = false;
+    note.dataset.tone = "warn";
+    note.textContent = (d?.motivo ? `${d.motivo}. ` : "")
+      + "Sin detector no hay clases: lo que se dibuja son manchas de movimiento "
+      + "y se etiquetan como tales.";
+  } else {
+    $("bDet").textContent = `${d.backend} · ${d.donde} · ${d.threads} hilo`
+      + `${d.threads > 1 ? "s" : ""}${d.isolated ? "" : " (sin aislar)"}`;
+    note.hidden = d.isolated;
+    if (!d.isolated) {
+      delete note.dataset.tone;
+      note.textContent = "La página no está aislada entre orígenes (COOP/COEP), "
+        + "así que WASM corre en un solo hilo. Es la diferencia más grande de "
+        + "velocidad que queda sin aprovechar.";
+    }
+  }
+
+  // Alto mediano: del detector si lo hay; si no, de las cajas de movimiento,
+  // que es lo único medible y sigue siendo el número que decide si la escena
+  // tiene arreglo o le faltan píxeles.
+  if (st && st.n) {
+    $("bPx").textContent = `${st.medianPx} px · n=${st.n}`;
+    $("bScores").textContent = `${st.hi} · ${st.mid} · ${st.lo}`;
+    $("bDetMs").textContent = st.ms !== null
+      ? `${st.ms} ms${st.tiles !== null ? ` · ${st.tiles} teselas` : ""}` : "—";
+  } else {
+    const hs = (state.boxes || []).map((b) => b.b[3] - b.b[1]).sort((a, b) => a - b);
+    $("bPx").textContent = hs.length
+      ? `${Math.round(hs[hs.length >> 1])} px (movimiento) · n=${hs.length}` : "— px";
+    $("bScores").textContent = "—";
+    $("bDetMs").textContent = st && st.ms !== null ? `${st.ms} ms` : "—";
+  }
+}
+
 function updateBrain() {
   const b = state.brain;
   if (!b) return;
   const s = b.state();
   $("fsBrain").hidden = false;
   $("bCounts").textContent = `${s.counts.person} · ${s.counts.vehicle}`;
+  $("bNoClass").textContent = String(s.counts.sinClase ?? 0);
   $("bFps").textContent = `${s.fps} fps · ${s.fast_ms} ms`;
+  paintDetStats(s);
   $("bScale").textContent = s.scale && s.scale.a !== undefined
     ? `${(1 / s.scale.a).toFixed(1)} px/m · n=${s.scale.n}`
     : "objetos a una sola distancia";
@@ -2329,6 +2558,33 @@ $("btnStature").addEventListener("click", async () => {
     console.error("ARGOS incompleto, faltan modulos: " + faltan.join(", "));
   } else {
     console.log("ARGOS listo: " + REQUERIDOS.length + " modulos cargados");
+  }
+
+  // El detector se carga al arrancar y no al conectar la cámara.
+  //
+  // No depende de la fuente --- son el runtime y los pesos, nada más --- y
+  // adelantarlo tiene dos ventajas: está listo cuando el usuario pulsa
+  // empezar, y su estado queda en el log de arranque. Que ese estado no fuera
+  // observable es lo que permitió entregar un APK que analizaba sin detector
+  // durante toda una sesión de campo.
+  if (typeof autoLoadModel === "function") {
+    state._autoLoading = autoLoadModel().then((ok) => {
+      state._autoLoading = null;
+      if (ok) {
+        const d = state.detStatus || {};
+        console.log(`ARGOS detector activo: ${d.backend} ${d.donde}, `
+          + `entrada ${d.size} px, ${d.threads} hilo(s), runtime ${d.origen}, `
+          + `aislado=${d.isolated}`);
+      } else {
+        console.error("ARGOS detector NO: "
+          + (state.detStatus?.motivo || "motivo desconocido"));
+      }
+      return ok;
+    }).catch((e) => {
+      state._autoLoading = null;
+      console.error("ARGOS detector NO: " + e.message);
+      return false;
+    });
   }
 })();
 

@@ -494,7 +494,10 @@ class Brain {
       p.setStopThreshold(hpx);
       p.update(cx, by, tSec, this.scale);
 
-      if (t.klass === "person") this._accumulateStature(t, by, hpx);
+      // Estatura solo sobre personas que ha dicho el modelo: medir la altura
+      // de una mancha vertical y llamarla estatura contamina la escala métrica
+      // de toda la sesión con farolas y marcos de puerta.
+      if (t.klass === "person" && t.klassSrc === "det") this._accumulateStature(t, by, hpx);
       if (this._fpVideo) this._accumulateFingerprint(t, this._fpVideo, this._fpRoi);
       this._checkEvents(t, p, tSec);
     }
@@ -648,7 +651,8 @@ class Brain {
     };
 
     if (p.stopped && p.dwellS > this.cfg.eventStopS) push("detenido", {dwell_s: +p.dwellS.toFixed(1)});
-    if (Number.isFinite(p.speedMs) && p.speedMs > this.cfg.eventRunMs && track.klass === "person") {
+    if (Number.isFinite(p.speedMs) && p.speedMs > this.cfg.eventRunMs
+        && track.klass === "person" && track.klassSrc === "det") {
       push("corriendo", {speed_m_s: +p.speedMs.toFixed(1)});
     }
     if (p.dwellS > this.cfg.loiterS && p.straightness < this.cfg.loiterStraightness) {
@@ -687,11 +691,21 @@ class Brain {
   }
 
   _updateCounts() {
-    const c = {person: 0, vehicle: 0, other: 0};
+    // Las clases que llegan del detector son GRUESAS --- "person" / "vehicle" /
+    // "bike" --- desde que el NMS pasó a operar por grupo. Esta lista seguía
+    // comparando contra las finas ("car", "bus", "truck"), que ya nadie emite:
+    // con el detector funcionando el contador de vehículos daba 0, y sin
+    // detector contaba las manchas anchas que `classify` bautiza "car". Estaba
+    // midiendo exactamente al revés de lo que dice.
+    //
+    // Solo cuenta lo que ha clasificado el modelo. Una proporción de caja no
+    // es una persona ni un vehículo, y ponerla en el marcador es afirmarlo.
+    const c = {person: 0, vehicle: 0, other: 0, sinClase: 0};
     for (const t of this.engine.tracker.tracks) {
       if (t.hits < this.engine.tracker.minHits) continue;
+      if (t.klassSrc !== "det") { c.sinClase++; continue; }
       if (t.klass === "person") c.person++;
-      else if (["car", "bus", "truck", "motorcycle", "bicycle"].includes(t.klass)) c.vehicle++;
+      else if (t.klass === "vehicle" || t.klass === "bike") c.vehicle++;
       else c.other++;
     }
     this.counts = c;
@@ -842,9 +856,10 @@ class Brain {
       if (t.hits < this.engine.tracker.minHits) continue;
       const p = this.physics.get(t.id);
       tracks.push({
-        id: t.id, cls: t.klass,
+        id: t.id, cls: t.klass, clsSrc: t.klassSrc || "forma",
         physics: p ? p.summary() : null,
-        stature: t.klass === "person" ? this.statureOf(t.id) : null,
+        stature: t.klass === "person" && t.klassSrc === "det"
+          ? this.statureOf(t.id) : null,
       });
     }
     return {

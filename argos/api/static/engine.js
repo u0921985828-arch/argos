@@ -360,6 +360,11 @@ class Tracker {
   /**
    * Voto de clase ponderado por área, ignorando cajas que tocan el borde.
    *
+   * Esto NO es reconocimiento: es la proporción de un borrón de movimiento. Lo
+   * que sale de aquí queda marcado con `klassSrc = "forma"` y la interfaz no
+   * enseña la palabra --- decir "coche" porque una mancha es más ancha que
+   * alta es justo la alucinación que se reportó desde el campo.
+   *
    * Asignar la clase con la caja del frame actual es un error sutil y
    * sistemático: la última caja de cualquier objeto es la rodaja estrecha que
    * queda mientras sale del cuadro, y una rodaja siempre tiene proporción de
@@ -376,6 +381,7 @@ class Tracker {
     let best = null, top = -1;
     for (const key in t.votes) if (t.votes[key] > top) { top = t.votes[key]; best = key; }
     t.klass = best;
+    t.klassSrc = "forma";
   }
 
   _hit(t, frameIdx, det) {
@@ -390,7 +396,7 @@ class Tracker {
     t.miss = 0;
     // Con clases del detector no hay que votar por proporción: la clase la da
     // el modelo y es fiable.
-    if (det.klass) t.klass = det.klass;
+    if (det.klass) { t.klass = det.klass; t.klassSrc = "det"; }
     else this._vote(t, det, this.frameW, this.frameH);
     t.obs.push({f: frameIdx, b: [det.x1, det.y1, det.x2, det.y2],
                 m: det.rle ?? null, s: det.fill});
@@ -400,12 +406,13 @@ class Tracker {
     const t = {
       id: this.nextId++, box: {x1: det.x1, y1: det.y1, x2: det.x2, y2: det.y2},
       vx: 0, vy: 0, hits: 1, miss: 0, age: 1, klass: det.klass || classify(det),
+      klassSrc: det.klass ? "det" : "forma",
       votes: {}, obs: [], pred: det, start: frameIdx,
     };
     t.pred = t.box;
     // Con clases del detector no hay que votar por proporción: la clase la da
     // el modelo y es fiable.
-    if (det.klass) t.klass = det.klass;
+    if (det.klass) { t.klass = det.klass; t.klassSrc = "det"; }
     else this._vote(t, det, this.frameW, this.frameH);
     t.obs.push({f: frameIdx, b: [det.x1, det.y1, det.x2, det.y2],
                 m: det.rle ?? null, s: det.fill});
@@ -434,6 +441,11 @@ class Tracker {
  * clases fiables hace falta un detector real.
  */
 function classify(det) {
+  // Pista de forma, NO una clase. Sin detector neuronal no hay nada en el
+  // pipeline que sepa qué es un coche; lo único disponible es la proporción de
+  // la mancha de movimiento, y una barandilla es más ancha que alta igual que
+  // un turismo. Quien consuma esto mira `klassSrc` antes de creérselo.
+  //
   // Se deriva de la caja y no de campos auxiliares: `classify` se llama tanto
   // sobre detecciones frescas como sobre cajas ya asociadas, y solo la caja
   // está garantizada en ambos casos.
@@ -942,7 +954,7 @@ class Engine {
       // Coordenadas devueltas en píxeles de la fuente: quien dibuja no debería
       // tener que conocer la resolución interna del análisis.
       boxes: live.map((t) => ({
-        id: t.id, c: t.klass, age: t.miss,
+        id: t.id, c: t.klass, cs: t.klassSrc || "forma", age: t.miss,
         b: [rx + t.box.x1 * sx, ry + t.box.y1 * sy,
             rx + t.box.x2 * sx, ry + t.box.y2 * sy],
       })),

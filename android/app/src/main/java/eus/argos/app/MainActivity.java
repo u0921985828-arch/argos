@@ -24,6 +24,9 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.webkit.WebViewAssetLoader;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Contenedor nativo de ARGOS.
  *
@@ -69,6 +72,32 @@ public class MainActivity extends AppCompatActivity {
     private WebView web;
     @Nullable private PermissionRequest pendingRequest;
 
+    /**
+     * Marca la respuesta como aislada entre orígenes.
+     *
+     * ONNX Runtime solo usa varios hilos de WASM si {@code crossOriginIsolated}
+     * es cierto, y eso exige que el documento llegue con COOP y COEP. Sin ellas
+     * la inferencia corre en un hilo aunque el teléfono tenga ocho núcleos, que
+     * es buena parte de la lentitud que se ve en pantalla.
+     *
+     * Se usa {@code credentialless} y no {@code require-corp} a propósito: con
+     * {@code require-corp} cualquier recurso externo sin CORP queda bloqueado,
+     * y esta aplicación se conecta a cámaras públicas de terceros que no envían
+     * esa cabecera. {@code credentialless} da el mismo aislamiento dejando pasar
+     * las peticiones sin credenciales. Un WebView antiguo que no la entienda la
+     * ignora y se queda en un hilo: peor, pero funcionando.
+     */
+    private static WebResourceResponse isolate(WebResourceResponse res) {
+        Map<String, String> headers = res.getResponseHeaders();
+        Map<String, String> out = headers == null
+                ? new HashMap<String, String>() : new HashMap<>(headers);
+        out.put("Cross-Origin-Opener-Policy", "same-origin");
+        out.put("Cross-Origin-Embedder-Policy", "credentialless");
+        out.put("Cross-Origin-Resource-Policy", "same-origin");
+        res.setResponseHeaders(out);
+        return res;
+    }
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -100,7 +129,8 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view,
                                                               WebResourceRequest request) {
-                return loader.shouldInterceptRequest(request.getUrl());
+                WebResourceResponse res = loader.shouldInterceptRequest(request.getUrl());
+                return res == null ? null : isolate(res);
             }
 
             @Override
