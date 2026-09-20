@@ -124,24 +124,12 @@ jobs:
           target: google_apis
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back emulated
-          script: |
-            adb install -r ARGOS.apk
-            # El permiso se concede sin diálogo: el emulador no tiene a nadie
-            # que lo pulse, y sin cámara la app no pasa de la pantalla inicial.
-            adb shell pm grant eus.argos.app android.permission.CAMERA || true
-            adb shell am start -n eus.argos.app/.MainActivity
-            sleep 15
-            adb exec-out screencap -p > screenshot.png
-            adb logcat -d > logcat.txt
-            if grep -q 'FATAL EXCEPTION' logcat.txt; then
-              echo "::error::crash al arrancar"; tail -60 logcat.txt; exit 1
-            fi
-            adb shell dumpsys activity activities \
-              | grep -q 'eus.argos.app/.MainActivity' || {
-                  echo "::error::la actividad no está en primer plano"; exit 1; }
-            # El WebView reenvía sus errores de consola a logcat con tag ARGOS,
-            # así que un fallo de carga del motor se ve aquí.
-            grep 'ARGOS' logcat.txt | tail -20 || true
+          # Una sola línea a propósito: esta acción ejecuta el bloque
+          # `script:` línea a línea con `sh -c`, así que cualquier construcción
+          # de varias líneas (un `if`, un `for`) le llega partida al shell y
+          # revienta con un error de sintaxis --- con el APK ya instalado y
+          # funcionando. Toda la lógica vive en el script.
+          script: bash .github/scripts/smoke.sh ARGOS.apk
 
       - uses: actions/upload-artifact@v4
         if: always()
