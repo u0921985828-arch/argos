@@ -2,6 +2,15 @@ name: Build APK
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_branch:
+        description: >-
+          Dejar el APK en la rama `apk` además de como artifact. Sirve para
+          recogerlo con git desde donde el almacén de artifacts no es
+          accesible. Apagado por defecto: cada activación deja 6 MB de binario
+          en el repositorio.
+        type: boolean
+        default: false
   push:
     paths:
       - 'android/**'
@@ -102,6 +111,30 @@ jobs:
           name: apk
           path: ARGOS.apk
           if-no-files-found: error
+
+      # Salida alternativa, apagada por defecto. El artifact se sirve desde un
+      # almacén que no es alcanzable desde todas las redes, y llega como .zip;
+      # una rama se recoge con `git fetch` desde cualquier sitio que llegue a
+      # github.com. La rama es huérfana y contiene solo el APK: no arrastra
+      # historia, y al no tocar ninguna de las rutas vigiladas arriba tampoco
+      # vuelve a disparar este workflow.
+      - name: Publish APK to the `apk` branch
+        if: inputs.publish_branch
+        run: |
+          set -e
+          work=$(mktemp -d)
+          cp ARGOS.apk "$work/"
+          cd "$work"
+          git init -q -b apk
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add ARGOS.apk
+          git commit -q -m "APK de ${GITHUB_SHA:0:8}"
+          git push -q --force \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}" apk
+          echo "APK en la rama apk ($(stat -c%s ARGOS.apk) bytes)"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   smoke:
     needs: build
