@@ -46,4 +46,21 @@ fi
 echo "--- logcat ARGOS ---"
 grep 'ARGOS' logcat.txt | tail -40 || echo "(sin líneas con tag ARGOS)"
 
-echo "OK: instalado, arrancado y en primer plano."
+# Y esto tiene que TUMBAR el job, no solo imprimirse.
+#
+# La versión anterior listaba estas líneas y terminaba con un OK. Así pasó en
+# verde un APK cuyo `brain.js` moría entero con
+#
+#     Uncaught SyntaxError: Unexpected token '=' @4155
+#
+# por un `??=` que el WebView de esta imagen no parsea. La aplicación se
+# instalaba, arrancaba, quedaba en primer plano y enseñaba la cámara sin
+# analizar nada: el fallo más caro del proyecto, y el comprobador decía que
+# todo estaba bien. Un proceso vivo no es un proceso que funcione.
+if grep 'ARGOS' logcat.txt | grep -Eq 'Uncaught|SyntaxError|ReferenceError|TypeError'; then
+    echo "::error::el motor no cargó: error de JavaScript en el WebView"
+    grep 'ARGOS' logcat.txt | grep -E 'Uncaught|SyntaxError|ReferenceError|TypeError'
+    exit 1
+fi
+
+echo "OK: instalado, arrancado, en primer plano y sin errores de JavaScript."
