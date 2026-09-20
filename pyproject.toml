@@ -1,0 +1,28 @@
+[project]
+name = "argos"
+version = "0.2.0"
+description = "Analitica de video sobre camara fija: deteccion, seguimiento, siluetas y sinopsis"
+requires-python = ">=3.11"
+
+# Rangos acotados por arriba a propósito. Sin techo, una versión mayor de
+# opencv o numpy entra sola en el siguiente `pip install` y rompe el pipeline
+# sin que nada del repositorio haya cambiado.
+dependencies = [
+  "numpy>=1.24,<3",
+  "opencv-contrib-python>=4.8,<5",
+  "scipy>=1.10,<2",
+]
+
+[project.optional-dependencies]
+# El servidor es opcional: el analisis completo corre en el navegador.
+server = [
+  "fastapi>=0.110,<1",
+  "uvicorn[standard]>=0.27,<1",
+  "python-multipart>=0.0.9",
+]
+detect = ["onnxruntime>=1.16,<2"]
+index = ["psycopg[binary]>=3.1,<4"]
+dev = ["pytest>=8,<9"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

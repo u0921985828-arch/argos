@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.venv/
+
+# Artefactos de compilación: se generan, no se versionan.
+# Tenerlos en el repo los desincroniza del código, y ya pasó una vez.
+argos.html
+desktop/argos.html
+android/app/src/main/assets/
+yolox_nano.onnx
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+.pytest_cache/
+*.tar.gz
+*.zip

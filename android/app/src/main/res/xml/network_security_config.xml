@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext acotado, no global.
+
+  La página se sirve por https desde los assets, pero un servidor ARGOS de la
+  red local habla por http plano. Poner `usesCleartextTraffic="true"` a secas
+  abriría la app a http contra cualquier destino de internet; esto lo limita a
+  direcciones privadas y a localhost, que es donde puede vivir el servidor y en
+  ningún otro sitio.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="true">192.168.0.0</domain>
+        <domain includeSubdomains="true">10.0.0.0</domain>
+        <domain includeSubdomains="true">argos.local</domain>
+    </domain-config>
+</network-security-config>

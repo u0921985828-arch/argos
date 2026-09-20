@@ -1,0 +1,143 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'android/**'
+      # Cualquier módulo del cliente: el APK empaqueta el bundle, que los
+      # contiene todos. Vigilar solo dos de ellos --- como hacía antes --- deja
+      # de disparar la compilación cuando cambia el detector o el cerebro.
+      - 'argos/api/static/**'
+      - 'scripts/bundle.py'
+      - '.github/workflows/build-apk.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # El APK empaqueta el MISMO fichero que se entrega para escritorio. Se
+      # genera aquí en lugar de versionarlo: un artefacto de compilación
+      # guardado junto al código se desincroniza, y ya ocurrió una vez en este
+      # repositorio.
+      - name: Build single-file bundle
+        run: |
+          python3 scripts/bundle.py --out argos.html
+          ls -l argos.html
+
+      # El modelo viaja dentro del APK. Sin él hay que ir a buscarlo a una
+      # release de GitHub desde el móvil, que es donde peor se hace.
+      - name: Fetch detector weights
+        run: |
+          curl -sSL -o yolox_nano.onnx \
+            https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_nano.onnx
+          test "$(stat -c%s yolox_nano.onnx)" -gt 3000000
+
+      # El wrapper incluye un .jar binario que no siempre conviene versionar.
+      # Si falta, se genera aquí con el Gradle del runner: así el repositorio
+      # queda solo con texto y la compilación sigue siendo reproducible.
+      - name: Ensure Gradle wrapper
+        working-directory: android
+        run: |
+          if [ ! -f gradlew ]; then
+            gradle wrapper --gradle-version 8.9 --no-daemon
+          fi
+          chmod +x gradlew
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew --no-daemon assembleDebug
+
+      # Comprobación barata que atrapa el fallo más caro: un APK que arranca,
+      # enseña la cámara y no detecta nada porque el motor no se copió.
+      - name: Verify web assets were bundled
+        run: |
+          set -e
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          unzip -l "$APK" | grep -q 'assets/index.html' || { echo "falta index.html"; exit 1; }
+          unzip -l "$APK" | grep -q 'assets/yolox_nano.onnx' || { echo "falta el modelo"; exit 1; }
+
+          # Que el fichero esté no basta: tiene que llevar los módulos dentro.
+          # Comprobar solo el nombre dejaba pasar un bundle recortado, que
+          # arranca, enseña la cámara y no detecta nada --- el fallo más caro
+          # porque parece que funciona.
+          mkdir -p /tmp/apk && unzip -o -q "$APK" assets/index.html -d /tmp/apk
+          for m in "class Engine" "class YoloxDetector" "class Brain" \
+                   "class Archive" "class BehaviourModel" "class DetectorWorker" \
+                   "class GroundPlane" "class CameraRegistry" "function planSynopsis"; do
+            grep -q "$m" /tmp/apk/assets/index.html || { echo "falta: $m"; exit 1; }
+          done
+          echo "APK completo: $(stat -c%s /tmp/apk/assets/index.html) bytes de app + modelo"
+
+      - name: Rename
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk ARGOS.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: ARGOS.apk
+          if-no-files-found: error
+
+  smoke:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: apk }
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back emulated
+          script: |
+            adb install -r ARGOS.apk
+            # El permiso se concede sin diálogo: el emulador no tiene a nadie
+            # que lo pulse, y sin cámara la app no pasa de la pantalla inicial.
+            adb shell pm grant eus.argos.app android.permission.CAMERA || true
+            adb shell am start -n eus.argos.app/.MainActivity
+            sleep 15
+            adb exec-out screencap -p > screenshot.png
+            adb logcat -d > logcat.txt
+            if grep -q 'FATAL EXCEPTION' logcat.txt; then
+              echo "::error::crash al arrancar"; tail -60 logcat.txt; exit 1
+            fi
+            adb shell dumpsys activity activities \
+              | grep -q 'eus.argos.app/.MainActivity' || {
+                  echo "::error::la actividad no está en primer plano"; exit 1; }
+            # El WebView reenvía sus errores de consola a logcat con tag ARGOS,
+            # así que un fallo de carga del motor se ve aquí.
+            grep 'ARGOS' logcat.txt | tail -20 || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke
+          path: |
+            screenshot.png
+            logcat.txt

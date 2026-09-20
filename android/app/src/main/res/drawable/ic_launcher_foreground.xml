@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- El ojo de ARGOS, dentro del área segura de 66dp que exige el icono
+     adaptativo: cualquier trazo fuera de ella se recorta en los lanzadores con
+     máscara circular. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path
+        android:pathData="M27,54 C27,54 38,37 54,37 C70,37 81,54 81,54 C81,54 70,71 54,71 C38,71 27,54 27,54 Z"
+        android:strokeColor="#F2EFE9" android:strokeWidth="3.4"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M54,54 m-10.5,0 a10.5,10.5 0 1,0 21,0 a10.5,10.5 0 1,0 -21,0"
+        android:strokeColor="#F2EFE9" android:strokeWidth="3.4" />
+    <path
+        android:pathData="M54,54 m-4.8,0 a4.8,4.8 0 1,0 9.6,0 a4.8,4.8 0 1,0 -9.6,0"
+        android:fillColor="#E8552D" />
+</vector>

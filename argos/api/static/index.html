@@ -1,0 +1,2311 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#000000">
+<meta name="description" content="ARGOS — análisis de vídeo sobre cualquier cámara.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ARGOS">
+<title>ARGOS</title>
+<script src="/engine.js" defer></script>
+<script src="/solver.js" defer></script>
+<script src="/photogrammetry.js" defer></script>
+<script src="/detector.js" defer></script>
+<script src="/brain.js" defer></script>
+<script src="/archive.js" defer></script>
+<script src="/identity.js" defer></script>
+<script src="/behaviour.js" defer></script>
+<script src="/detector-worker.js" defer></script>
+<script src="/cameras.js" defer></script>
+<script src="/groundplane.js" defer></script>
+<style>
+/* ==========================================================================
+   ARGOS · cliente móvil
+   --------------------------------------------------------------------------
+   Una superficie: la escena. Un control: el ojo.
+
+   El fondo es el stream local del dispositivo a resolución nativa y a su propia
+   tasa de refresco. Por la red solo viaja lo que el cliente no puede deducir:
+   la posición que el tracker atribuye a cada objeto. Devolver un JPEG
+   recodificado desde el servidor costaría ~29x más ancho de banda para mostrar
+   una copia peor y más tardía de una imagen que el teléfono ya tiene.
+   ========================================================================== */
+
+/* --- tokens ------------------------------------------------------------- */
+:root{
+  --ink:#f2efe9;
+  --dim:rgb(242 239 233 / .56);
+  --faint:rgb(242 239 233 / .30);
+  --line:rgb(242 239 233 / .16);
+  --line-strong:rgb(242 239 233 / .28);
+  --glass:rgb(9 11 14 / .74);
+  --scrim:rgb(0 0 0 / .45);
+  --accent:#e8552d;
+  --accent-ink:#fff;
+  --ok:#5cc98a;
+  --warn:#e0b64a;
+  --err:#e0614f;
+
+  --r-sm:9px; --r-md:12px; --r-lg:20px; --r-pill:999px;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:22px; --sp-6:30px;
+
+  --eye:64px;
+  --safe-t:env(safe-area-inset-top,0px);
+  --safe-b:env(safe-area-inset-bottom,0px);
+
+  --ease:cubic-bezier(.32,.72,0,1);
+  --ease-out:cubic-bezier(.4,0,.2,1);
+  --spring:cubic-bezier(.3,1.3,.5,1);
+
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important}
+}
+
+/* --- reset -------------------------------------------------------------- */
+*,*::before,*::after{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{
+  margin:0;height:100%;overflow:hidden;background:#000;color:var(--ink);
+  font:400 15px/1.45 var(--font);overscroll-behavior:none;
+  -webkit-user-select:none;user-select:none;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:var(--r-sm)}
+[hidden]{display:none!important}
+
+/* --- escena ------------------------------------------------------------- */
+#stage{position:fixed;inset:0;background:#000;overflow:hidden}
+#video,#mjpeg{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;object-position:center;background:#000;
+}
+#overlay{position:absolute;inset:0;pointer-events:none}
+
+#idle{
+  position:absolute;inset:0;display:grid;place-content:center;gap:var(--sp-2);
+  text-align:center;padding:var(--sp-6);color:var(--faint);
+}
+#idle svg{width:56px;height:56px;margin:0 auto;opacity:.5}
+#idle p{margin:0;font-size:13px;letter-spacing:.02em;max-width:24ch}
+
+/* --- selector de región ------------------------------------------------- */
+/*
+   El recuadro no oscurece lo de dentro: se oscurece TODO lo de fuera con una
+   sombra enorme. Así la región analizada se ve tal cual y el contraste señala
+   el límite sin dibujar nada encima del contenido que importa.
+*/
+#roi{
+  position:absolute;border:2px solid var(--accent);border-radius:2px;
+  box-shadow:0 0 0 9999px rgb(0 0 0 / .55);cursor:move;display:none;z-index:12;
+  touch-action:none;
+}
+#roi[data-on="1"]{display:block}
+#roi::after{
+  content:attr(data-size);position:absolute;top:-22px;left:0;
+  font:600 11px/1 var(--mono);color:var(--ink);background:var(--scrim);
+  padding:4px 7px;border-radius:5px;white-space:nowrap;
+}
+.grip{
+  position:absolute;width:22px;height:22px;background:var(--accent);
+  border-radius:3px;touch-action:none;
+}
+.grip[data-c="nw"]{left:-11px;top:-11px;cursor:nwse-resize}
+.grip[data-c="ne"]{right:-11px;top:-11px;cursor:nesw-resize}
+.grip[data-c="sw"]{left:-11px;bottom:-11px;cursor:nesw-resize}
+.grip[data-c="se"]{right:-11px;bottom:-11px;cursor:nwse-resize}
+
+/* --- HUD ---------------------------------------------------------------- */
+#hud{
+  position:fixed;top:calc(var(--safe-t) + var(--sp-3));inset-inline:0;z-index:15;
+  display:flex;justify-content:center;flex-wrap:wrap;gap:var(--sp-2);
+  padding-inline:var(--sp-4);pointer-events:none;
+  transition:opacity .3s var(--ease-out),transform .3s var(--ease-out);
+}
+#hud[data-dim="1"]{opacity:0;transform:translateY(-8px)}
+.pill{
+  display:inline-flex;align-items:center;gap:6px;
+  background:var(--scrim);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid var(--line);padding:5px 11px;border-radius:var(--r-pill);
+  font-size:11px;letter-spacing:.05em;color:var(--dim);
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.pill b{color:var(--ink);font-weight:600}
+.pill[data-tone="warn"]{border-color:rgb(224 182 74 / .45);color:var(--warn)}
+.pill[data-tone="err"]{border-color:rgb(224 97 79 / .5);color:var(--err)}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:none}
+.dot[data-live="1"]{animation:breathe 2.2s var(--ease-out) infinite}
+@keyframes breathe{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* --- ojo ---------------------------------------------------------------- */
+#eye{
+  position:fixed;left:50%;bottom:calc(var(--safe-b) + var(--sp-5));
+  translate:-50% 0;
+  width:var(--eye);height:var(--eye);padding:0;border:0;background:none;
+  color:var(--ink);opacity:.42;z-index:30;cursor:pointer;
+  filter:drop-shadow(0 2px 14px rgb(0 0 0 / .78));
+  transition:opacity .28s var(--ease-out),scale .28s var(--spring);
+}
+#eye:hover{opacity:.7}
+#eye:active{scale:.9}
+#eye[aria-expanded="true"]{opacity:.95}
+#eye svg{width:100%;height:100%;display:block}
+#eye .iris{transform-origin:32px 32px;transition:scale .3s var(--ease-out)}
+#eye[aria-expanded="true"] .iris{scale:.55}
+#eye .lid{transform-origin:32px 32px;scale:1 0;transition:scale .3s var(--ease-out)}
+#eye[aria-expanded="true"] .lid{scale:1 1}
+#eye .pupil{transform-origin:32px 32px}
+#eye[data-live="1"] .pupil{animation:iris 2.4s var(--ease-out) infinite}
+@keyframes iris{0%,100%{scale:1;opacity:1}50%{scale:1.32;opacity:.5}}
+
+/* --- panel -------------------------------------------------------------- */
+#panel{
+  position:fixed;inset-inline:0;bottom:0;z-index:20;
+  max-height:min(78dvh,640px);overflow-y:auto;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  background:var(--glass);backdrop-filter:blur(24px) saturate(140%);
+  -webkit-backdrop-filter:blur(24px) saturate(140%);
+  border-top:1px solid var(--line-strong);border-radius:var(--r-lg) var(--r-lg) 0 0;
+  padding:var(--sp-5) var(--sp-4) calc(var(--eye) + var(--safe-b) + var(--sp-6));
+  translate:0 100%;opacity:0;pointer-events:none;
+  transition:translate .34s var(--ease),opacity .24s var(--ease-out);
+}
+#panel[data-open="1"]{translate:0 0;opacity:1;pointer-events:auto}
+#grip{
+  width:36px;height:4px;border-radius:var(--r-pill);background:var(--line-strong);
+  margin:calc(var(--sp-2) * -1) auto var(--sp-4);
+}
+
+fieldset{border:0;margin:0 0 var(--sp-5);padding:0;min-inline-size:0}
+fieldset:last-of-type{margin-bottom:0}
+legend{
+  padding:0;margin-bottom:var(--sp-3);font-size:11px;font-weight:600;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--dim);
+}
+
+label{display:block;font-size:12px;color:var(--dim);margin:var(--sp-3) 0 var(--sp-1)}
+input,select{
+  inline-size:100%;padding:12px 13px;background:rgb(0 0 0 / .42);color:var(--ink);
+  border:1px solid var(--line);border-radius:var(--r-md);
+  font:400 16px/1.3 var(--font);appearance:none;
+  transition:border-color .18s var(--ease-out);
+}
+input:focus,select:focus{border-color:var(--line-strong);outline:none}
+input::placeholder{color:var(--faint)}
+select{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23f2efe9' stroke-opacity='.5' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 14px center;padding-right:36px;
+}
+
+button{
+  inline-size:100%;padding:14px;border:0;border-radius:var(--r-md);
+  background:var(--accent);color:var(--accent-ink);
+  font:600 15px/1 var(--font);margin-top:var(--sp-2);cursor:pointer;
+  transition:opacity .18s var(--ease-out),scale .12s var(--ease-out);
+}
+button:active:not(:disabled){scale:.985}
+button.ghost{background:rgb(255 255 255 / .07);color:var(--ink);border:1px solid var(--line)}
+button:disabled{opacity:.34;cursor:default}
+
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:var(--sp-3)}
+.chip{
+  padding:8px 12px;background:rgb(255 255 255 / .06);border:1px solid var(--line);
+  border-radius:var(--r-pill);font:400 13px/1 var(--font);color:var(--dim);
+  cursor:pointer;inline-size:auto;margin:0;
+  transition:color .18s var(--ease-out),border-color .18s var(--ease-out);
+}
+.chip:active{border-color:var(--accent);color:var(--ink)}
+.row{display:flex;gap:var(--sp-2)}
+.row>*{flex:1 1 0;min-inline-size:0}
+
+.stat{
+  display:flex;justify-content:space-between;align-items:baseline;gap:var(--sp-3);
+  padding:9px 0;border-bottom:1px solid var(--line);font-size:14px;
+}
+.stat:last-child{border-bottom:0}
+.stat>span{color:var(--dim);min-inline-size:0;overflow-wrap:anywhere}
+.stat>b{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.stat small{color:var(--faint);font-weight:400;font-size:.85em}
+
+.note{font-size:12px;line-height:1.55;color:var(--dim);margin:var(--sp-3) 0 0}
+.note b{color:var(--ink);font-weight:600}
+.note[data-tone="warn"]{color:var(--warn)}
+.note[data-tone="err"]{color:var(--err)}
+
+.out{inline-size:100%;display:block;margin-top:var(--sp-2);
+  border-radius:var(--r-md);background:#000}
+
+/* --- avisos ------------------------------------------------------------- */
+/* Cuando el panel está abierto ocupa la mitad inferior, así que los avisos se
+   mueven arriba: un mensaje de error solapado sobre el formulario que lo ha
+   provocado es ilegible justo cuando más falta hace leerlo. */
+#toasts{
+  position:fixed;inset-inline:var(--sp-4);z-index:40;
+  bottom:calc(var(--eye) + var(--safe-b) + var(--sp-6));top:auto;
+  display:flex;flex-direction:column;gap:var(--sp-2);
+  pointer-events:none;align-items:center;
+  transition:top .3s var(--ease),bottom .3s var(--ease);
+}
+#toasts[data-shift="1"]{top:calc(var(--safe-t) + var(--sp-6) + 34px);bottom:auto}
+.toast{
+  max-inline-size:min(100%,42ch);padding:11px 14px;border-radius:var(--r-md);
+  background:var(--glass);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  border:1px solid var(--line-strong);font-size:13px;line-height:1.45;color:var(--ink);
+  box-shadow:0 8px 28px rgb(0 0 0 / .5);
+  animation:rise .28s var(--ease) both;
+}
+.toast[data-tone="err"]{border-color:rgb(224 97 79 / .55)}
+.toast[data-tone="warn"]{border-color:rgb(224 182 74 / .5)}
+.toast.out-anim{animation:fade .22s var(--ease-out) forwards}
+@keyframes rise{from{opacity:0;translate:0 10px}to{opacity:1;translate:0 0}}
+@keyframes fade{to{opacity:0;translate:0 6px}}
+
+.sr{position:absolute;inline-size:1px;block-size:1px;padding:0;margin:-1px;
+  overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+@media (min-width:640px){
+  #panel{inset-inline:50%;translate:-50% 100%;inline-size:min(560px,calc(100% - 32px));
+    border-radius:var(--r-lg);bottom:calc(var(--eye) + var(--safe-b) + var(--sp-6))}
+  #panel[data-open="1"]{translate:-50% 0}
+}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <video id="video" playsinline muted autoplay disablepictureinpicture hidden></video>
+  <img id="mjpeg" alt="" hidden>
+  <canvas id="overlay" aria-hidden="true"></canvas>
+
+  <div id="roi" data-size="" aria-label="Región analizada">
+    <div class="grip" data-c="nw"></div><div class="grip" data-c="ne"></div>
+    <div class="grip" data-c="sw"></div><div class="grip" data-c="se"></div>
+  </div>
+
+  <div id="idle">
+    <p>Toca el ojo para elegir una cámara.</p>
+  </div>
+</div>
+
+<div id="hud" data-dim="0">
+  <span class="pill" id="pillState">en espera</span>
+  <span class="pill" id="pillObjects" hidden><b>0</b>&nbsp;objetos</span>
+  <span class="pill" id="pillAlert" hidden></span>
+</div>
+
+<button id="eye" type="button" aria-expanded="true" aria-controls="panel"
+        aria-label="Mostrar u ocultar el menú">
+  <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M4 32s11-17 28-17 28 17 28 17-11 17-28 17S4 32 4 32Z"
+          stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"
+          fill="rgb(0 0 0 / .3)"/>
+    <g class="iris">
+      <circle cx="32" cy="32" r="11.5" stroke="currentColor" stroke-width="2.6"/>
+      <circle class="pupil" cx="32" cy="32" r="5.5" fill="currentColor"/>
+    </g>
+    <path class="lid" d="M4 32s11-17 28-17 28 17 28 17Z"
+          fill="currentColor" fill-opacity=".92"/>
+  </svg>
+</button>
+
+<section id="panel" data-open="1" aria-label="Controles">
+  <div id="grip" aria-hidden="true"></div>
+
+  <fieldset id="fsServer" hidden>
+    <legend>Servidor</legend>
+    <p class="note" data-tone="warn" id="noteServer"></p>
+    <label for="apiBase">Dirección del servidor ARGOS</label>
+    <input id="apiBase" type="url" inputmode="url" autocomplete="off" autocapitalize="off"
+           autocorrect="off" spellcheck="false" placeholder="http://192.168.1.40:8000">
+    <label for="apiToken">Token de acceso <span style="opacity:.6">— si el servidor lo exige</span></label>
+    <input id="apiToken" type="password" autocomplete="off" autocapitalize="off"
+           autocorrect="off" spellcheck="false" placeholder="opcional en red local">
+    <button id="btnPing" type="button" class="ghost">Probar conexión</button>
+  </fieldset>
+
+  <fieldset id="fsSource">
+    <legend>Fuente</legend>
+    <label for="spec">Origen de vídeo</label>
+    <input id="spec" type="text" inputmode="url" autocomplete="off" autocapitalize="off"
+           autocorrect="off" spellcheck="false"
+           value="pantalla://area"
+           placeholder="local://camara  ·  rtsp://…  ·  /ruta/video.mp4  ·  0">
+    <div class="chips" role="group" aria-label="Orígenes frecuentes">
+      <button type="button" class="chip" data-spec="pantalla://area">Región de pantalla</button>
+      <button type="button" class="chip" data-spec="local://camara">Cámara · análisis local</button>
+      <button type="button" class="chip" data-spec="push://telefono">Cámara · análisis en servidor</button>
+      <button type="button" class="chip" data-spec="0">Webcam USB</button>
+      <button type="button" class="chip"
+              data-spec="rtsp://usuario:clave@192.168.1.50:554/stream1">IP · RTSP</button>
+    </div>
+    <button id="btnConnect" type="button">Conectar</button>
+    <p class="note">Todo el análisis corre en este equipo. No hace falta servidor.</p>
+    <button id="btnUseServer" type="button" class="ghost">Usar servidor Python (opcional)</button>
+    <p class="note">Solo para fuentes RTSP y el índice de búsqueda persistente.
+      Detección, siluetas, sinopsis y estatura funcionan sin él.</p>
+  </fieldset>
+
+  <fieldset id="fsCapture" hidden>
+    <legend>Captura</legend>
+    <div class="row">
+      <button id="btnStart" type="button">Empezar</button>
+      <button id="btnStop" type="button" class="ghost" disabled>Parar</button>
+    </div>
+    <label for="rate">Cadencia de envío</label>
+    <select id="rate">
+      <option value="500" selected>2 fps — recomendado</option>
+      <option value="250">4 fps — más detalle</option>
+      <option value="1000">1 fps — red lenta</option>
+    </select>
+    <button id="btnFlip" type="button" class="ghost" hidden>Cambiar de cámara</button>
+    <p class="note"><b>Apoya el dispositivo en algo fijo.</b> Todo el análisis asume vista
+      estática: si la cámara se mueve, la escena entera se detecta como objeto.</p>
+  </fieldset>
+
+  <fieldset id="fsRoi" hidden>
+    <legend>Región</legend>
+    <p class="note">Arrastra el recuadro sobre el vídeo que quieras analizar y ajústalo
+      con las esquinas. <b>Solo se analiza lo de dentro.</b></p>
+    <div class="row">
+      <button id="btnRoiFull" type="button" class="ghost">Toda la fuente</button>
+      <button id="btnRoiLock" type="button" class="ghost">Fijar</button>
+    </div>
+    <p class="note" data-tone="warn">Al mover el recuadro se reinicia el modelo de fondo:
+      la escena de debajo es otra. Ajústalo antes de empezar a grabar.</p>
+  </fieldset>
+
+  <fieldset id="fsModel" hidden>
+    <legend>Detector</legend>
+    <p class="note" id="noteModel">Ahora mismo: <b>sustracción de fondo</b>. Encuentra lo
+      que se mueve, y eso basta para tráfico — pero una multitud densa y parada es, para
+      un modelo de fondo, parte del fondo.</p>
+    <label for="modelUrl">Modelo YOLOX (.onnx)</label>
+    <input id="modelUrl" type="text" autocomplete="off" spellcheck="false"
+           placeholder="https://…/yolox_tiny.onnx  ·  o elige un fichero">
+    <input id="modelFile" type="file" accept=".onnx">
+    <label for="detZoom">Zoom de análisis</label>
+    <select id="detZoom">
+      <option value="1">×1 — vehículos y objetos grandes</option>
+      <option value="2" selected>×2 — recomendado para personas</option>
+      <option value="3">×3 — objetos muy pequeños</option>
+      <option value="4">×4 — extremo</option>
+      <option value="6">×6 — extremo</option>
+      <option value="10">×10 — máximo</option>
+      <option value="multi">×1 + ×2 — multiescala</option>
+      <option value="piramide">Pirámide — rejilla gruesa + fina adaptativa</option>
+      <option value="escaner">Escáner — barrido visible de arriba abajo</option>
+    </select>
+    <p class="note">Recorta teselas más pequeñas y las amplía antes de mirarlas. Una
+      persona de 20 px llega al modelo a 40. Coste: al doble de zoom, cuatro veces más
+      teselas.</p>
+    <p class="note" id="noteZoom" data-tone="warn" hidden></p>
+    <button id="btnLoadModel" type="button" class="ghost">Cargar detector neuronal</button>
+    <p class="note">Pesos Apache-2.0 de YOLOX. El modelo se ejecuta aquí con ONNX Runtime
+      Web: no sale nada del equipo.</p>
+  </fieldset>
+
+  <fieldset id="fsOverlay" hidden>
+    <legend>Vista</legend>
+    <div class="row">
+      <button id="btnBrackets" type="button">Corchetes</button>
+      <button id="btnSilhouettes" type="button" class="ghost">Siluetas</button>
+    </div>
+    <p class="note">La capa de siluetas es <b>anónima por construcción</b>: lleva postura,
+      marcha, clase, tamaño y posición, y nada del detalle facial o de ropa que convierte
+      una imagen en dato personal.</p>
+  </fieldset>
+
+  <fieldset id="fsBrain" hidden>
+    <legend>Escena</legend>
+    <div class="stat"><span>Personas · vehículos</span><b id="bCounts">0 · 0</b></div>
+    <div class="stat"><span>Render</span><b id="bFps">— fps</b></div>
+    <div class="stat"><span>Escala métrica</span><b id="bScale">aprendiendo</b></div>
+    <div id="bTracks"></div>
+    <p class="note" id="bEvents"></p>
+  </fieldset>
+
+  <fieldset id="fsSession" hidden>
+    <legend>Sesión</legend>
+    <div class="stat"><span>Frames analizados</span><b id="statFrames">0</b></div>
+    <div class="stat"><span>Objetos completados</span><b id="statTubes">0</b></div>
+    <div class="stat"><span>Capacidad de la fuente</span><b id="statCapability">midiendo</b></div>
+    <p class="note" id="noteCapability" hidden></p>
+    <button id="btnDisconnect" type="button" class="ghost">Desconectar</button>
+  </fieldset>
+
+  <fieldset id="fsMemory" hidden>
+    <legend>Memoria</legend>
+    <div class="stat"><span>Objetos archivados</span><b id="mTubes">0</b></div>
+    <div class="stat"><span>Eventos</span><b id="mEvents">0</b></div>
+    <div class="stat"><span>Espacio</span><b id="mSize">—</b></div>
+
+    <label for="qClass">Buscar</label>
+    <select id="qClass">
+      <option value="">Todo</option>
+      <option value="person">Personas</option>
+      <option value="vehicle">Vehículos</option>
+      <option value="bike">Bicis y motos</option>
+    </select>
+    <select id="qWindow">
+      <option value="0">Toda la memoria</option>
+      <option value="1">Última hora</option>
+      <option value="8">Últimas 8 horas</option>
+      <option value="24">Último día</option>
+    </select>
+    <button id="btnSearch" type="button" class="ghost">Buscar</button>
+    <div id="qResults"></div>
+
+    <p class="note">Se archivan trayectorias, siluetas y eventos. <b>No se guarda vídeo
+      ni recortes de objeto</b>: una silueta lleva postura, marcha, clase y posición, y
+      no lleva cara ni ropa reconocible.</p>
+    <button id="btnLink" type="button" class="ghost">Buscar el mismo objeto en otras cámaras</button>
+    <div id="linkResults"></div>
+    <div class="row">
+      <button id="btnExport" type="button" class="ghost">Exportar</button>
+      <button id="btnWipe" type="button" class="ghost">Borrar todo</button>
+    </div>
+  </fieldset>
+
+  <fieldset id="fsOutput" hidden>
+    <legend>Resultados</legend>
+    <button id="btnBuild" type="button">Generar sinopsis y siluetas</button>
+    <button id="btnStature" type="button" class="ghost">Estimar estaturas</button>
+    <div id="results" aria-live="polite"></div>
+  </fieldset>
+</section>
+
+<div id="toasts" role="status" aria-live="polite"></div>
+<p class="sr" id="srStatus" role="status" aria-live="polite"></p>
+
+<script>
+"use strict";
+(() => {
+
+/* ==========================================================================
+   Configuración
+   ========================================================================== */
+const CFG = Object.freeze({
+  trackPollMs:       330,   // refresco de corchetes
+  statusEveryNPolls: 5,     // el estado de sesión cambia mucho más despacio
+  fetchTimeoutMs:    8000,
+  uploadTimeoutMs:   12000,
+  backoffMaxMs:      6000,
+  staleAfterMs:      6000,  // sin frames nuevos => la fuente está parada
+  toastMs:           4200,
+  jpegQuality:       0.72,
+  captureMaxEdge:    1600,  // techo del lado mayor al codificar
+  boxStaleMs:        2500,  // corchetes que dejan de refrescarse => se ocultan
+  runMaxFrames:      1200,
+  bracketRatio:      0.28,
+  bracketMaxPx:      14,
+});
+
+const CLASS_ES = Object.freeze({
+  person:"persona", car:"coche", truck:"camión", bus:"autobús",
+  bicycle:"bici", motorcycle:"moto", cat:"gato", dog:"perro", object:"objeto",
+});
+
+const CAPABILITY_ES = Object.freeze({
+  full:"completa", limited:"limitada", "snapshot-only":"solo snapshot", unknown:"midiendo",
+});
+
+/* ==========================================================================
+   Utilidades
+   ========================================================================== */
+const $ = (id) => document.getElementById(id);
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+/** fetch con timeout duro: una petición colgada no debe congelar el bucle. */
+async function request(path, {timeout = CFG.fetchTimeoutMs, ...opts} = {}) {
+  const url = /^https?:\/\//i.test(path) ? path : state.apiBase + path;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeout);
+  // El token viaja en cabecera. Solo las URL de medios lo llevan en la consulta
+  // (ver mediaUrl), porque <img> y <video> no pueden enviar cabeceras y los
+  // parámetros acaban en registros de acceso y en el historial.
+  const headers = {...(opts.headers || {})};
+  if (state.token) headers["Authorization"] = `Bearer ${state.token}`;
+  try {
+    const res = await fetch(url, {...opts, headers, signal: ctl.signal});
+    if (!res.ok) {
+      let detail = res.statusText;
+      try { detail = (await res.json()).detail ?? detail; } catch { /* cuerpo no JSON */ }
+      throw new Error(detail || `HTTP ${res.status}`);
+    }
+    return res.status === 204 ? null : res.json();
+  } catch (err) {
+    if (err.name === "AbortError") throw new Error("La petición tardó demasiado.");
+    // "Failed to fetch" es un TypeError genérico que cubre tres causas muy
+    // distintas: no hay servidor, el origen no es http(s), o CORS lo bloqueó.
+    // Devolver el texto crudo del navegador deja al usuario sin saber cuál de
+    // las tres es, que es exactamente cuando abandona.
+    if (err.message && /token/i.test(err.message)) {
+      throw new Error("El servidor exige un token de acceso. Introdúcelo arriba.");
+    }
+    if (err instanceof TypeError) {
+      // Solo se llega aquí desde las funciones que sí usan servidor: nada del
+      // análisis local hace peticiones.
+      throw new Error(`No hay respuesta en ${state.apiBase || location.origin}. `
+        + "Comprueba que el servidor Python está arrancado y accesible.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** ¿La página viene servida por HTTP, o se abrió como file:// desde el disco? */
+const isServed = () => location.protocol === "http:" || location.protocol === "https:";
+
+const postJSON = (url, body) => request(url, {
+  method: "POST",
+  headers: {"Content-Type": "application/json"},
+  body: JSON.stringify(body ?? {}),
+});
+
+/* --- avisos efímeros ---------------------------------------------------- */
+const toastHost = $("toasts");
+function toast(message, tone = "info") {
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.dataset.tone = tone;
+  el.textContent = message;
+  toastHost.append(el);
+  $("srStatus").textContent = message;
+  setTimeout(() => {
+    el.classList.add("out-anim");
+    el.addEventListener("animationend", () => el.remove(), {once: true});
+  }, CFG.toastMs);
+}
+
+/* ==========================================================================
+   Estado
+   ========================================================================== */
+const state = {
+  apiBase:     "",            // vacío = mismo origen que sirvió la página
+  token:       "",            // credencial, si el servidor la exige
+  sessionId:   null,
+  mode:        null,          // 'local' | 'pantalla' | 'push' | 'pull'
+  detector:    null,          // YoloxDetector en el hilo principal (respaldo)
+  detWorker:   null,          // detector en hilo propio (preferente)
+  detBoxes:    [],            // cajas acumuladas entre pasadas
+  detBudget:   1,             // teselas por pasada
+  multiScale:  false,
+  pyramid:     false,
+  scanner:     false,
+  sweepBand:   null,          // dónde mira el detector AHORA, en px de fuente
+  sweepY:      null,          // posición dibujada, interpolada hacia la real
+  detTtlMs:    4000,          // caducidad de una caja sin reconfirmar
+  detRunning:  false,
+  brain:       null,          // coordinador de las dos escalas de tiempo
+  archive:     null,          // memoria persistente
+  archived:    new Set(),
+  detMs:       0,
+  detPasses:   0,
+  engine:      null,          // motor en el dispositivo (modo local)
+  overlay:     "brackets",    // 'brackets' | 'silhouettes'
+  rafId:       0,
+  lastTubes:   [],
+  kind:        null,
+  capturing:   false,
+  facing:      "environment",
+  mediaStream: null,
+  wakeLock:    null,
+  boxes:       [],
+  boxesAt:     0,
+  sourceW:     0,
+  sourceH:     0,
+  lastFrameCount: -1,
+  lastFrameAt: 0,
+  pollTicks:   0,
+  backoffMs:   0,
+  busyUpload:  false,
+  captureTimer:null,
+  pollTimer:   null,
+};
+
+/* ==========================================================================
+   Panel y ojo
+   ========================================================================== */
+const eye = $("eye"), panel = $("panel"), hud = $("hud");
+
+function setPanel(open) {
+  eye.setAttribute("aria-expanded", String(open));
+  panel.dataset.open = open ? "1" : "0";
+  hud.dataset.dim = open ? "1" : "0";
+  toastHost.dataset.shift = open ? "1" : "0";
+}
+const panelOpen = () => eye.getAttribute("aria-expanded") === "true";
+
+eye.addEventListener("click", (e) => { e.stopPropagation(); setPanel(!panelOpen()); });
+// Tocar la escena también cierra: un panel nunca debe ser algo de lo que haya
+// que buscar la salida.
+$("stage").addEventListener("click", () => { if (panelOpen()) setPanel(false); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && panelOpen()) setPanel(false);
+});
+
+for (const chip of document.querySelectorAll(".chip")) {
+  chip.addEventListener("click", () => { $("spec").value = chip.dataset.spec; });
+}
+
+/* ==========================================================================
+   Overlay
+   ========================================================================== */
+const canvas = $("overlay");
+const ctx = canvas.getContext("2d", {alpha: true});
+
+function resizeCanvas() {
+  const dpr = clamp(window.devicePixelRatio || 1, 1, 3);
+  const {clientWidth: w, clientHeight: h} = document.documentElement;
+  canvas.width  = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  canvas.style.width  = `${w}px`;
+  canvas.style.height = `${h}px`;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+addEventListener("resize", resizeCanvas, {passive: true});
+addEventListener("orientationchange", () => setTimeout(resizeCanvas, 120), {passive: true});
+resizeCanvas();
+
+/**
+ * El vídeo se pinta con object-fit:cover, es decir se escala hasta cubrir el
+ * viewport y el excedente se recorta de forma simétrica. Las cajas llegan en
+ * píxeles del origen, así que hay que reproducir esa transformación con
+ * exactitud: un desfase de pocos píxeles se lee como un fallo de tracking.
+ */
+function coverTransform(srcW, srcH) {
+  const vw = document.documentElement.clientWidth;
+  const vh = document.documentElement.clientHeight;
+  const scale = Math.max(vw / srcW, vh / srcH);
+  return {scale, dx: (vw - srcW * scale) / 2, dy: (vh - srcH * scale) / 2};
+}
+
+/**
+ * Banda de barrido: dónde está mirando el detector.
+ *
+ * No es un adorno. La posición es la que informa el detector, y la estela por
+ * encima indica lo recién revisado. Así se ve de un vistazo qué zona lleva más
+ * tiempo sin confirmarse --- información que hasta ahora la interfaz escondía.
+ */
+function drawSweep(vw, vh) {
+  const b = state.sweepBand;
+  if (!b || !state.scanner) return;
+  const v = $("video");
+  if (!v.videoWidth) return;
+  const {scale, dx, dy} = coverTransform(v.videoWidth, v.videoHeight);
+
+  // La banda se interpola entre informes del detector.
+  //
+  // El detector informa su posición una vez por pasada --- unas pocas veces por
+  // segundo --- y dibujarla tal cual da una barra que salta a tirones. Se
+  // avanza cada frame hacia la posición informada, así que la línea se mueve a
+  // la tasa de la pantalla mientras sigue representando dónde mira de verdad:
+  // el destino es real, solo el camino está suavizado.
+  const objetivo = dy + b.y * scale;
+  if (state.sweepY === null || Math.abs(objetivo - state.sweepY) > vh * 0.6) {
+    state.sweepY = objetivo;          // salto de ciclo: no interpolar
+  } else {
+    state.sweepY += (objetivo - state.sweepY) * 0.25;
+  }
+  const y = state.sweepY;
+  const h = Math.max(3, (b.height || 40) * scale);
+
+  // Estela hacia arriba: lo recién mirado se desvanece.
+  const g = ctx.createLinearGradient(0, y - h * 3, 0, y + h);
+  g.addColorStop(0, "rgba(90,190,255,0)");
+  g.addColorStop(0.75, "rgba(90,190,255,0.06)");
+  g.addColorStop(1, "rgba(90,190,255,0.14)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, y - h * 3, vw, h * 4);
+
+  ctx.strokeStyle = "rgba(120,205,255,0.85)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, y + h);
+  ctx.lineTo(vw, y + h);
+  ctx.stroke();
+}
+
+let lastPaintKey = "";
+let lastVw = 0, lastVh = 0;
+
+function paint() {
+  const vw = document.documentElement.clientWidth;
+  const vh = document.documentElement.clientHeight;
+
+  // El overlay solo se redibuja cuando algo ha cambiado. A 120 Hz con seis
+  // objetos quietos, repintar los mismos corchetes 120 veces por segundo gasta
+  // batería y tiempo de GPU para producir exactamente la misma imagen.
+  //
+  // La clave incluye posiciones redondeadas: un temblor subpíxel de la caja no
+  // es un cambio visible y no justifica un repintado.
+  // La banda se mueve cada frame, así que en modo escáner el repintado no se
+  // puede saltar. Fuera de él sigue saltándose cuando nada cambia.
+  let key = state.scanner ? String(Math.random())
+    : `${vw}x${vh}|${state.overlay}|${state.boxes.length}`;
+  for (const b of state.boxes) {
+    key += `|${b.id},${b.b[0] | 0},${b.b[1] | 0},${b.b[2] | 0},${b.b[3] | 0},${b.age}`;
+  }
+  if (key === lastPaintKey && vw === lastVw && vh === lastVh) {
+    requestAnimationFrame(paint);
+    return;
+  }
+  lastPaintKey = key; lastVw = vw; lastVh = vh;
+
+  ctx.clearRect(0, 0, vw, vh);
+  drawSweep(vw, vh);
+
+  // En modo local el motor produce cajas en el mismo frame en que las detecta,
+  // así que nunca caducan; el umbral de frescura solo protege al modo servidor,
+  // donde una caída de red dejaría corchetes fantasma pegados a la pantalla.
+  const fresh = state.mode === "local" || state.mode === "pantalla" ||
+                performance.now() - state.boxesAt < CFG.boxStaleMs;
+  if (state.sourceW && state.sourceH && state.boxes.length && fresh) {
+    const {scale, dx, dy} = coverTransform(state.sourceW, state.sourceH);
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.font = '600 11px ' + getComputedStyle(document.body).fontFamily;
+    ctx.textBaseline = "alphabetic";
+
+    for (const box of state.boxes) {
+      const [x1, y1, x2, y2] = box.b;
+      const X = dx + x1 * scale, Y = dy + y1 * scale;
+      const W = (x2 - x1) * scale, H = (y2 - y1) * scale;
+      if (W < 2 || H < 2) continue;
+
+      // Corchetes de esquina en vez de caja cerrada: marcan la extensión sin
+      // tapar justo aquello que se quiere mirar.
+      const k = Math.min(CFG.bracketMaxPx, W * CFG.bracketRatio, H * CFG.bracketRatio);
+      ctx.strokeStyle = box.age > 0 ? "rgb(224 182 74 / .78)" : "rgb(92 201 138 / .94)";
+      ctx.beginPath();
+      ctx.moveTo(X, Y + k);         ctx.lineTo(X, Y);         ctx.lineTo(X + k, Y);
+      ctx.moveTo(X + W - k, Y);     ctx.lineTo(X + W, Y);     ctx.lineTo(X + W, Y + k);
+      ctx.moveTo(X + W, Y + H - k); ctx.lineTo(X + W, Y + H); ctx.lineTo(X + W - k, Y + H);
+      ctx.moveTo(X + k, Y + H);     ctx.lineTo(X, Y + H);     ctx.lineTo(X, Y + H - k);
+      ctx.stroke();
+
+      const label = `${CLASS_ES[box.c] ?? box.c} ${box.id}`;
+      const tw = ctx.measureText(label).width;
+      const ty = Y > 18 ? Y - 6 : Y + H + 14;
+      ctx.fillStyle = "rgb(0 0 0 / .45)";
+      ctx.fillRect(X - 1, ty - 11, tw + 8, 15);
+      ctx.fillStyle = "rgb(242 239 233 / .92)";
+      ctx.fillText(label, X + 3, ty);
+    }
+  }
+  requestAnimationFrame(paint);
+}
+requestAnimationFrame(paint);
+
+const SIL_COLOR = {person: "#e8552d", car: "#2e6f9e", object: "#8a929e"};
+
+/** Contornos vectoriales suavizados sobre la escena en vivo. */
+function paintSilhouettes(dx, dy, scale) {
+  const eng = state.engine;
+  if (!eng) return;
+  const [aw] = eng.stats ? [eng.small.width] : [0];
+  const sx = eng.sourceW / eng.small.width;
+  const sy = eng.sourceH / eng.small.height;
+
+  ctx.lineWidth = 2;
+  ctx.lineJoin = "round";
+  for (const t of eng.tracker.tracks) {
+    if (t.hits < eng.tracker.minHits || !t.obs.length) continue;
+    const obs = t.obs[t.obs.length - 1];
+    const pts = silhouette(obs, sx, sy, {points: 40, smooth: 2});
+    if (!pts) continue;
+    // A coordenadas de pantalla, replicando el recorte de object-fit:cover.
+    const p = new Float64Array(pts.length);
+    for (let i = 0; i < pts.length; i += 2) {
+      p[i] = dx + pts[i] * scale;
+      p[i + 1] = dy + pts[i + 1] * scale;
+    }
+    strokeSilhouette(ctx, p);
+    ctx.fillStyle = (SIL_COLOR[t.klass] || SIL_COLOR.object) + "d0";
+    ctx.fill();
+    ctx.strokeStyle = "rgb(20 20 20 / .85)";
+    ctx.stroke();
+  }
+}
+
+/* ==========================================================================
+   Cámara local
+   ========================================================================== */
+const video = $("video");
+
+async function openCamera(facing = state.facing) {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    toast("Este navegador no expone la cámara. iOS y Android la exigen bajo HTTPS.", "err");
+    return false;
+  }
+  stopCamera();
+  try {
+    state.mediaStream = await navigator.mediaDevices.getUserMedia({
+      video: {facingMode: {ideal: facing}, width: {ideal: 1920}, height: {ideal: 1080}},
+      audio: false,
+    });
+    state.facing = facing;
+    video.srcObject = state.mediaStream;
+    video.hidden = false;
+    $("idle").hidden = true;
+    await video.play();
+
+    const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+    $("btnFlip").hidden = devices.filter((d) => d.kind === "videoinput").length < 2;
+    return true;
+  } catch (err) {
+    const secure = window.isSecureContext;
+    toast(secure
+      ? `Sin acceso a la cámara: ${err.message}`
+      : "La cámara requiere HTTPS (o localhost). Prueba con un túnel TLS.", "err");
+    return false;
+  }
+}
+
+function stopCamera() {
+  state.mediaStream?.getTracks().forEach((t) => t.stop());
+  state.mediaStream = null;
+  video.srcObject = null;
+}
+
+/* --- pantalla despierta -------------------------------------------------- */
+async function acquireWakeLock() {
+  if (!("wakeLock" in navigator)) return;
+  try {
+    state.wakeLock = await navigator.wakeLock.request("screen");
+    state.wakeLock.addEventListener("release", () => { state.wakeLock = null; });
+  } catch { /* denegado o sin soporte: no es crítico */ }
+}
+function releaseWakeLock() {
+  state.wakeLock?.release().catch(() => {});
+  state.wakeLock = null;
+}
+
+/* ==========================================================================
+   Envío de frames
+   ========================================================================== */
+const encoder = document.createElement("canvas");
+const encCtx = encoder.getContext("2d", {alpha: false});
+
+function encodeFrame() {
+  const sw = video.videoWidth, sh = video.videoHeight;
+  if (!sw || !sh) return null;
+  // Techo del lado mayor: subir 4K por wifi no mejora una detección que trabaja
+  // sobre siluetas, y multiplica la latencia de cada envío.
+  const k = Math.min(1, CFG.captureMaxEdge / Math.max(sw, sh));
+  const w = Math.round(sw * k), h = Math.round(sh * k);
+  if (encoder.width !== w || encoder.height !== h) {
+    encoder.width = w; encoder.height = h;
+  }
+  encCtx.drawImage(video, 0, 0, w, h);
+  return new Promise((resolve) =>
+    encoder.toBlob(resolve, "image/jpeg", CFG.jpegQuality));
+}
+
+async function sendFrame() {
+  // Se salta el turno si el envío anterior sigue en vuelo. Encolar en el
+  // dispositivo solo hace crecer la latencia hasta que los corchetes van
+  // minutos por detrás de la escena.
+  if (state.busyUpload || !state.sessionId || document.hidden) return;
+  state.busyUpload = true;
+  try {
+    const blob = await encodeFrame();
+    if (!blob) return;
+    const form = new FormData();
+    form.append("file", blob, "frame.jpg");
+    await request(`/api/sources/${state.sessionId}/frame`, {
+      method: "POST", body: form, timeout: CFG.uploadTimeoutMs,
+    });
+  } catch { /* pérdida puntual: el siguiente turno lo cubre */ }
+  finally { state.busyUpload = false; }
+}
+
+function startCapture() {
+  if (state.capturing) return;
+  state.capturing = true;
+  // En local no se envía nada: "grabar" significa empezar a guardar recortes
+  // para poder componer el sinopsis después. El análisis ya venía corriendo.
+  if (state.mode !== "local" && state.mode !== "pantalla") {
+    state.captureTimer = setInterval(sendFrame, Number($("rate").value));
+  }
+  eye.dataset.live = "1";
+  $("btnStart").disabled = true;
+  $("btnStop").disabled = false;
+  acquireWakeLock();
+  setPanel(false);
+  toast("Analizando. Mantén el dispositivo inmóvil.");
+}
+
+function stopCapture() {
+  clearInterval(state.captureTimer);
+  state.captureTimer = null;
+  state.capturing = false;
+  delete eye.dataset.live;
+  $("btnStart").disabled = false;
+  $("btnStop").disabled = true;
+  releaseWakeLock();
+}
+
+$("rate").addEventListener("change", () => {
+  if (!state.capturing) return;
+  clearInterval(state.captureTimer);
+  state.captureTimer = setInterval(sendFrame, Number($("rate").value));
+});
+
+// En segundo plano el navegador estrangula los temporizadores y la cámara se
+// congela: seguir enviando gastaría batería para subir el mismo frame.
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    releaseWakeLock();
+  } else if (state.capturing) {
+    acquireWakeLock();
+  }
+});
+
+/* ==========================================================================
+   Región de pantalla
+   ==========================================================================
+   Captura de pantalla + recuadro ajustable. Resuelve de golpe el problema de
+   las fuentes: cualquier vídeo que se vea en el equipo --- una cámara pública
+   en una pestaña, un reproductor, el cliente web de un grabador --- sirve de
+   entrada, sin RTSP, sin credenciales y sin formato que negociar.
+
+   Dos límites que conviene saber antes de intentarlo:
+   · `getDisplayMedia` exige contexto seguro, igual que la cámara.
+   · No existe en navegadores móviles. Esto es de escritorio.
+   ========================================================================== */
+
+const roiEl = $("roi");
+const state_roi = {x: 0.08, y: 0.08, w: 0.6, h: 0.6, locked: false};
+
+async function openScreen() {
+  if (!navigator.mediaDevices?.getDisplayMedia) {
+    toast("Este navegador no permite capturar pantalla. En móvil no existe.", "err");
+    return false;
+  }
+  stopCamera();
+  try {
+    state.mediaStream = await navigator.mediaDevices.getDisplayMedia({
+      video: {frameRate: {ideal: 30}},
+      audio: false,
+      // Pide que el selector empiece por ventanas: capturar la pantalla entera
+      // y recortar desperdicia resolución en la región que importa.
+      preferCurrentTab: false,
+    });
+    const v = $("video");
+    v.srcObject = state.mediaStream;
+    v.hidden = false;
+    $("idle").hidden = true;
+    await v.play();
+    // Si el usuario detiene la compartición desde la barra del navegador, la
+    // pista termina y hay que enterarse: si no, el bucle sigue analizando el
+    // último frame congelado.
+    state.mediaStream.getVideoTracks()[0].addEventListener("ended", () => {
+      toast("Se ha detenido la compartición de pantalla.", "warn");
+      stopCapture();
+      stopLocalLoop();
+    });
+    return true;
+  } catch (err) {
+    toast(err.name === "NotAllowedError"
+      ? "Compartición cancelada."
+      : `No se pudo capturar la pantalla: ${err.message}`, "err");
+    return false;
+  }
+}
+
+/** Rectángulo del recuadro en píxeles del vídeo de origen. */
+function roiInSource() {
+  const v = $("video");
+  if (!v.videoWidth) return null;
+  return {x: state_roi.x * v.videoWidth, y: state_roi.y * v.videoHeight,
+          w: state_roi.w * v.videoWidth, h: state_roi.h * v.videoHeight};
+}
+
+/** Coloca el recuadro en pantalla replicando el recorte de object-fit:cover. */
+function layoutRoi() {
+  const v = $("video");
+  if (!v.videoWidth) return;
+  const {scale, dx, dy} = coverTransform(v.videoWidth, v.videoHeight);
+  const L = dx + state_roi.x * v.videoWidth * scale;
+  const T = dy + state_roi.y * v.videoHeight * scale;
+  const W = state_roi.w * v.videoWidth * scale;
+  const H = state_roi.h * v.videoHeight * scale;
+  roiEl.style.left = `${L}px`;
+  roiEl.style.top = `${T}px`;
+  roiEl.style.width = `${W}px`;
+  roiEl.style.height = `${H}px`;
+  roiEl.dataset.size =
+    `${Math.round(state_roi.w * v.videoWidth)} × ${Math.round(state_roi.h * v.videoHeight)} px`;
+}
+
+function enableRoi(on) {
+  roiEl.dataset.on = on ? "1" : "0";
+  $("fsRoi").hidden = !on;
+  if (on) layoutRoi();
+}
+
+// Arrastre y redimensionado con eventos de puntero: cubre ratón, táctil y
+// lápiz con un solo camino, y `setPointerCapture` evita perder el gesto si el
+// puntero sale del elemento a media maniobra.
+(() => {
+  let drag = null;
+
+  const onDown = (e, corner) => {
+    if (state_roi.locked) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const v = $("video");
+    if (!v.videoWidth) return;
+    const {scale} = coverTransform(v.videoWidth, v.videoHeight);
+    drag = {corner, x0: e.clientX, y0: e.clientY, scale,
+            r: {...state_roi}, vw: v.videoWidth, vh: v.videoHeight};
+    e.target.setPointerCapture?.(e.pointerId);
+  };
+
+  const onMove = (e) => {
+    if (!drag) return;
+    const dx = (e.clientX - drag.x0) / drag.scale / drag.vw;
+    const dy = (e.clientY - drag.y0) / drag.scale / drag.vh;
+    const r = {...drag.r};
+    const MIN = 0.04;
+
+    if (!drag.corner) {
+      r.x = clamp(r.x + dx, 0, 1 - r.w);
+      r.y = clamp(r.y + dy, 0, 1 - r.h);
+    } else {
+      const west = drag.corner.includes("w");
+      const north = drag.corner.includes("n");
+      if (west) {
+        const nx = clamp(r.x + dx, 0, r.x + r.w - MIN);
+        r.w += r.x - nx; r.x = nx;
+      } else {
+        r.w = clamp(r.w + dx, MIN, 1 - r.x);
+      }
+      if (north) {
+        const ny = clamp(r.y + dy, 0, r.y + r.h - MIN);
+        r.h += r.y - ny; r.y = ny;
+      } else {
+        r.h = clamp(r.h + dy, MIN, 1 - r.y);
+      }
+    }
+    Object.assign(state_roi, r);
+    layoutRoi();
+  };
+
+  const onUp = () => {
+    if (!drag) return;
+    drag = null;
+    // El modelo de fondo describía la escena anterior. Reiniciarlo aquí, al
+    // soltar, y no en cada píxel del arrastre.
+    state.engine?.invalidate();
+  };
+
+  roiEl.addEventListener("pointerdown", (e) => {
+    if (e.target.classList.contains("grip")) onDown(e, e.target.dataset.c);
+    else onDown(e, null);
+  });
+  addEventListener("pointermove", onMove);
+  addEventListener("pointerup", onUp);
+  addEventListener("pointercancel", onUp);
+  addEventListener("resize", layoutRoi, {passive: true});
+})();
+
+$("btnRoiFull").addEventListener("click", () => {
+  Object.assign(state_roi, {x: 0, y: 0, w: 1, h: 1});
+  layoutRoi();
+  state.engine?.invalidate();
+});
+
+$("btnRoiLock").addEventListener("click", () => {
+  state_roi.locked = !state_roi.locked;
+  $("btnRoiLock").textContent = state_roi.locked ? "Desbloquear" : "Fijar";
+  roiEl.style.cursor = state_roi.locked ? "default" : "move";
+  for (const g of roiEl.querySelectorAll(".grip")) {
+    g.style.display = state_roi.locked ? "none" : "block";
+  }
+});
+
+/* ==========================================================================
+   Detector neuronal opcional
+   ==========================================================================
+   La sustracción de fondo encuentra lo que se mueve. En una plaza llena de
+   gente parada eso falla de raíz: para un modelo de fondo, una multitud quieta
+   *es* el fondo. Medido en vivo sobre una cámara del Panteón: 6 objetos donde
+   había cientos de personas.
+
+   Un detector no depende del movimiento. Se carga bajo demanda porque pesa
+   varios megas y no todo el mundo lo necesita.
+   ========================================================================== */
+
+/**
+ * Devuelve el código de detector.js tal como está en esta página.
+ *
+ * El Worker necesita el detector, y descargarlo otra vez sería absurdo en un
+ * fichero autónomo --- además de abrir la puerta a que las dos copias
+ * diverjan. Se recupera del propio documento.
+ */
+function detectorSource() {
+  for (const sc of document.querySelectorAll("script")) {
+    if (!sc.src && sc.textContent.includes("class YoloxDetector")) {
+      return sc.textContent;
+    }
+  }
+  return null;
+}
+
+async function loadDetector(source) {
+  const btn = $("btnLoadModel");
+  btn.disabled = true;
+  btn.textContent = "Cargando…";
+  try {
+    if (typeof YoloxDetector !== "function") throw new Error("detector.js no cargado");
+    if (!globalThis.ort) {
+      // ONNX Runtime se trae de CDN la primera vez y queda en caché. Es la
+      // única dependencia externa de toda la herramienta, y solo la usa quien
+      // active el detector.
+      await new Promise((res, rej) => {
+        const sc = document.createElement("script");
+        sc.src = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.min.js";
+        sc.onload = res;
+        sc.onerror = () => rej(new Error("no se pudo cargar ONNX Runtime (¿sin internet?)"));
+        document.head.append(sc);
+      });
+    }
+    // Primero se intenta el hilo aparte.
+    //
+    // Con el detector en el hilo de la interfaz, una inferencia de 120 ms se
+    // come siete frames seguidos: medido, 33 fps efectivos con tirones de
+    // 120 ms. En un Worker, los mismos 120 ms de trabajo dan 61 fps sin un solo
+    // tirón, porque el render no compite con la inferencia.
+    const src = detectorSource();
+    if (typeof DetectorWorker === "function" && src && typeof Worker !== "undefined") {
+      try {
+        const bytes = typeof source === "string"
+          ? new Uint8Array(await (await fetch(source)).arrayBuffer())
+          : source;
+        const w = new DetectorWorker({mode: state.pyramid ? "piramide" : "multiscale"});
+        const info = await w.start(bytes, src,
+          {scoreThresh: 0.15, classThresh: {person: 0.08, bicycle: 0.10}},
+          state.multiScale || state.pyramid ? 2 : Number($("detZoom").value) || 2);
+        w.onResult = (dets) => {
+          state.brain?.mergeDetections({dets, tiles: [[0, 0, 1e6, 1e6]]});
+        };
+        w.onError = (m) => console.error("worker:", m);
+        state.detWorker = w;
+        $("noteModel").innerHTML = "";
+        $("noteModel").textContent =
+          `Detector en hilo propio (entrada ${info.size} px, `
+          + `${info.threads} hilo${info.threads > 1 ? "s" : ""} WASM`
+          + `${info.isolated ? ", aislado" : ""}). El render no se bloquea.`;
+        toast("Detector cargado en hilo aparte.");
+        return;
+      } catch (err) {
+        // Sin Worker se sigue en el hilo principal: peor, pero funciona.
+        console.warn("worker no disponible, se usa el hilo principal:", err.message);
+      }
+    }
+
+    state.detector = await YoloxDetector.load(source, globalThis.ort, {
+      scoreThresh: 0.15,
+      // Umbral más bajo para las clases difíciles. Una persona a media
+      // distancia tiene menos píxeles, silueta variable y casi siempre está
+      // parcialmente ocluida por otra: el mismo listón que un turismo es lo que
+      // produce "detecta furgonetas pero no gente".
+      classThresh: {person: 0.08, bicycle: 0.10, motorcycle: 0.12},
+    });
+    applyZoom();
+    state.detBoxes = [];
+    detectorLoop();
+    $("noteModel").innerHTML =
+      `Detector <b>neuronal</b> activo (entrada ${state.detector.size} px). `
+      + "Ve objetos parados y da clases reales.";
+    delete $("noteModel").dataset.tone;
+    toast("Detector cargado. Ahora ve gente parada.");
+  } catch (err) {
+    toast(err.message, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Cargar detector neuronal";
+  }
+}
+
+function applyZoom() {
+  const v = $("detZoom").value;
+  // Aviso por encima de x3.
+  //
+  // Ampliar no crea información: un peatón de 10 px llevado a 60 sigue teniendo
+  // diez píxeles de detalle. Medido sobre una vista aérea real, el recuento
+  // BAJA de 67 objetos a x2 a 3 objetos a x6, y el coste se multiplica por
+  // treinta. Se permite porque hay escenas donde ayuda y es decisión del
+  // operador, pero callarlo sería dejar que lo descubra perdiendo una hora.
+  const z = Number(v);
+  const note = $("noteZoom");
+  if (z >= 4) {
+    note.hidden = false;
+    note.textContent =
+      `×${z}: ${z * z} veces más teselas que ×1. Por encima de ×3 el recuento suele `
+      + "BAJAR, porque ampliar no añade detalle y la tesela pierde el contexto que "
+      + "el modelo necesita. Si no encuentras personas a ×2, el problema es la "
+      + "resolución de la cámara, no el zoom.";
+  } else {
+    note.hidden = true;
+  }
+  // Multiescala no fija un zoom: recorre varios y fusiona. Un solo zoom obliga
+  // a elegir entre ver los vehículos o ver a la gente, porque sus tamaños
+  // difieren en un orden de magnitud.
+  state.multiScale = v === "multi";
+  state.pyramid = v === "piramide";
+  state.scanner = v === "escaner";
+  if (state.detector) state.detector.cfg.sweep = state.scanner;
+  if (!state.multiScale && state.detector) state.detector.setZoom(Number(v) || 2);
+  else if (state.detector) state.detector.setZoom(2);
+}
+
+$("detZoom").addEventListener("change", () => {
+  applyZoom();
+  if (state.brain) state.brain.detBoxes = [];
+  toast(state.pyramid
+    ? "Pirámide: barrido grueso que localiza, fino solo donde hace falta."
+    : state.multiScale
+      ? "Multiescala: más personas y vehículos, barrido más lento."
+      : `Zoom ×${$("detZoom").value}.`);
+});
+
+/**
+ * Carga automática del modelo empaquetado.
+ *
+ * En el APK el detector viaja dentro, junto a la app. Obligar al usuario a
+ * buscarlo con un selector de ficheros en un móvil --- donde no hay explorador
+ * decente y el fichero está dentro del propio paquete --- es pedirle que haga
+ * algo imposible. Si está ahí, se carga solo.
+ *
+ * En escritorio el mismo código funciona si `yolox_nano.onnx` está junto a
+ * `argos.html`, que es como se entrega. Y si no está, no pasa nada: el selector
+ * manual sigue donde estaba.
+ */
+async function autoLoadModel() {
+  // Solo tiene sentido servido por http(s): desde file:// un fetch relativo
+  // está bloqueado y el fallo confundiría más que ayudar.
+  if (!/^https?:$/.test(location.protocol)) return false;
+  try {
+    const res = await fetch("yolox_nano.onnx");
+    if (!res.ok) return false;
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.length < 1e6) return false;      // no es un modelo
+    await loadDetector(bytes);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+$("btnLoadModel").addEventListener("click", () => {
+  const f = $("modelFile").files?.[0];
+  if (f) {
+    // Fichero local: se lee a bytes, no se sube a ningún sitio.
+    const r = new FileReader();
+    r.onload = () => loadDetector(new Uint8Array(r.result));
+    r.readAsArrayBuffer(f);
+    return;
+  }
+  const url = $("modelUrl").value.trim();
+  if (!url) { toast("Indica una URL o elige un fichero .onnx", "warn"); return; }
+  loadDetector(url);
+});
+
+/* ==========================================================================
+   Memoria
+   ========================================================================== */
+
+async function startArchive() {
+  if (typeof Archive !== "function") return;
+  state.archive = new Archive({camera: state.mode === "pantalla" ? "pantalla" : "camara"});
+  const ok = await state.archive.open();
+  $("fsMemory").hidden = !ok;
+  if (!ok) {
+    // La memoria es opcional: si IndexedDB falla --- modo privado, cuota llena ---
+    // el análisis en vivo sigue funcionando. Lo que no puede pasar es que un
+    // fallo de almacenamiento tumbe la aplicación.
+    toast(`Sin memoria persistente: ${state.archive.error}`, "warn");
+    state.archive = null;
+    return;
+  }
+
+  // La escala métrica aprendida se recupera de la sesión anterior: la cámara no
+  // se ha movido entre ayer y hoy, así que volver a aprenderla desde cero
+  // desperdicia los primeros minutos.
+  const prev = await state.archive.loadScene();
+  if (prev && state.brain) {
+    Object.assign(state.brain.scale, {
+      a: prev.a, b: prev.b, sigma: prev.sigma, n: prev.n,
+      ySpan: prev.ySpan, valid: true,
+      classScale: new Map(Object.entries(prev.classScale || {})),
+    });
+    toast("Escala métrica recuperada de la sesión anterior.");
+  }
+
+  const removed = await state.archive.enforceRetention();
+  if (removed) toast(`Retención: ${removed} registros caducados eliminados.`);
+  refreshMemory();
+}
+
+/** Vuelca al archivo lo que el motor ha dado por terminado. */
+function archiveFinished() {
+  const a = state.archive, eng = state.engine;
+  if (!a || !eng) return;
+  for (const t of eng.tubes) {
+    if (state.archived.has(t.id)) continue;
+    state.archived.add(t.id);
+    a.push(t, state.brain);
+  }
+  if (state.brain) {
+    for (const ev of state.brain.events) {
+      const k = `${ev.kind}:${ev.id}:${Math.round(ev.t)}`;
+      if (state.archived.has(k)) continue;
+      state.archived.add(k);
+      a.pushEvent(ev);
+    }
+  }
+}
+
+async function refreshMemory() {
+  const a = state.archive;
+  if (!a) return;
+  const s = await a.stats();
+  $("mTubes").textContent = s.tubes ?? 0;
+  $("mEvents").textContent = s.events ?? 0;
+  $("mSize").textContent = s.quota
+    ? `${s.quota.used_mb} MB de ${s.quota.quota_mb}` : "—";
+}
+
+$("btnSearch").addEventListener("click", async () => {
+  const a = state.archive;
+  if (!a) return;
+  const cls = $("qClass").value || null;
+  const hours = Number($("qWindow").value) || 0;
+  const rows = await a.query({cls, limit: 40});
+  const cut = hours ? Date.now() - hours * 3600000 : 0;
+  const sel = rows.filter((r) => r.wall >= cut);
+
+  const frag = document.createDocumentFragment();
+  if (!sel.length) {
+    frag.append(note("Nada archivado con esos criterios todavía.", "warn"));
+  }
+  for (const r of sel.slice(0, 20)) {
+    const when = new Date(r.wall).toLocaleTimeString();
+    const extra = [];
+    if (r.physics?.speed_km_h) extra.push(`${r.physics.speed_km_h} km/h`);
+    if (r.stature) extra.push(`${r.stature.m} m`);
+    frag.append(statRow(`${r.cls} · ${when}`, `${r.n} obs`,
+                        extra.length ? ` · ${extra.join(" · ")}` : ""));
+  }
+  $("qResults").replaceChildren(frag);
+});
+
+$("btnLink").addEventListener("click", async () => {
+  const a = state.archive;
+  if (!a || typeof CrossCamera !== "function") return;
+  const rows = await a.query({limit: 2000});
+  const tracks = rows.filter((r) => r.fp).map((r) => ({
+    id: r.key, cam: r.cam, cls: r.cls, t0: r.wall, t1: r.wall + (r.t1 - r.t0) * 40,
+    fp: r.fp, stature: r.stature?.m ?? null,
+  }));
+  const cams = new Set(tracks.map((t) => t.cam));
+  const frag = document.createDocumentFragment();
+
+  if (cams.size < 2) {
+    // Sin dos cámaras no hay nada que enlazar, y decirlo es más útil que
+    // devolver una lista vacía sin explicación.
+    frag.append(note(
+      `Solo hay ${cams.size} cámara en el archivo. El enlace compara trayectorias `
+      + "entre cámaras distintas: graba desde otra fuente y vuelve a intentarlo.", "warn"));
+    $("linkResults").replaceChildren(frag);
+    return;
+  }
+
+  // Topología por defecto: cualquier par de cámaras, tránsito de 5 s a 5 min.
+  // Es deliberadamente laxa porque no conocemos la planta del sitio; con una
+  // topología real la precisión sube mucho, porque la geometría descarta lo que
+  // la apariencia no.
+  const pairs = [];
+  for (const A of cams) for (const B of cams) if (A !== B) pairs.push([A, B, 5, 300, 1]);
+  const cc = new CrossCamera(Topology.from(pairs));
+  const bg = cc.fitBackground(tracks);
+  const hyp = cc.propose(tracks).filter((h) => h.confidence !== "insuficiente");
+
+  frag.append(note(
+    `Distribución de impostores calibrada con ${bg.n} pares de la propia escena `
+    + `(media ${bg.mean.toFixed(2)}, sigma ${bg.std.toFixed(2)}). `
+    + "Son hipótesis: ninguna identidad se escribe automáticamente.", "warn"));
+  if (!hyp.length) frag.append(note("Ningún enlace supera el umbral."));
+  for (const h of hyp.slice(0, 12)) {
+    frag.append(statRow(`${h.camA} → ${h.camB} · ${h.confidence}`,
+                        `${h.gapS} s`, ` · similitud ${h.similarity}`));
+  }
+  $("linkResults").replaceChildren(frag);
+});
+
+$("btnExport").addEventListener("click", async () => {
+  if (!state.archive) return;
+  const data = await state.archive.export();
+  download(new Blob([JSON.stringify(data)], {type: "application/json"}),
+           `argos_memoria_${new Date().toISOString().slice(0, 10)}.json`);
+});
+
+$("btnWipe").addEventListener("click", async () => {
+  if (!state.archive) return;
+  // Borrar es irreversible, así que se confirma. No se confirma nada más en
+  // toda la aplicación precisamente para que esta pregunta signifique algo.
+  if (!confirm("¿Borrar toda la memoria archivada? No se puede deshacer.")) return;
+  await state.archive.clear();
+  state.archived.clear();
+  $("qResults").replaceChildren();
+  refreshMemory();
+  toast("Memoria borrada.");
+});
+
+/* ==========================================================================
+   Modo local: el motor corre aquí
+   ========================================================================== */
+
+function startLocalLoop() {
+  const video = $("video");
+  let busy = false;
+
+  const tick = async () => {
+    state.rafId = requestAnimationFrame(tick);
+    // Un frame se salta si el anterior sigue procesándose. Encadenar await sin
+    // esta guarda hace crecer una cola de promesas que el navegador atiende
+    // tarde: la pantalla va fluida y los corchetes, con segundos de retraso.
+    if (busy || document.hidden || !state.engine) return;
+    busy = true;
+    try {
+      const roi = state.mode === "pantalla" ? roiInSource() : null;
+      // Al Worker se le manda un frame de vez en cuando y NO se espera: el
+      // resultado entra por `onResult` cuando esté. Si sigue ocupado, el envío
+      // se descarta --- encolar frames haría que el detector respondiera sobre
+      // imágenes de hace diez segundos.
+      if (state.detWorker?.ready && state.engine.frameIdx % 6 === 0) {
+        state.detWorker.submitFrame(video, {roi});
+      }
+      // El bucle rápido pasa por el cerebro: sustracción de fondo, asociación,
+      // física y escala métrica. NO espera al detector nunca --- consume las
+      // cajas que éste haya dejado, sean de hace 20 ms o de hace 2 s.
+      const r = state.brain
+        ? await state.brain.tick(video, {roi, capturePatches: state.capturing})
+        : await state.engine.process(video, {capturePatches: state.capturing, roi});
+      if (r) {
+        state.boxes = r.boxes;
+        state.boxesAt = performance.now();
+        state.sourceW = video.videoWidth;
+        state.sourceH = video.videoHeight;
+        if (r.disturbed) setAlert("escena alterada · reiniciando fondo", "warn");
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      busy = false;
+    }
+  };
+  state.rafId = requestAnimationFrame(tick);
+
+  clearInterval(state.pollTimer);
+  state.pollTimer = setInterval(updateLocalStats, 500);
+}
+
+function stopLocalLoop() {
+  cancelAnimationFrame(state.rafId);
+  state.rafId = 0;
+  clearInterval(state.pollTimer);
+  state.detRunning = false;
+}
+
+/* --------------------------------------------------------------------------
+   Ciclo del detector, desacoplado del render
+   --------------------------------------------------------------------------
+   Analizar las 24 teselas en cada frame cuesta segundos y no aporta nada: entre
+   dos frames un objeto se mueve unos píxeles y el tracker lo sigue solo. Lo que
+   el detector aporta es que algo *entre o salga* de escena, y eso pasa en
+   escalas de segundos.
+   
+   Así que va por su cuenta, una tesela por pasada, en rotación con prioridad
+   por actividad. El presupuesto se ajusta solo a lo que aguanta el equipo: si
+   una pasada tarda mucho, se espera más entre pasadas en vez de atragantar la
+   interfaz.
+   -------------------------------------------------------------------------- */
+
+async function detectorLoop() {
+  if (state.detRunning) return;
+  state.detRunning = true;
+  const video = $("video");
+  let interval = 0;
+
+  while (state.detRunning && state.detector) {
+    if (document.hidden || !video.videoWidth) {
+      await new Promise((r) => setTimeout(r, 250));
+      continue;
+    }
+    try {
+      const roi = state.mode === "pantalla" ? roiInSource() : null;
+      // Al Worker se le manda un frame de vez en cuando y NO se espera: el
+      // resultado entra por `onResult` cuando esté. Si sigue ocupado, el envío
+      // se descarta --- encolar frames haría que el detector respondiera sobre
+      // imágenes de hace diez segundos.
+      if (state.detWorker?.ready && state.engine.frameIdx % 6 === 0) {
+        state.detWorker.submitFrame(video, {roi});
+      }
+      const r = await state.detector.detectIncremental(video, globalThis.ort, {
+        // En modo escáner se analizan más teselas por pasada para que la banda
+        // recorra el cuadro en un tiempo razonable. Con una tesela por pasada,
+        // un cuadro de 21 teselas tarda 21 pasadas en completar un ciclo.
+        roi, budget: state.scanner ? state.detBudget * 5 : state.detBudget,
+        // La atención no es uniforme: una tesela con personas se revisita
+        // mucho antes que una de tejado. Se pasa como función del rectángulo
+        // para que no pueda desalinearse si el recorte cambia.
+        priority: state.brain ? (tile) => state.brain.tilePriority(tile, roi) : null,
+      });
+      // La banda que se pinta es la que devuelve el detector, no una animación.
+      // Una barra decorativa que no coincide con dónde mira de verdad sería una
+      // mentira sobre el estado del sistema.
+      state.sweepBand = r.sweep || null;
+      if (state.brain) state.brain.mergeDetections(r);
+      else mergeDetections(r);
+      // Se cede al menos tanto tiempo como ha costado la pasada: mantiene el
+      // detector por debajo del 50 % del hilo y deja respirar al render.
+      interval = Math.max(16, Math.round(r.ms));
+      state.detMs = Math.round(r.ms);
+      state.detPasses = state.detector.sweepPasses(state.detBudget);
+    } catch (err) {
+      console.error(err);
+      interval = 1000;
+    }
+    await new Promise((r) => setTimeout(r, interval));
+  }
+  state.detRunning = false;
+}
+
+/**
+ * Funde las cajas de una pasada con las que ya había.
+ *
+ * Cada pasada solo refresca unas teselas, así que las cajas de las zonas no
+ * visitadas deben conservarse --- si no, los objetos parpadearían al ritmo de
+ * la rotación. Se sustituyen únicamente las que caen dentro de las teselas
+ * recién analizadas, y se caducan las que llevan demasiadas pasadas sin
+ * confirmarse.
+ */
+function mergeDetections(r) {
+  const now = performance.now();
+  const inside = (b, t) =>
+    b[0] >= t[0] - 2 && b[1] >= t[1] - 2 && b[2] <= t[2] + 2 && b[3] <= t[3] + 2;
+
+  const kept = (state.detBoxes || []).filter((d) =>
+    !r.tiles.some((t) => inside(d.b, t)) && now - d.t < state.detTtlMs);
+  for (const d of r.dets) kept.push({...d, t: now});
+  state.detBoxes = kept;
+}
+
+function updateBrain() {
+  const b = state.brain;
+  if (!b) return;
+  const s = b.state();
+  $("fsBrain").hidden = false;
+  $("bCounts").textContent = `${s.counts.person} · ${s.counts.vehicle}`;
+  $("bFps").textContent = `${s.fps} fps · ${s.fast_ms} ms`;
+  $("bScale").textContent = s.scale && s.scale.a !== undefined
+    ? `${(1 / s.scale.a).toFixed(1)} px/m · n=${s.scale.n}`
+    : "objetos a una sola distancia";
+
+  // Solo personas con física real: una lista de todo es ruido.
+  const rows = s.tracks
+    .filter((t) => t.cls === "person" && t.physics && t.physics.speed_px_s > 1)
+    .slice(0, 6);
+  const frag = document.createDocumentFragment();
+  for (const t of rows) {
+    const v = t.physics.speed_km_h !== null
+      ? `${t.physics.speed_km_h} km/h` : `${t.physics.speed_px_s} px/s`;
+    const h = t.stature ? ` · ${t.stature.m} m` : "";
+    frag.append(statRow(`#${t.id}`, v, h));
+  }
+  $("bTracks").replaceChildren(frag);
+  $("bEvents").textContent = s.events.length
+    ? s.events.slice(0, 4).map((e) => `${e.kind} #${e.id}`).join(" · ") : "";
+}
+
+let memTick = 0;
+function updateLocalStats() {
+  updateBrain();
+  if (state.archive) {
+    archiveFinished();
+    // El volcado va por lotes y el recuento no necesita refrescarse a la tasa
+    // del panel: cada pocos segundos basta y evita transacciones constantes.
+    if (++memTick % 12 === 0) {
+      state.archive.flush().then(refreshMemory);
+      if (state.brain?.scale?.valid) state.archive.saveScene(state.brain.scale);
+    }
+  }
+  const eng = state.engine;
+  if (!eng) return;
+  const st = eng.stats();
+
+  $("pillObjects").hidden = false;
+  $("pillObjects").innerHTML =
+    `<b>${state.boxes.length}</b>&nbsp;objeto${state.boxes.length === 1 ? "" : "s"}`;
+
+  if (st.warming) {
+    $("pillState").textContent = "aprendiendo el fondo…";
+    setAlert("", "warn");
+  } else {
+    $("pillState").innerHTML = state.capturing
+      ? `<span class="dot" data-live="1"></span>${st.fps} fps · ${st.ms} ms`
+      : `${st.fps} fps`;
+  }
+
+  $("statFrames").textContent = st.frames;
+  $("statTubes").textContent = st.tubes + st.active;
+  const wr = state.detWorker?.report();
+  $("statCapability").textContent = wr?.ready
+    ? `neuronal · hilo propio · ${wr.last_ms} ms`
+    : state.detector ? `neuronal · ${state.detMs} ms/pasada`
+    : `local · ${st.fps} fps`;
+  const note = $("noteCapability");
+  note.hidden = false;
+  note.dataset.tone = "info";
+  note.textContent = state.detector
+    ? `Render a ${st.fps} fps. El detector va por su cuenta: `
+      + `${state.detMs} ms por pasada, ${state.detPasses} pasadas para recorrer `
+      + `el cuadro entero. ${state.detBoxes.length} cajas vivas.`
+    : `Análisis en el dispositivo: ${st.ms} ms por frame, ${st.patchMB} MB de `
+      + `recortes. Las clases se deducen de la proporción de la caja, no de un `
+      + `detector: son orientativas.`;
+}
+
+/* ==========================================================================
+   Sondeo
+   ========================================================================== */
+function setAlert(text, tone) {
+  const pill = $("pillAlert");
+  pill.hidden = !text;
+  if (text) { pill.textContent = text; pill.dataset.tone = tone; }
+}
+
+async function pollOnce() {
+  if (!state.sessionId) return;
+  try {
+    const tracks = await request(`/api/sources/${state.sessionId}/tracks`);
+    state.backoffMs = 0;
+    state.boxes   = tracks.boxes ?? [];
+    state.boxesAt = performance.now();
+    state.sourceW = tracks.w;
+    state.sourceH = tracks.h;
+
+    if (tracks.frame !== state.lastFrameCount) {
+      state.lastFrameCount = tracks.frame;
+      state.lastFrameAt = Date.now();
+    }
+
+    $("pillObjects").hidden = false;
+    $("pillObjects").innerHTML =
+      `<b>${state.boxes.length}</b>&nbsp;objeto${state.boxes.length === 1 ? "" : "s"}`;
+    $("pillState").innerHTML = state.capturing
+      ? '<span class="dot" data-live="1"></span>analizando'
+      : (tracks.frame ? `${tracks.frame} frames` : "en espera");
+
+    const stalled = state.lastFrameAt &&
+                    Date.now() - state.lastFrameAt > CFG.staleAfterMs &&
+                    state.lastFrameCount > 0;
+    setAlert(stalled ? "fuente detenida" : "", "warn");
+
+    if (++state.pollTicks % CFG.statusEveryNPolls === 0) await refreshStatus();
+  } catch {
+    // Backoff exponencial: si el servidor se cae, martillearlo cada 330 ms no
+    // ayuda a nadie y agota la batería.
+    state.backoffMs = state.backoffMs
+      ? Math.min(state.backoffMs * 2, CFG.backoffMaxMs)
+      : CFG.trackPollMs * 2;
+    setAlert("sin conexión", "err");
+    restartPolling(state.backoffMs);
+  }
+}
+
+async function refreshStatus() {
+  const s = await request(`/api/sources/${state.sessionId}/status`);
+  $("statFrames").textContent = s.frames ?? 0;
+  $("statTubes").textContent  = s.tubes ?? 0;
+
+  const cap = s.capability ?? {};
+  $("statCapability").textContent = CAPABILITY_ES[cap.verdict] ?? "midiendo";
+  const note = $("noteCapability");
+  if (cap.excludes?.length) {
+    note.hidden = false;
+    note.dataset.tone = "warn";
+    note.textContent = `Esta fuente no soporta: ${cap.excludes.join(", ")}.`;
+  } else {
+    note.hidden = true;
+  }
+  if (s.status === "error" && s.error) toast(s.error, "err");
+}
+
+function restartPolling(interval = CFG.trackPollMs) {
+  clearInterval(state.pollTimer);
+  state.pollTimer = setInterval(pollOnce, interval);
+}
+
+/* ==========================================================================
+   Ciclo de vida de la sesión
+   ========================================================================== */
+$("btnConnect").addEventListener("click", async () => {
+  const spec = $("spec").value.trim();
+  if (!spec) { toast("Indica un origen de vídeo.", "warn"); return; }
+
+  const btn = $("btnConnect");
+  btn.disabled = true;
+  btn.textContent = "Conectando…";
+
+  // El modo local no crea sesión en el servidor: no hay servidor obligatorio.
+  // Se contacta con él más tarde y solo para resolver el plan de sinopsis, que
+  // es lo único que no cabe con soltura en el bucle del navegador.
+  if (spec.startsWith("pantalla://") || spec.startsWith("screen://")) {
+    try {
+      if (typeof Engine !== "function") throw new Error("engine.js no se ha cargado");
+      const ok = await openScreen();
+      if (!ok) throw new Error("sin captura de pantalla no hay nada que analizar");
+      state.mode = "pantalla";
+      state.engine = new Engine({analysisWidth: 320});
+      state.brain = new Brain(state.engine);
+      await startArchive();
+      $("fsSource").hidden = true;
+      for (const id of ["fsCapture", "fsSession", "fsOutput", "fsOverlay", "fsModel"]) {
+        $(id).hidden = false;
+      }
+      $("btnStart").textContent = "Empezar a grabar";
+      $("btnFlip").hidden = true;
+      enableRoi(true);
+      startLocalLoop();
+      autoLoadModel();
+      setPanel(false);
+      toast("Coloca el recuadro sobre el vídeo y ajústalo con las esquinas.");
+    } catch (err) {
+      toast(err.message, "err");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Conectar";
+    }
+    return;
+  }
+
+  if (spec.startsWith("local://")) {
+    try {
+      if (typeof Engine !== "function") {
+        throw new Error("engine.js no se ha cargado");
+      }
+      const ok = await openCamera();
+      if (!ok) throw new Error("sin cámara no hay nada que analizar");
+      state.mode = "local";
+      state.engine = new Engine({analysisWidth: 320});
+      state.brain = new Brain(state.engine);
+      await startArchive();
+      $("fsSource").hidden = true;
+      $("fsCapture").hidden = false;
+      $("fsSession").hidden = false;
+      $("fsOutput").hidden = false;
+      $("fsOverlay").hidden = false;
+      $("fsModel").hidden = false;
+      $("btnStart").textContent = "Empezar a grabar";
+      enableRoi(false);
+      autoLoadModel();
+      startLocalLoop();
+      setPanel(false);
+      toast("Análisis local activo. Mantén el dispositivo inmóvil.");
+    } catch (err) {
+      toast(err.message, "err");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Conectar";
+    }
+    return;
+  }
+
+  try {
+    const session = await postJSON("/api/sources", {spec});
+    state.sessionId = session.session_id;
+    state.kind = spec.startsWith("push://") ? "push" : "pull";
+
+    $("fsSource").hidden  = true;
+    $("fsSession").hidden = false;
+    $("fsOutput").hidden  = false;
+
+    if (state.kind === "push") {
+      $("fsCapture").hidden = false;
+      const ok = await openCamera();
+      if (!ok) $("btnStart").disabled = true;
+    } else {
+      // Sin stream local: se sirve MJPEG por conexión larga. Sondear un
+      // endpoint de imagen fija cuesta un round-trip por frame y los entrega a
+      // intervalos irregulares, que es lo que se percibe como tirones.
+      const img = $("mjpeg");
+      img.src = mediaUrl(`/api/sources/${state.sessionId}/stream.mjpg`);
+      img.hidden = false;
+      $("idle").hidden = true;
+      await postJSON(`/api/sources/${state.sessionId}/run`,
+                     {max_frames: CFG.runMaxFrames});
+      setPanel(false);
+    }
+    restartPolling();
+    toast(`Conectado a ${session.name ?? spec}.`);
+  } catch (err) {
+    toast(`No se pudo conectar: ${err.message}`, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Conectar";
+  }
+});
+
+$("btnBrackets").addEventListener("click", () => setOverlay("brackets"));
+$("btnSilhouettes").addEventListener("click", () => setOverlay("silhouettes"));
+function setOverlay(mode) {
+  state.overlay = mode;
+  $("btnBrackets").className = mode === "brackets" ? "" : "ghost";
+  $("btnSilhouettes").className = mode === "silhouettes" ? "" : "ghost";
+}
+
+$("btnStart").addEventListener("click", startCapture);
+$("btnStop").addEventListener("click", stopCapture);
+$("btnFlip").addEventListener("click", async () => {
+  const was = state.capturing;
+  if (was) stopCapture();
+  await openCamera(state.facing === "environment" ? "user" : "environment");
+  if (was) startCapture();
+});
+
+$("btnDisconnect").addEventListener("click", async () => {
+  stopCapture();
+  stopCamera();
+  stopLocalLoop();
+  state.engine?.reset();
+  state.engine = null;
+  state.mode = null;
+  state.boxes = [];
+  $("fsOverlay").hidden = true;
+  $("fsModel").hidden = true;
+  state.detector = null;
+  state.detRunning = false;
+  state.detBoxes = [];
+  state.detWorker?.stop();
+  state.detWorker = null;
+  if (state.archive) { state.archive.flush(); state.archive = null; }
+  state.archived.clear();
+  state.brain = null;
+  $("fsBrain").hidden = true;
+  $("fsMemory").hidden = true;
+  enableRoi(false);
+  clearInterval(state.pollTimer);
+  const id = state.sessionId;
+  state.sessionId = null;
+  state.boxes = [];
+  state.lastFrameCount = -1;
+  if (id) await request(`/api/sources/${id}`, {method: "DELETE"}).catch(() => {});
+
+  $("mjpeg").hidden = true; $("mjpeg").removeAttribute("src");
+  video.hidden = true;
+  $("idle").hidden = false;
+  $("fsSource").hidden = false;
+  for (const id2 of ["fsCapture", "fsSession", "fsOutput"]) $(id2).hidden = true;
+  $("pillObjects").hidden = true;
+  $("pillState").textContent = "en espera";
+  setAlert("", "warn");
+  $("results").replaceChildren();
+  setPanel(true);
+});
+
+addEventListener("pagehide", () => {
+  stopCapture();
+  stopCamera();
+  clearInterval(state.pollTimer);
+});
+
+/* ==========================================================================
+   Resultados
+   ========================================================================== */
+function statRow(label, value, hint) {
+  const row = document.createElement("div");
+  row.className = "stat";
+  const l = document.createElement("span"); l.textContent = label;
+  const v = document.createElement("b");    v.textContent = value;
+  if (hint) {
+    const s = document.createElement("small");
+    s.textContent = ` ${hint}`;
+    v.append(s);
+  }
+  row.append(l, v);
+  return row;
+}
+
+/** URL de un medio, con el token en la consulta si hace falta. */
+function mediaUrl(path) {
+  const base = /^https?:\/\//i.test(path) ? path : state.apiBase + path;
+  return state.token
+    ? base + (base.includes("?") ? "&" : "?") + "t=" + encodeURIComponent(state.token)
+    : base;
+}
+
+function mediaNode(tag, src) {
+  const el = document.createElement(tag);
+  el.className = "out";
+  el.src = mediaUrl(src);
+  if (tag === "video") { el.controls = true; el.playsInline = true; el.preload = "metadata"; }
+  else { el.loading = "lazy"; el.alt = ""; }
+  return el;
+}
+
+$("btnBuild").addEventListener("click", async () => {
+  if (state.mode === "local" || state.mode === "pantalla") return buildLocal();
+  return buildOnServer();
+});
+
+/* --------------------------------------------------------------------------
+   Sinopsis en modo local
+   --------------------------------------------------------------------------
+   El dispositivo sube geometría y recibe un desplazamiento por tubo. Los
+   píxeles no viajan en ninguna dirección: la composición se pinta aquí con los
+   recortes que el motor ya tiene en memoria. Una sesión de una hora manda unos
+   cientos de kilobytes en lugar de decenas de megas, y el resultado aparece en
+   segundos aunque la subida esté saturada.
+   ------------------------------------------------------------------------ */
+async function buildLocal() {
+  const btn = $("btnBuild"), results = $("results");
+  const eng = state.engine;
+  const tubes = eng.allTubes();
+
+  results.replaceChildren();
+  // La lámina de siluetas no necesita servidor: se compone aquí y aparece de
+  // inmediato, aunque el plan de sinopsis luego falle.
+  results.append(silhouettePlate(eng, tubes));
+
+  if (tubes.length < 2) {
+    results.append(note(`Solo ${tubes.length} objeto${tubes.length === 1 ? "" : "s"}. `
+      + "Deja correr la escena un poco más antes de pedir el sinopsis.", "warn"));
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Resolviendo…";
+  // Ceder un frame antes de bloquear: sin esto el botón nunca llega a repintarse
+  // con "Resolviendo…" y la interfaz parece colgada durante el cálculo.
+  await new Promise((r) => setTimeout(r, 30));
+
+  try {
+    const payload = eng.exportTubes();
+    const fps = Math.max(4, Math.min(30, eng.stats().fps || 12));
+    const t0 = performance.now();
+
+    // El optimizador corre aquí. No hay servidor: era la última pieza que lo
+    // exigía, y está portada a JS en solver.js.
+    if (typeof planSynopsis !== "function") {
+      throw new Error("solver.js no se ha cargado");
+    }
+    const plan = planSynopsis(payload, {maxOverlapRatio: 0.012, iterations: 12000});
+    if (!plan) throw new Error("no hay tubos utilizables");
+    const ms = Math.round(performance.now() - t0);
+
+    results.append(statRow("Objetos", String(plan.tubes)));
+    results.append(statRow("Compresión", `${plan.compression}×`));
+    results.append(statRow("Solape", `${(plan.overlap_ratio * 100).toFixed(2)} %`));
+    results.append(statRow("Resuelto en", `${ms} ms`, "en este equipo"));
+    results.append(synopsisPlayer(eng, tubes, plan, fps));
+  } catch (err) {
+    results.append(note(`No se pudo resolver el sinopsis: ${err.message}`, "err"));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Generar sinopsis y siluetas";
+  }
+}
+
+function note(text, tone) {
+  const p = document.createElement("p");
+  p.className = "note";
+  if (tone) p.dataset.tone = tone;
+  p.textContent = text;
+  return p;
+}
+
+/** Lámina de actividad: cada objeto una vez, en su posición real. */
+function silhouettePlate(eng, tubes) {
+  const wrap = document.createElement("div");
+  const cv = document.createElement("canvas");
+  const W = eng.sourceW || 960, H = eng.sourceH || 540;
+  cv.width = W; cv.height = H;
+  cv.className = "out";
+  const c = cv.getContext("2d");
+
+  c.fillStyle = "#f4f1ea";
+  c.fillRect(0, 0, W, H);
+  const sx = W / eng.small.width, sy = H / eng.small.height;
+
+  const figs = [];
+  for (const t of tubes) {
+    if (!t.obs.length) continue;
+    const obs = t.obs[Math.floor(t.obs.length / 2)];
+    const pts = silhouette(obs, sx, sy, {points: 44, smooth: 2});
+    if (pts) figs.push({pts, klass: t.klass, baseY: obs.b[3] * sy, h: (obs.b[3] - obs.b[1]) * sy});
+  }
+  // De atrás hacia delante por contacto con el suelo: una figura más baja en el
+  // cuadro está más cerca de la cámara y debe ocluir, no ser ocluida.
+  figs.sort((a, b) => a.baseY - b.baseY);
+
+  for (const f of figs) {
+    strokeSilhouette(c, f.pts);
+    c.fillStyle = (SIL_COLOR[f.klass] || SIL_COLOR.object) + "e6";
+    c.fill();
+    // El trazo se escala con la figura: uno constante convierte los objetos
+    // lejanos en manchas y los cercanos en filamentos.
+    c.lineWidth = Math.max(1, Math.min(3.6, f.h / 120 * 1.8));
+    c.strokeStyle = "#1a1a1a";
+    c.lineJoin = "round";
+    c.stroke();
+  }
+
+  wrap.append(note(`Lámina de actividad · ${figs.length} figuras`));
+  wrap.append(cv);
+  const dl = document.createElement("button");
+  dl.type = "button"; dl.className = "ghost"; dl.textContent = "Descargar PNG";
+  dl.addEventListener("click", () => cv.toBlob((b) => download(b, "argos_siluetas.png")));
+  wrap.append(dl);
+  return wrap;
+}
+
+function download(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+/** Reproductor del sinopsis, compuesto en canvas desde los recortes locales. */
+function synopsisPlayer(eng, tubes, plan, fps) {
+  const wrap = document.createElement("div");
+  const W = eng.sourceW, H = eng.sourceH;
+  const cv = document.createElement("canvas");
+  cv.width = W; cv.height = H; cv.className = "out";
+  const c = cv.getContext("2d");
+
+  const sx = W / eng.small.width, sy = H / eng.small.height;
+  const byId = new Map(tubes.map((t) => [String(t.id), t]));
+
+  // synFrame = obs.f - inicio_del_tubo + desplazamiento
+  const schedule = new Map();
+  for (const [id, shift] of Object.entries(plan.placements)) {
+    const t = byId.get(id);
+    if (!t) continue;
+    const start = plan.starts[id] ?? t.obs[0].f;
+    for (const obs of t.obs) {
+      const f = obs.f - start + shift;
+      if (f < 0 || f >= plan.duration) continue;
+      if (!schedule.has(f)) schedule.set(f, []);
+      schedule.get(f).push({t, obs});
+    }
+  }
+
+  let frame = 0, playing = false, timer = 0;
+
+  const drawFrame = (f) => {
+    if (eng.plate) c.drawImage(eng.plate, 0, 0, W, H);
+    else { c.fillStyle = "#101216"; c.fillRect(0, 0, W, H); }
+
+    const items = (schedule.get(f) || [])
+      .slice().sort((a, b) => a.obs.b[3] - b.obs.b[3]);
+
+    for (const {t, obs} of items) {
+      const bmp = eng.patches.get(t.id, obs.f);
+      const x = obs.b[0] * sx, y = obs.b[1] * sy;
+      const w = (obs.b[2] - obs.b[0]) * sx, h = (obs.b[3] - obs.b[1]) * sy;
+      if (bmp) {
+        c.drawImage(bmp, x, y, w, h);
+      } else {
+        // El recorte pudo ser desalojado por el techo de memoria. Se dibuja la
+        // silueta en su lugar en vez de omitir el objeto: perder una figura de
+        // un sinopsis forense es peor que mostrarla sin textura.
+        const pts = silhouette(obs, sx, sy, {points: 36, smooth: 1});
+        if (pts) {
+          strokeSilhouette(c, pts);
+          c.fillStyle = (SIL_COLOR[t.klass] || SIL_COLOR.object) + "cc";
+          c.fill();
+        }
+      }
+      // El sello de tiempo original es lo que hace utilizable el resultado: el
+      // sentido del sinopsis es que lo que se ve junto no ocurrió junto.
+      const secs = obs.f / fps;
+      const label = `${t.klass} +${Math.floor(secs / 60)}:`
+        + String(Math.floor(secs % 60)).padStart(2, "0");
+      c.font = "600 12px system-ui, sans-serif";
+      const tw = c.measureText(label).width;
+      c.fillStyle = SIL_COLOR[t.klass] || SIL_COLOR.object;
+      c.fillRect(x, Math.max(0, y - 15), tw + 8, 15);
+      c.fillStyle = "#111";
+      c.fillText(label, x + 4, Math.max(11, y - 4));
+    }
+  };
+
+  const step = () => {
+    drawFrame(frame);
+    frame = (frame + 1) % plan.duration;
+  };
+
+  const play = document.createElement("button");
+  play.type = "button";
+  play.textContent = "Reproducir";
+  play.addEventListener("click", () => {
+    playing = !playing;
+    play.textContent = playing ? "Pausa" : "Reproducir";
+    clearInterval(timer);
+    if (playing) timer = setInterval(step, 1000 / fps);
+  });
+
+  const rec = document.createElement("button");
+  rec.type = "button"; rec.className = "ghost"; rec.textContent = "Grabar a vídeo";
+  rec.addEventListener("click", () => recordSynopsis(cv, drawFrame, plan.duration, fps, rec));
+
+  drawFrame(0);
+  wrap.append(note(`Sinopsis · ${plan.source_duration} → ${plan.duration} frames`
+    + ` (${plan.compression}×), solape ${(plan.overlap_ratio * 100).toFixed(2)} %`));
+  wrap.append(cv, play, rec);
+  return wrap;
+}
+
+/** Vuelca el sinopsis a WebM con MediaRecorder sobre el canvas. */
+async function recordSynopsis(canvas, drawFrame, duration, fps, btn) {
+  if (!window.MediaRecorder || !canvas.captureStream) {
+    toast("Este navegador no permite grabar el canvas.", "warn");
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = "Grabando…";
+  const stream = canvas.captureStream(fps);
+  const chunks = [];
+  let mime = "video/webm;codecs=vp9";
+  if (!MediaRecorder.isTypeSupported(mime)) mime = "video/webm";
+  const rec = new MediaRecorder(stream, {mimeType: mime, videoBitsPerSecond: 4e6});
+  rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+
+  const done = new Promise((r) => { rec.onstop = r; });
+  rec.start();
+  for (let f = 0; f < duration; f++) {
+    drawFrame(f);
+    // Se espera un frame real de pantalla por cada frame del sinopsis: sin esta
+    // pausa MediaRecorder captura solo los que le llegan y salen vídeos con la
+    // duración correcta y la mitad de los objetos ausentes.
+    await new Promise((r) => requestAnimationFrame(r));
+  }
+  rec.stop();
+  await done;
+  download(new Blob(chunks, {type: mime}), "argos_sinopsis.webm");
+  btn.disabled = false;
+  btn.textContent = "Grabar a vídeo";
+}
+
+async function buildOnServer() {
+  const btn = $("btnBuild"), results = $("results");
+  btn.disabled = true;
+  btn.textContent = "Procesando…";
+  results.replaceChildren(Object.assign(document.createElement("p"),
+    {className: "note", textContent: "Resolviendo el empaquetado temporal…"}));
+  try {
+    const r = await postJSON(`/api/sources/${state.sessionId}/build`, {overlap: 0.012});
+    const out = r.outputs ?? {};
+    const base = `/api/sources/${state.sessionId}/file/`;
+    const frag = document.createDocumentFragment();
+
+    frag.append(statRow("Objetos", String(r.tubes)));
+    if (out.compression) frag.append(statRow("Compresión", `${out.compression}×`));
+    if (out.synopsis)         frag.append(mediaNode("video", base + out.synopsis));
+    if (out.activity_plate)   frag.append(mediaNode("img",   base + out.activity_plate));
+    if (out.trajectory_strip) frag.append(mediaNode("img",   base + out.trajectory_strip));
+    if (out.activity_plate_svg) {
+      const dl = document.createElement("a");
+      dl.href = base + out.activity_plate_svg;
+      dl.download = "argos_siluetas.svg";
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "ghost"; b.textContent = "Descargar SVG vectorial";
+      dl.append(b);
+      dl.style.display = "block";
+      frag.append(dl);
+    }
+    results.replaceChildren(frag);
+  } catch (err) {
+    results.replaceChildren(Object.assign(document.createElement("p"),
+      {className: "note", textContent: err.message}));
+    $("results").firstChild.dataset.tone = "err";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Generar sinopsis y siluetas";
+  }
+}
+
+$("btnStature").addEventListener("click", async () => {
+  const btn = $("btnStature"), results = $("results");
+  btn.disabled = true;
+  try {
+    let r;
+    if (state.engine && typeof measureStature === "function") {
+      // Todo local: autocalibración desde los propios peatones y medida por
+      // metrología de vista única. No hay petición de red.
+      const payload = state.engine.exportTubes();
+      r = measureStature(payload, {});
+    } else {
+      r = await postJSON(`/api/sources/${state.sessionId}/stature`);
+    }
+
+    const frag = document.createDocumentFragment();
+    if (!r.available) {
+      frag.append(note(r.reason, "warn"));
+    } else {
+      // La advertencia va delante de las cifras, no debajo: la escala se ancla
+      // en una mediana poblacional asumida y la altura incluye calzado, así que
+      // quien lea el número debe saberlo antes de leerlo.
+      // Construido con nodos, no con innerHTML. Los valores vienen de la API
+      // y hoy son enumerados generados por el servidor, pero un sumidero de
+      // innerHTML con datos remotos está a una refactorización de ser XSS.
+      const p = document.createElement("p");
+      p.className = "note";
+      const b1 = document.createElement("b");
+      b1.textContent = r.calibration.mode;
+      p.append("Calibración ", b1,
+               ` sobre ${r.calibration.n_samples} muestras. `);
+      if (!r.evidential) {
+        const b2 = document.createElement("b");
+        b2.textContent = "No evidencial";
+        p.append(b2, ": ");
+      }
+      p.append("la escala se ancla en una mediana poblacional asumida y la "
+               + "altura incluye calzado.");
+      frag.append(p);
+
+      if (!r.results.length) {
+        frag.append(note("Ninguna medida superó el filtro de calidad.", "warn"));
+      }
+      for (const row of r.results) {
+        frag.append(statRow(`Objeto ${row.tube} · ${row.quality}`,
+                            `${row.m} m`, `(${row.ci[0]}–${row.ci[1]})`));
+      }
+    }
+    results.replaceChildren(frag);
+  } catch (err) {
+    results.replaceChildren(note(err.message, "err"));
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+})();
+</script>
+</body>
+</html>

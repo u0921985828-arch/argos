@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fondo negro desde el primer frame: la pantalla de arranque por defecto
+         es blanca y produce un destello violento antes de que cargue una
+         interfaz que es toda negra. -->
+    <style name="Theme.Argos" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/argos_black</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
