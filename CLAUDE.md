@@ -180,6 +180,29 @@ todo lo que superara el umbral por clase, 0,08 para persona. Dos personas
 reales salían como seis cajas. El corte que fijó la invariante 4 no se estaba
 aplicando donde más importa.
 
+**El proveedor que se pide no es el que se usa.** `navigator.gpu` existe en
+WebViews sin GPU utilizable: ORT acepta `webgpu`, falla al iniciarlo, lo
+descarta él solo y corre en WASM. El panel decía «webgpu» porque el nombre
+salía de lo pedido. Ahora se pide el adaptador de verdad antes de ofrecer el
+proveedor, así que el nombre es el que se usa —y de paso carga el artefacto de
+11 MB en vez del de WebGPU de 21. Un diagnóstico que miente cuesta más que no
+tenerlo: es literalmente lo que dejó una sesión de campo analizando sin
+detector.
+
+**La primera inferencia no vale lo que las demás.** ONNX Runtime reserva la
+arena y compila los kernels en la primera ejecución. Si cae sobre el primer
+frame de cámara se ve como un tirón y, con la cola que descarta mientras hay
+trabajo en curso, se traga los primeros barridos. Se calienta al cargar, que
+además da el único número que convierte «va lenta» en un dato: lo que cuesta
+una inferencia EN ESE aparato. Medido en el emulador: 3.305 ms —dos núcleos,
+sin GPU, un hilo—.
+
+**Un «ms de frame» no señala a nada.** Bajar el frame de la GPU
+(`drawImage`+`getImageData`) depende del tamaño de la FUENTE y del aparato, no
+del algoritmo: la cámara entrega 1920×1080 aunque el análisis trabaje a 320 px
+de ancho. Sumado al análisis, a la física y al dibujo en un solo número, es
+indistinguible de un modelo de fondo caro. Van repartidos en cuatro.
+
 **`localStorage` no funciona en artefactos de Claude.** Aquí se usa IndexedDB.
 
 ---
