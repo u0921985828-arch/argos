@@ -63,4 +63,15 @@ if grep 'ARGOS' logcat.txt | grep -Eq 'Uncaught|SyntaxError|ReferenceError|TypeE
     exit 1
 fi
 
-echo "OK: instalado, arrancado, en primer plano y sin errores de JavaScript."
+# Y el silencio tampoco es éxito. `onConsoleMessage` reenvía toda la consola,
+# así que «ninguna línea ARGOS» es indistinguible de «la página no llegó a
+# ejecutarse»: la comprobación anterior habría pasado igual con un WebView en
+# blanco. El cliente publica una marca al terminar de cargar, y aquí se exige.
+if ! grep -q 'ARGOS listo:' logcat.txt; then
+    echo "::error::el motor no publicó su marca de arranque"
+    echo "(ni «ARGOS listo» ni «ARGOS incompleto» en logcat: la página no llegó"
+    echo " a ejecutarse, o lo hizo sin los módulos)"
+    exit 1
+fi
+
+echo "OK: instalado, arrancado, en primer plano y con los once módulos cargados."

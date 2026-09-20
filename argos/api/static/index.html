@@ -2305,6 +2305,33 @@ $("btnStature").addEventListener("click", async () => {
   }
 });
 
+/* ------------------------------------------------------------------ */
+/*  Marca de arranque                                                   */
+/* ------------------------------------------------------------------ */
+/* Cada módulo del bundle va en una etiqueta de script propia. Eso es
+   deliberado
+   --- les da ámbito propio --- pero tiene una consecuencia: un error
+   de sintaxis en uno solo deja ese módulo fuera SIN tumbar la página.
+   La interfaz responde, la cámara se ve, y el análisis no existe.
+
+   Ocurrió: un `??=` que el WebView de Android 11 no parsea dejó a
+   `brain.js` sin cargar, y el APK pasó la comprobación de arranque en
+   verde. Esta línea convierte ese fallo silencioso en una línea de
+   consola --- y, en el APK, en una línea de logcat que el emulador del
+   CI puede exigir. */
+(function(){
+  const REQUERIDOS = ["Engine", "YoloxDetector", "Brain", "Archive",
+                      "BehaviourModel", "DetectorWorker", "GroundPlane",
+                      "CameraRegistry", "planSynopsis", "CrossCamera",
+                      "StatureEstimator"];
+  const faltan = REQUERIDOS.filter(n => typeof globalThis[n] === "undefined");
+  if (faltan.length) {
+    console.error("ARGOS incompleto, faltan modulos: " + faltan.join(", "));
+  } else {
+    console.log("ARGOS listo: " + REQUERIDOS.length + " modulos cargados");
+  }
+})();
+
 })();
 </script>
 </body>
