@@ -125,4 +125,14 @@ grep 'ARGOS detector activo:' logcat.txt
 echo "--- entorno ---"
 grep 'ARGOS entorno:' logcat.txt || echo "(sin línea de entorno)"
 
+# Lo que SÍ depende de nosotros se exige: que las cabeceras salgan del
+# contenedor. Que el WebView conceda o no el aislamiento con ellas puestas es
+# cosa suya --- medido: las manda y no lo concede ---, pero dejar de mandarlas
+# sería una regresión de esta aplicación y tiene que verse aquí.
+if grep -q 'ARGOS entorno:' logcat.txt && grep 'ARGOS entorno:' logcat.txt | grep -q 'coop=(ninguna)'; then
+    echo "::error::el contenedor no está emitiendo COOP/COEP"
+    grep 'ARGOS entorno:' logcat.txt
+    exit 1
+fi
+
 echo "OK: instalado, arrancado, en primer plano, once módulos y detector neuronal vivo."

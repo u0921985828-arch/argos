@@ -94,8 +94,31 @@ public class MainActivity extends AppCompatActivity {
         out.put("Cross-Origin-Opener-Policy", "same-origin");
         out.put("Cross-Origin-Embedder-Policy", "credentialless");
         out.put("Cross-Origin-Resource-Policy", "same-origin");
-        res.setResponseHeaders(out);
-        return res;
+        // Se construye una respuesta NUEVA con línea de estado, en vez de
+        // añadir las cabeceras a la que devuelve el loader.
+        //
+        // `AssetsPathHandler` usa el constructor de tres argumentos, que deja
+        // la respuesta sin código de estado. Una respuesta así no tiene línea
+        // de estado que encabece las cabeceras, y lo que se le cuelgue con
+        // `setResponseHeaders` no llega a procesarse: el documento se pinta
+        // igual --- el HTML es el mismo --- pero sin COOP ni COEP, así que
+        // `crossOriginIsolated` sale falso y WASM se queda en un hilo. El
+        // fallo no produce ningún error: exactamente la forma de romperse que
+        // más veces ha costado una entrega en este proyecto.
+        //
+        // El estado que ya traiga se RESPETA. El loader devuelve 404 para un
+        // asset que falte, y reescribirlo a 200 convertiría un fichero que no
+        // está en una página vacía servida como correcta --- tapando justo el
+        // error que hay que ver. Y sin cuerpo no se toca nada: el constructor
+        // largo exige un estado válido y una razón no vacía, y una excepción
+        // aquí dentro se lleva por delante la carga entera.
+        if (res.getData() == null) return res;
+        int code = res.getStatusCode();
+        String reason = res.getReasonPhrase();
+        if (code < 100 || code > 599) { code = 200; reason = "OK"; }
+        if (reason == null || reason.isEmpty()) reason = "OK";
+        return new WebResourceResponse(res.getMimeType(), res.getEncoding(),
+                code, reason, out, res.getData());
     }
 
     @Override

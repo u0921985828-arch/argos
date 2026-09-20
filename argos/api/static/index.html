@@ -645,6 +645,7 @@ const state = {
   detTtlMs:    4000,          // caducidad de una caja sin reconfirmar
   detRunning:  false,
   paintMs:     0,             // coste medio de un repintado real del overlay
+  entorno:     null,          // núcleos, SAB, aislamiento y cabeceras recibidas
   brain:       null,          // coordinador de las dos escalas de tiempo
   archive:     null,          // memoria persistente
   archived:    new Set(),
@@ -1886,9 +1887,23 @@ function paintDetStats(s) {
     note.hidden = d.isolated;
     if (!d.isolated) {
       delete note.dataset.tone;
-      note.textContent = "La página no está aislada entre orígenes (COOP/COEP), "
-        + "así que WASM corre en un solo hilo. Es la diferencia más grande de "
-        + "velocidad que queda sin aprovechar.";
+      // Dos causas distintas, y decirlo mal manda a quien lo lea al sitio
+      // equivocado. Si las cabeceras NO llegaron, la página se está sirviendo
+      // desde algo que no las emite y eso se arregla en el servidor o en el
+      // contenedor. Si llegaron y aun así no hay aislamiento, es el navegador
+      // el que no lo concede --- medido en Android WebView --- y no hay nada
+      // que tocar aquí: el detector funciona, con un hilo en vez de varios.
+      const e = state.entorno;
+      const llegaron = e && e.coop && e.coop !== "(ninguna)"
+        && e.coep && e.coep !== "(ninguna)";
+      note.textContent = llegaron
+        ? "Este navegador no concede el aislamiento entre orígenes aunque la "
+          + "página llega con COOP y COEP, así que WASM corre en un solo hilo. "
+          + "No es un fallo de la aplicación y no hay nada que ajustar; en un "
+          + "navegador de escritorio la misma página sí usa varios."
+        : "La página no llega con COOP/COEP, así que WASM corre en un solo "
+          + "hilo. Sirviéndola con esas dos cabeceras se aprovecharían varios "
+          + "núcleos: es la mayor diferencia de velocidad que queda sin usar.";
     }
   }
 
@@ -2662,6 +2677,10 @@ $("btnStature").addEventListener("click", async () => {
     } catch (err) {
       coop = coep = "(no legible)";
     }
+    state.entorno = {coop, coep,
+                     cores: navigator.hardwareConcurrency || 0,
+                     sab: typeof SharedArrayBuffer !== "undefined",
+                     isolated: !!globalThis.crossOriginIsolated};
     console.log(`ARGOS entorno: ${navigator.hardwareConcurrency || "?"} nucleos, `
       + `SAB=${typeof SharedArrayBuffer !== "undefined"}, `
       + `aislado=${!!globalThis.crossOriginIsolated}, `
