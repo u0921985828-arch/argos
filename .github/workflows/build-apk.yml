@@ -3,14 +3,17 @@ name: Build APK
 on:
   workflow_dispatch:
     inputs:
-      publish_branch:
+      apk_branch:
         description: >-
-          Dejar el APK en la rama `apk` además de como artifact. Sirve para
-          recogerlo con git desde donde el almacén de artifacts no es
-          accesible. Apagado por defecto: cada activación deja 6 MB de binario
-          en el repositorio.
-        type: boolean
-        default: false
+          Qué hacer con la rama `apk`. `publicar` deja ahí el APK además de
+          como artifact, para recogerlo con git desde donde el almacén de
+          artifacts no es accesible. `borrar` la elimina y no compila nada:
+          esos 6 MB de binario no deben quedarse en el repositorio más de lo
+          necesario, que es justo lo que `.gitignore` evita en el resto del
+          proyecto.
+        type: choice
+        options: [ 'no', 'publicar', 'borrar' ]
+        default: 'no'
   push:
     paths:
       - 'android/**'
@@ -25,7 +28,28 @@ permissions:
   contents: write
 
 jobs:
+  # Limpieza a demanda. Va en este mismo workflow y no aparte porque es el
+  # reverso exacto del paso que publica: quien crea la rama tiene que poder
+  # deshacerla, o se queda para siempre.
+  cleanup:
+    if: inputs.apk_branch == 'borrar'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete the `apk` branch
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/git/refs/heads/apk" >/dev/null 2>&1; then
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/apk"
+            echo "rama apk borrada"
+          else
+            echo "la rama apk no existe; nada que borrar"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build:
+    # Borrar no compila: sería gastar cinco minutos de runner en un APK que
+    # nadie ha pedido.
+    if: inputs.apk_branch != 'borrar'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -119,7 +143,7 @@ jobs:
       # historia, y al no tocar ninguna de las rutas vigiladas arriba tampoco
       # vuelve a disparar este workflow.
       - name: Publish APK to the `apk` branch
-        if: inputs.publish_branch
+        if: inputs.apk_branch == 'publicar'
         run: |
           set -e
           work=$(mktemp -d)
