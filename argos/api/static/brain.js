@@ -865,6 +865,11 @@ class Brain {
     return {
       fps: this.fps,
       fast_ms: +this.fastMs.toFixed(1),
+      // Desglose del frame: bajar la imagen, analizarla, y el resto del ciclo
+      // rápido (física, escala, contadores). Un solo número no dice dónde se
+      // va el tiempo, y sin eso «va lenta» no lleva a ningún sitio.
+      grab_ms: +(this.engine.grabMs || 0).toFixed(1),
+      engine_ms: +(this.engine.lastMs || 0).toFixed(1),
       counts: this.counts,
       scale: this.scale.valid
         ? {a: +this.scale.a.toFixed(4), cx: +this.scale.cx.toFixed(5),

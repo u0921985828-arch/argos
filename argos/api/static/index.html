@@ -455,6 +455,7 @@ button:disabled{opacity:.34;cursor:default}
     <div class="stat"><span>Alto mediano del objeto</span><b id="bPx">— px</b></div>
     <div class="stat"><span>Puntuación &gt;.5 · .2-.5 · &lt;.2</span><b id="bScores">—</b></div>
     <div class="stat"><span>Render</span><b id="bFps">— fps</b></div>
+    <div class="stat"><span>Captura · análisis · resto · dibujo</span><b id="bFrame">—</b></div>
     <div class="stat"><span>Detector por pasada</span><b id="bDetMs">—</b></div>
     <p class="note" id="noteDet" hidden></p>
     <div class="stat"><span>Escala métrica</span><b id="bScale">aprendiendo</b></div>
@@ -643,6 +644,7 @@ const state = {
   sweepY:      null,          // posición dibujada, interpolada hacia la real
   detTtlMs:    4000,          // caducidad de una caja sin reconfirmar
   detRunning:  false,
+  paintMs:     0,             // coste medio de un repintado real del overlay
   brain:       null,          // coordinador de las dos escalas de tiempo
   archive:     null,          // memoria persistente
   archived:    new Set(),
@@ -799,6 +801,10 @@ function paint() {
   }
   lastPaintKey = key; lastVw = vw; lastVh = vh;
 
+  // Solo se cronometran los repintados REALES. Los saltados de arriba cuestan
+  // una comparación de cadenas y meterlos en la media la hundiría hasta cero,
+  // que es justo lo contrario de lo que hay que saber.
+  const tPaint = performance.now();
   ctx.clearRect(0, 0, vw, vh);
   drawSweep(vw, vh);
 
@@ -846,6 +852,10 @@ function paint() {
       ctx.fillText(label, X + 3, ty);
     }
   }
+  // Media exponencial: el dibujo varía mucho de un frame a otro --- una
+  // etiqueta más, una silueta menos --- y un valor instantáneo en el panel
+  // parpadea sin informar de nada.
+  state.paintMs = state.paintMs * 0.9 + (performance.now() - tPaint) * 0.1;
   requestAnimationFrame(paint);
 }
 requestAnimationFrame(paint);
@@ -1912,6 +1922,15 @@ function updateBrain() {
   $("bCounts").textContent = `${s.counts.person} · ${s.counts.vehicle}`;
   $("bNoClass").textContent = String(s.counts.sinClase ?? 0);
   $("bFps").textContent = `${s.fps} fps · ${s.fast_ms} ms`;
+  // Un total no dice dónde se va el tiempo, y cada trozo se arregla de otra
+  // manera: bajar el frame de la GPU depende del tamaño de la fuente, el
+  // análisis del algoritmo, el dibujo de cuántos objetos hay en pantalla.
+  // «Va lenta» con un solo número obliga a adivinar; con cuatro, no.
+  if (s.grab_ms !== undefined) {
+    const resto = Math.max(0, s.fast_ms - s.engine_ms);
+    $("bFrame").textContent = `${s.grab_ms} · ${(s.engine_ms - s.grab_ms).toFixed(1)}`
+      + ` · ${resto.toFixed(1)} · ${state.paintMs.toFixed(1)} ms`;
+  }
   paintDetStats(s);
   $("bScale").textContent = s.scale && s.scale.a !== undefined
     ? `${(1 / s.scale.a).toFixed(1)} px/m · n=${s.scale.n}`

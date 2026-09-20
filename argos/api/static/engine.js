@@ -780,6 +780,7 @@ class Engine {
     this.frameIdx = 0;
     this.lastMs = 0;
     this.msAvg = 0;
+    this.grabMs = 0;      // solo bajar el frame de la GPU, medido aparte
     this.running = false;
     this.sourceW = 0;
     this.sourceH = 0;
@@ -845,8 +846,20 @@ class Engine {
     this.roi = {x: rx, y: ry, w: rw, h: rh};
 
     const {width: w, height: h} = this.small;
+    // La captura se cronometra APARTE del análisis.
+    //
+    // Son dos cosas distintas con arreglos distintos. El análisis trabaja a
+    // 320 px de ancho y su coste depende del algoritmo; esto de aquí es bajar
+    // un frame de la GPU a memoria de CPU, y su coste depende del TAMAÑO de la
+    // fuente y del aparato, no de nada que se pueda optimizar en el bucle. En
+    // un móvil con la cámara a 1920x1080 puede costar más que todo el resto
+    // junto, y sumado en un solo número «ms de frame» eso es indistinguible de
+    // un detector lento o de un modelo de fondo caro --- que es exactamente la
+    // confusión que deja «va lenta» sin arreglar.
+    const tGrab = performance.now();
     this.smallCtx.drawImage(video, rx, ry, rw, rh, 0, 0, w, h);
     const frame = this.smallCtx.getImageData(0, 0, w, h);
+    this.grabMs = performance.now() - tGrab;
 
     const mask = this.bg.update(frame.data);
 
