@@ -26,7 +26,16 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # `packages: ''` no es cosmético: por defecto esta acción ejecuta
+      # `sdkmanager tools`, y `tools` es un paquete retirado del repositorio de
+      # Google. El resultado es `Failed to find package 'tools'` y el job muere
+      # en el segundo 20, antes de tocar una sola línea de ARGOS. Lo que hace
+      # falta --- la platform 34 y las build-tools --- lo descarga solo el
+      # plugin de Android durante `assembleDebug`, con las licencias ya
+      # aceptadas por esta misma acción.
       - uses: android-actions/setup-android@v3
+        with:
+          packages: ''
 
       - uses: actions/setup-python@v5
         with:
