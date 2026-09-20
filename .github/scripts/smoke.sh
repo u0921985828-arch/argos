@@ -114,4 +114,15 @@ fi
 echo "--- detector ---"
 grep 'ARGOS detector activo:' logcat.txt
 
+# El entorno no tumba el job, se IMPRIME.
+#
+# Un WebView sin aislar corre WASM en un hilo. Eso no es un APK roto --- el
+# detector funciona igual, más despacio --- pero es la mayor diferencia de
+# velocidad que queda sobre la mesa, y hasta ahora no había forma de saber si
+# la causa estaba en el contenedor (que no manda las cabeceras) o en el motor
+# (que las ignora). La línea trae las dos cosas: lo que llegó y lo que se
+# consiguió con ello.
+echo "--- entorno ---"
+grep 'ARGOS entorno:' logcat.txt || echo "(sin línea de entorno)"
+
 echo "OK: instalado, arrancado, en primer plano, once módulos y detector neuronal vivo."

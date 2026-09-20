@@ -356,6 +356,41 @@ class YoloxDetector {
     return new YoloxDetector(sess, opts);
   }
 
+  /**
+   * Una inferencia en vacío, para que la primera de verdad no llegue tarde.
+   *
+   * ONNX Runtime reserva su arena, resuelve el grafo y compila los kernels en
+   * la PRIMERA ejecución. Esa cuesta varias veces lo que las siguientes. Si
+   * cae sobre el primer frame de cámara, el arranque se ve como un tirón --- y
+   * como el hilo del detector descarta los frames que llegan mientras hay uno
+   * en curso, se traga además los primeros barridos. Hacerla aquí la paga el
+   * arranque, que es donde no molesta.
+   *
+   * Devuelve además lo que ha tardado, que es el único número que convierte
+   * «va lenta» en un dato: el coste de una inferencia EN ESTE aparato, sin
+   * cámara, sin teselas y sin nada más de por medio.
+   *
+   * @param {object} [ortLib] el runtime; por defecto el global, igual que
+   *   en el resto de métodos --- no se resuelve por el ámbito léxico a
+   *   propósito: con ORT cargado como módulo no habría ningún `ort` global.
+   * @returns {Promise<number>} milisegundos de esa inferencia.
+   */
+  async warmup(ortLib) {
+    const ort = ortLib || globalThis.ort;
+    if (!ort) throw new Error("ONNX Runtime no está cargado");
+    const now = () => (globalThis.performance ? performance.now() : Date.now());
+    const t0 = now();
+    const input = new ort.Tensor("float32",
+      new Float32Array(3 * this.size * this.size),
+      [1, 3, this.size, this.size]);
+    const out = await this.sess.run({[this.inputName]: input});
+    // Leer la salida no es decorativo: con WebGPU el resultado vive en la GPU
+    // y solo al pedirlo se espera de verdad a que la inferencia termine. Sin
+    // esta línea el número medido sería el de encolar el trabajo.
+    if (!out[this.sess.outputNames[0]]?.data) throw new Error("el modelo no devolvió nada");
+    return Math.round(now() - t0);
+  }
+
   /* -------------------------------------------------------------------- */
 
   _grid(size) {

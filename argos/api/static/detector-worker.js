@@ -64,8 +64,22 @@ self.onmessage = async (e) => {
   const msg = e.data;
   try {
     if (msg.type === "load") {
-      const providers = msg.webgpu && self.navigator?.gpu
-        ? ["webgpu", "wasm"] : ["wasm"];
+      // WebGPU se comprueba PIDIENDO el adaptador, no mirando si la API
+      // existe. navigator.gpu está definido en WebViews que luego no tienen
+      // ninguna GPU utilizable: ORT acepta el proveedor, falla al iniciarlo,
+      // lo descarta por su cuenta y corre en WASM --- mientras el panel sigue
+      // enseñando «webgpu», porque el nombre salía de lo que se pidió y no de
+      // lo que se usó. Un diagnóstico que miente cuesta más que no tenerlo:
+      // este proyecto ya perdió una sesión de campo entera por creerse uno.
+      let webgpu = false;
+      if (msg.webgpu && self.navigator?.gpu) {
+        try {
+          webgpu = !!(await navigator.gpu.requestAdapter());
+        } catch (err) {
+          webgpu = false;
+        }
+      }
+      const providers = webgpu ? ["webgpu", "wasm"] : ["wasm"];
       // Los hilos de WASM solo existen si la página envía COOP/COEP. El
       // lanzador de escritorio las manda; abierto como fichero suelto, no.
       if (self.crossOriginIsolated) {
@@ -77,10 +91,21 @@ self.onmessage = async (e) => {
       });
       detector = new YoloxDetector(sess, msg.cfg || {});
       if (msg.zoom) detector.setZoom(msg.zoom);
+      // La primera inferencia se paga aquí y se mide: es el coste real de
+      // este aparato, y llega al panel antes de que el usuario pulse nada.
+      let warmup = null;
+      try {
+        warmup = await detector.warmup(ort);
+      } catch (err) {
+        // Calentar es una mejora, no un requisito: si falla, el detector
+        // sigue sirviendo. Lo que NO puede pasar es que se caiga la carga.
+        warmup = null;
+      }
       self.postMessage({type: "ready",
                         size: detector.size,
                         threads: ort.env.wasm.numThreads || 1,
-                        backend: sess.handler?._backendName || providers[0],
+                        backend: providers[0],
+                        warmup,
                         isolated: !!self.crossOriginIsolated});
       return;
     }

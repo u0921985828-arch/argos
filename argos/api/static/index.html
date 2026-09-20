@@ -1317,6 +1317,7 @@ async function loadDetector(source) {
         state.detStatus = {ok: true, donde: "hilo propio", size: info.size,
                            threads: info.threads, isolated: !!info.isolated,
                            backend: info.backend || "wasm",
+                           warmup: info.warmup ?? null,
                            origen: state.ortUrl === ORT_CDN ? "CDN" : "local"};
         $("noteModel").innerHTML = "";
         $("noteModel").textContent =
@@ -1342,11 +1343,20 @@ async function loadDetector(source) {
     });
     applyFilter();
     applyZoom();
+    // Misma razón que en el Worker: la primera inferencia es la cara, y aquí
+    // cae en el hilo de la interfaz. Pagarla antes del primer frame evita un
+    // tirón visible justo al empezar.
+    let warmup = null;
+    try {
+      warmup = await state.detector.warmup(globalThis.ort);
+    } catch (err) {
+      warmup = null;
+    }
     state.detBoxes = [];
     detectorLoop();
     state.detStatus = {ok: true, donde: "hilo principal", size: state.detector.size,
                        threads: 1, isolated: !!globalThis.crossOriginIsolated,
-                       backend: "wasm",
+                       backend: "wasm", warmup,
                        origen: state.ortUrl === ORT_CDN ? "CDN" : "local"};
     $("noteModel").innerHTML =
       `Detector <b>neuronal</b> activo (entrada ${state.detector.size} px). `
@@ -1885,7 +1895,12 @@ function paintDetStats(s) {
     $("bPx").textContent = hs.length
       ? `${Math.round(hs[hs.length >> 1])} px (movimiento) · n=${hs.length}` : "— px";
     $("bScores").textContent = "—";
-    $("bDetMs").textContent = st && st.ms !== null ? `${st.ms} ms` : "—";
+    // Antes del primer barrido no hay nada medido de la escena, pero sí el
+    // coste de una inferencia en este aparato: se enseña ese, marcado, en
+    // lugar de una raya. Es lo que dice si la lentitud es del modelo o de la
+    // escena antes siquiera de empezar.
+    $("bDetMs").textContent = st && st.ms !== null ? `${st.ms} ms`
+      : d?.warmup != null ? `${d.warmup} ms · 1.ª inferencia` : "—";
   }
 }
 
@@ -2609,6 +2624,31 @@ $("btnStature").addEventListener("click", async () => {
     console.log("ARGOS listo: " + REQUERIDOS.length + " modulos cargados");
   }
 
+  // El entorno, medido y no supuesto.
+  //
+  // «Va lenta» no es accionable; `aislado=false, 1 nucleo` sí lo es. Las
+  // cabeceras se leen tal y como LLEGARON al documento, no como se pretendía
+  // enviarlas: ponerlas en el contenedor y darlas por buenas es exactamente el
+  // error que dejó el runtime fuera del APK durante una entrega entera. Si
+  // COOP y COEP están presentes y aun así no hay aislamiento, el culpable es
+  // el WebView y no esta aplicación --- y entonces no hay nada que arreglar
+  // aquí, que también es un resultado.
+  (async () => {
+    let coop = "?", coep = "?";
+    try {
+      const r = await fetch(location.href, {cache: "no-store"});
+      coop = r.headers.get("cross-origin-opener-policy") || "(ninguna)";
+      coep = r.headers.get("cross-origin-embedder-policy") || "(ninguna)";
+      r.body?.cancel?.();
+    } catch (err) {
+      coop = coep = "(no legible)";
+    }
+    console.log(`ARGOS entorno: ${navigator.hardwareConcurrency || "?"} nucleos, `
+      + `SAB=${typeof SharedArrayBuffer !== "undefined"}, `
+      + `aislado=${!!globalThis.crossOriginIsolated}, `
+      + `coop=${coop}, coep=${coep}`);
+  })();
+
   // El detector se carga al arrancar y no al conectar la cámara.
   //
   // No depende de la fuente --- son el runtime y los pesos, nada más --- y
@@ -2623,7 +2663,8 @@ $("btnStature").addEventListener("click", async () => {
         const d = state.detStatus || {};
         console.log(`ARGOS detector activo: ${d.backend} ${d.donde}, `
           + `entrada ${d.size} px, ${d.threads} hilo(s), runtime ${d.origen}, `
-          + `aislado=${d.isolated}`);
+          + `aislado=${d.isolated}, `
+          + `primera inferencia ${d.warmup == null ? "?" : d.warmup + " ms"}`);
       } else {
         console.error("ARGOS detector NO: "
           + (state.detStatus?.motivo || "motivo desconocido"));
