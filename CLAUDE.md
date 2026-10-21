@@ -102,12 +102,21 @@ mientras la persona sigue andando.
 `scripts/bundle.py` los inlina en **`argos.html`**, un fichero de 409 KB que es
 lo que se entrega. El APK empaqueta ese mismo fichero.
 
-### Nativo (`android-native/`) — el núcleo portado, sin app todavía
+### Nativo (`android-native/`) — la app sin WebView
 
-`core/Core.kt` es `engine.js` en Kotlin puro, verificado por paridad **exacta**
-contra el JS (260 frames, 0 divergencias) y 1,4× más rápido. No existe la app:
-falta CameraX, el dibujo, el detector por TFLite y el Gradle. El estado
-detallado y los criterios están en `ESTADO.md`, que se lee ANTES de retomarlo.
+| Pieza | Qué hace |
+|---|---|
+| `core/Core.kt` | `engine.js` en Kotlin puro: fondo, morfología, componentes, seguimiento |
+| `core/Detector.kt` | `detector.js` en cuadro entero + la memoria de `Brain.mergeDetections` |
+| `app/Pipeline.kt` | los dos relojes: cámara y seguimiento en un hilo, detector en otro |
+| `app/MainActivity.kt` | CameraX RGBA girado, carga, autoprueba, panel |
+| `app/Overlay.kt` | cajas: clase solo si la dio el detector, «movimiento» si no |
+
+`core` no depende de Android y se verifica en la JVM contra el JS: **paridad
+exacta** del núcleo (260/260 frames, con y sin detector) y del detector sobre
+bus, zidane y dog (cajas ±1e-4 px). El CI exige la del núcleo antes de
+compilar el APK (`./gradlew :core:paridad`, tras `node scripts/dump_js.js`).
+El estado y las cifras están en `ESTADO.md`, que se lee ANTES de tocar esto.
 
 Lo nativo no gana por ese 1,4×: gana porque `capture()` era el 75 % del coste y
 CameraX entrega los píxeles sin lienzo ni lectura de GPU. Y el plano Y de
@@ -259,6 +268,15 @@ del algoritmo: la cámara entrega 1920×1080 aunque el análisis trabaje a 320 p
 de ancho. Sumado al análisis, a la física y al dibujo en un solo número, es
 indistinguible de un modelo de fondo caro. Van repartidos en cuatro.
 
+**Partir una función deja nombres colgando, y en el navegador no fallan.**
+Al partir `process()` en `capture()` + `analyze()`, `analyze()` siguió usando
+`roi`, que era un parámetro de `process()`. En node es un ReferenceError; en el
+navegador NO: hay un `<div id="roi">` y el acceso por nombre de `window` lo
+resuelve a ese elemento. `roi.x` vale `undefined`, cada caja del detector sale
+NaN y el seguimiento devuelve **cero pistas con el detector activo**, sin una
+queja. Ninguna paridad lo pisó porque todas corrían sin detecciones. Toda
+paridad tiene que cubrir el camino con detector: es el que corre en uso real.
+
 **`localStorage` no funciona en artefactos de Claude.** Aquí se usa IndexedDB.
 
 ---
@@ -266,7 +284,7 @@ indistinguible de un modelo de fondo caro. Van repartidos en cuatro.
 ## Comandos
 
 ```bash
-python3 -m pytest tests/ -q          # 27 tests
+python3 -m pytest tests/ -q          # 29 tests
 python3 scripts/bundle.py --out argos.html
 python3 scripts/run_video.py VIDEO --out /tmp/x --stride 4
 python3 scripts/demo_viewer.py VIDEO --out v.mp4 --clean
