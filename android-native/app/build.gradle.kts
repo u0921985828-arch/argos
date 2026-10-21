@@ -15,6 +15,10 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1-nativo"
+        // ONNX Runtime trae sus .so para cuatro arquitecturas y el APK pesaba
+        // 83 MB. x86 de 32 bits no lo usa ningún teléfono; x86_64 se queda
+        // para el emulador del CI.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
     }
     buildTypes {
         release {

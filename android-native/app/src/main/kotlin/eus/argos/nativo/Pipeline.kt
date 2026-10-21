@@ -78,6 +78,14 @@ class Pipeline(modelBytes: ByteArray, threads: Int) {
         val opts = OrtSession.SessionOptions().apply {
             setIntraOpNumThreads(threads)
             setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+            // Sin espera activa. Por defecto los hilos de ORT giran en vacío
+            // entre operadores para ganar microsegundos, y en un aparato con
+            // pocos núcleos ese giro le roba la CPU al reloj rápido y a la
+            // vista previa. Medido en el emulador del CI (2 núcleos) con el giro
+            // puesto: inferencia 2.587 ms y análisis del frame 38-52 ms, frente
+            // a 1,8 ms del mismo análisis en la JVM.
+            addConfigEntry("session.intra_op.allow_spinning", "0")
+            addConfigEntry("session.inter_op.allow_spinning", "0")
         }
         session = env.createSession(modelBytes, opts)
         inputName = session.inputNames.first()

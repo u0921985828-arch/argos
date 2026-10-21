@@ -74,7 +74,10 @@ class MainActivity : ComponentActivity() {
     private fun loadDetector() {
         try {
             val model = assets.open("yolox_nano.onnx").use { it.readBytes() }
-            val threads = Runtime.getRuntime().availableProcessors().coerceIn(1, 4)
+            // Un núcleo queda para el reloj rápido: el detector no puede
+            // comérselos todos o la cámara va a tirones mientras infiere.
+            val cores = Runtime.getRuntime().availableProcessors()
+            val threads = (cores - 1).coerceIn(1, 4)
             val p = Pipeline(model, threads)
             val warm = p.warmup()
             // El proveedor que se nombra es el que se usa: aquí no se pide
