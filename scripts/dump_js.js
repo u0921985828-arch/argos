@@ -1,7 +1,15 @@
 // Referencia JS: genera frames RGBA deterministas (sin lienzo) y vuelca cajas.
 global.performance = require('perf_hooks').performance;
 const mod={exports:{}};
-(function(module,exports){ eval(require('fs').readFileSync('/home/claude/argos/argos/api/static/engine.js','utf8')); })(mod,mod.exports);
+// Las rutas se derivan de la ubicación de ESTE fichero. Estaban absolutas y
+// apuntaban a la máquina donde se escribió la prueba, asi que la receta de
+// reproduccion del README no podia funcionar en ningun otro sitio --- y una
+// prueba de paridad que no se puede reproducir no demuestra nada.
+const path=require('path');
+const RAIZ=path.resolve(__dirname,'..');
+const MOTOR=path.join(RAIZ,'argos','api','static','engine.js');
+const SALIDA=process.argv[2] || path.join(RAIZ,'android-native','build','ref_js.txt');
+(function(module,exports){ eval(require('fs').readFileSync(MOTOR,'utf8')); })(mod,mod.exports);
 const {Engine} = mod.exports;
 const W=320,H=180,SRCW=1280,SRCH=720,N=8;
 
@@ -27,5 +35,6 @@ for(let f=0; f<260; f++){
   const r=e.analyze({data:frame(), w:W, h:H, rx:0, ry:0, rw:SRCW, rh:SRCH}, {});
   out.push((r.boxes||[]).map(b=>`${b.id},${b.c},${b.b.map(v=>v.toFixed(4)).join(',')}`).join(';'));
 }
-require('fs').writeFileSync('/tmp/claude-0/-home-claude/9b7bd83f-c314-5443-b5a0-7b8f33536d06/scratchpad/ref_js.txt', out.join('\n'));
-console.log('JS: '+out.length+' frames, '+out.filter(x=>x).length+' con cajas');
+require('fs').mkdirSync(path.dirname(SALIDA),{recursive:true});
+require('fs').writeFileSync(SALIDA, out.join('\n'));
+console.log('JS: '+out.length+' frames, '+out.filter(x=>x).length+' con cajas -> '+SALIDA);

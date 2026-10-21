@@ -11,6 +11,7 @@ yolox_nano.onnx
 android/.gradle/
 android/build/
 android/app/build/
+android-native/build/
 android/local.properties
 .pytest_cache/
 *.tar.gz

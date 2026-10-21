@@ -36,7 +36,7 @@ fun bgPlate(): ByteArray {
 
 class Obj(var x: Double, var y: Double, val vx: Double, var vy: Double, val w: Int, val h: Int)
 
-fun main() {
+fun main(args: Array<String>) {
     val plate = bgPlate()
     val objs = (0 until N).map { k ->
         Obj(((k * 37) % W).toDouble(), (40 + (k * 13) % 90).toDouble(),
@@ -76,7 +76,14 @@ fun main() {
         })
     }
 
-    val refFile = File("/tmp/claude-0/-home-claude/9b7bd83f-c314-5443-b5a0-7b8f33536d06/scratchpad/ref_js.txt")
+    // El volcado de referencia llega por argumento; por defecto, donde lo deja
+    // `dump_js.js`. Estaba fijado a una ruta absoluta de otra maquina.
+    val refFile = File(if (args.isNotEmpty()) args[0] else "android-native/build/ref_js.txt")
+    if (!refFile.exists()) {
+        println("falta el volcado de referencia en ${refFile.path}")
+        println("generalo antes con: node scripts/dump_js.js")
+        return
+    }
     val ref = refFile.readLines()
     var dif = 0
     var primero = -1

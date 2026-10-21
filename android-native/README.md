@@ -22,13 +22,28 @@ razón. Por eso hay en `Core.kt` decisiones que en Kotlin escribirías de otra
 forma --- cálculo en `Double` y almacenamiento en `Float`, lectura de bytes con
 `and 0xFF` --- puestas para reproducir la aritmética de JavaScript exactamente.
 
-Reproducir:
+Reproducir, desde la raíz del repositorio:
 
 ```bash
-node scripts/dump_js.js                     # volcado de referencia
-kotlinc core/src/main/kotlin/eus/argos/core/Core.kt \
-        core/src/test/kotlin/Parity.kt -include-runtime -d parity.jar
-java -jar parity.jar
+node scripts/dump_js.js                     # -> android-native/build/ref_js.txt
+kotlinc android-native/core/src/main/kotlin/eus/argos/core/Core.kt \
+        android-native/core/src/test/kotlin/Parity.kt \
+        -include-runtime -d /tmp/parity.jar
+java -Dfile.encoding=UTF-8 -jar /tmp/parity.jar
+```
+
+Las dos puntas aceptan la ruta del volcado por argumento y por defecto usan la
+misma, derivada del repositorio. Antes estaban fijadas a rutas absolutas de la
+máquina donde se escribió la prueba, así que esta receta no podía funcionar en
+ningún otro sitio --- y una prueba de paridad que no se reproduce no demuestra
+nada. El `-Dfile.encoding=UTF-8` es para que los separadores de la salida no
+salgan como `?`.
+
+Comprobado de nuevo en otra máquina (kotlinc 2.0.21, JDK 21, 2 núcleos):
+
+```
+C1 paridad: 260 frames · 0 divergencias -> IDENTICOS
+C2 velocidad: analyze() mediana 1,767 ms  (JS medido: 2,58 ms)  -> 1,46x
 ```
 
 ## Por qué lo nativo gana, y no es por ese 1,4x
