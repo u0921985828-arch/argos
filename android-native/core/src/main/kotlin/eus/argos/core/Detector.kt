@@ -9,10 +9,11 @@ import kotlin.math.min
  * Detector YOLOX, puerto de `detector.js` en su modo de cuadro entero.
  *
  * Igual que `Core.kt`, es un puerto LITERAL: hay una prueba que pasa las
- * mismas fotos por el JS y por esto y compara caja a caja. Solo se porta el
- * camino que corre la app —el cuadro entero, invariante 3—; las teselas, la
- * pirámide y los modos foveales quedan en el JS hasta que una medida diga que
- * hacen falta en el móvil.
+ * mismas fotos por el JS y por esto y compara caja a caja. Se portan los dos
+ * modos que importan: el cuadro entero, que es el de por defecto (invariante
+ * 3), y las teselas con zoom, para escenas amplias con objetos pequeños
+ * (invariante 2: no hay zoom universal, depende de los píxeles del objeto).
+ * La pirámide y los modos foveales quedan en el JS.
  *
  * No sabe nada de ONNX Runtime: la inferencia entra como función. Así el
  * preproceso y la decodificación, que es donde vive todo lo que puede salir
@@ -78,7 +79,8 @@ class YoloxDetector(
      *   `anchura × 4`; leer con la anchura cizalla la imagen y el detector, en
      *   vez de fallar, simplemente deja de ver.
      */
-    fun preprocess(rgba: ByteArray, rowStride: Int, tw: Int, th: Int): Prep {
+    fun preprocess(rgba: ByteArray, rowStride: Int, tw: Int, th: Int,
+                   ox: Int = 0, oy: Int = 0): Prep {
         val r = min(size.toDouble() / th, size.toDouble() / tw)
         val nw = Math.round(tw * r).toInt()
         val nh = Math.round(th * r).toInt()
@@ -88,7 +90,7 @@ class YoloxDetector(
             val sy = min(th - 1, floor(y / r).toInt())
             for (x in 0 until nw) {
                 val sx = min(tw - 1, floor(x / r).toInt())
-                val s = sy * rowStride + sx * 4
+                val s = (oy + sy) * rowStride + (ox + sx) * 4
                 val d = y * size + x
                 out[d] = (rgba[s + 2].toInt() and 0xFF).toFloat()
                 out[plane + d] = (rgba[s + 1].toInt() and 0xFF).toFloat()
@@ -182,13 +184,72 @@ class YoloxDetector(
     /** Milisegundos de la última inferencia, sin preproceso ni decodificación. */
     var lastInferMs = 0.0; private set
 
-    /** Cuadro entero en una inferencia. Cajas en píxeles del búfer de entrada. */
-    fun detect(rgba: ByteArray, rowStride: Int, w: Int, h: Int): List<DetBox> {
-        val prep = preprocess(rgba, rowStride, w, h)
-        val t0 = System.nanoTime()
-        val out = infer(prep.tensor)
-        lastInferMs = (System.nanoTime() - t0) / 1e6
-        val raw = decode(out, prep.ratio, w, h)
+    // Teselas: los mismos parámetros que DET_DEFAULTS.
+    var tileOverlap = 0.45
+    var edgeMargin = 4
+    var minTileFrac = 1.35
+    var maxTiles = 24
+
+    /**
+     * Plan de teselas, como `_tiles` del JS. `zoom <= 0` es el cuadro entero.
+     * Por encima de ×3 el recuento BAJA (medido): ampliar no crea detalle y la
+     * tesela pierde el contexto que el modelo necesita.
+     */
+    fun tiles(w: Int, h: Int, zoom: Double): List<IntArray> {
+        if (zoom <= 0) return listOf(intArrayOf(0, 0, w, h))
+        val t = maxOf(40, Math.round(size / maxOf(0.5, zoom)).toInt())
+        if (w <= t && h <= t) return listOf(intArrayOf(0, 0, w, h))
+        if (w < t * minTileFrac && h < t * minTileFrac) return listOf(intArrayOf(0, 0, w, h))
+        val step = maxOf(1, Math.round(t * (1 - tileOverlap)).toInt())
+        val xs = ArrayList<Int>(); val ys = ArrayList<Int>()
+        run { var x = 0; while (x + t <= w) { xs.add(x); x += step } }
+        if (xs.isEmpty() || xs.last() + t < w) xs.add(maxOf(0, w - t))
+        run { var y = 0; while (y + t <= h) { ys.add(y); y += step } }
+        if (ys.isEmpty() || ys.last() + t < h) ys.add(maxOf(0, h - t))
+        var out = ArrayList<IntArray>()
+        for (y in ys.distinct().sorted()) for (x in xs.distinct().sorted())
+            out.add(intArrayOf(x, y, minOf(w, x + t), minOf(h, y + t)))
+        if (out.size > maxTiles) {
+            // Antes que exceder el presupuesto se reduce el solape.
+            val every = (out.size + maxTiles - 1) / maxTiles
+            out = ArrayList(out.filterIndexed { i, _ -> i % every == 0 })
+        }
+        return out
+    }
+
+    /** Inferencias de la última llamada a `detect` (1 en cuadro entero). */
+    var lastTiles = 1; private set
+
+    /**
+     * Una pasada completa: cuadro entero (`zoom <= 0`) o todas las teselas.
+     * Cajas en píxeles del búfer de entrada.
+     */
+    fun detect(rgba: ByteArray, rowStride: Int, w: Int, h: Int, zoom: Double = 0.0): List<DetBox> {
+        val plan = tiles(w, h, zoom)
+        lastTiles = plan.size
+        val boxes = ArrayList<DoubleArray>(); val scores = ArrayList<Double>()
+        val labels = ArrayList<Int>()
+        var inferNs = 0L
+        for (tl in plan) {
+            val tx1 = tl[0]; val ty1 = tl[1]; val tw = tl[2] - tx1; val th = tl[3] - ty1
+            val prep = preprocess(rgba, rowStride, tw, th, tx1, ty1)
+            val t0 = System.nanoTime()
+            val out = infer(prep.tensor)
+            inferNs += System.nanoTime() - t0
+            val d = decode(out, prep.ratio, tw, th)
+            val m = edgeMargin
+            for (i in d.boxes.indices) {
+                val b = d.boxes[i]
+                // Invariante 1: una caja que toca el borde de una tesela
+                // INTERIOR miente; la vecina tiene el objeto entero.
+                if ((b[0] <= m && tx1 > 0) || (b[1] <= m && ty1 > 0) ||
+                    (b[2] >= tw - m && tl[2] < w) || (b[3] >= th - m && tl[3] < h)) continue
+                boxes.add(doubleArrayOf(tx1 + b[0], ty1 + b[1], tx1 + b[2], ty1 + b[3]))
+                scores.add(d.scores[i]); labels.add(d.labels[i])
+            }
+        }
+        lastInferMs = inferNs / 1e6
+        val raw = Raw(boxes, scores, labels)
         if (raw.boxes.isEmpty()) return emptyList()
         val keep = softNms(raw) { COARSE[COCO_NAMES[it]] ?: "other" }
         return keep.map { i ->

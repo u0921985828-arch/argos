@@ -455,9 +455,17 @@ class Brain {
     // El vídeo se guarda para que la huella pueda recortar del frame actual.
     this._fpVideo = video;
     this._fpRoi = roi;
+    // Las cajas del detector entran en el seguimiento UNA vez, en el frame en
+    // que llegan. Repetirlas en cada frame hasta la pasada siguiente era
+    // pedirle al detector que hiciera de tracker: la caja quedaba congelada
+    // mientras la persona seguía andando. Entre pasadas manda la resta de
+    // fondo, que sí ve dónde está cada cosa en cada frame, y la pista conserva
+    // la clase que le dio el detector.
+    const fresh = this._detFresh;
+    this._detFresh = false;
     const r = await this.engine.process(video, {
       roi, capturePatches,
-      detections: this.detBoxes.length ? this.detectionsForTracking() : null,
+      detections: fresh && this.detBoxes.length ? this.detectionsForTracking() : null,
     });
     if (!r) return null;
 
@@ -835,6 +843,7 @@ class Brain {
     }
 
     this.detBoxes = supervivientes.concat(fresh);
+    this._detFresh = true;
     this.confirmedCount = this.detBoxes.filter((d) => d.confirmed).length;
     this.staleCount = this.detBoxes.filter((d) => d.stale).length;
   }

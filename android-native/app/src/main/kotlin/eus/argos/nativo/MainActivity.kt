@@ -35,6 +35,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var hud: TextView
     private val analysisExec = Executors.newSingleThreadExecutor { r -> Thread(r, "argos-rapido") }
     private var lastLog = 0L
+    @Volatile private var destroyed = false
 
     private val askCamera = registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) startCamera() else hud.text = "Sin permiso de cámara no hay nada que analizar."
@@ -50,6 +51,12 @@ class MainActivity : ComponentActivity() {
         }
         setContentView(FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
+            // Un toque alterna cuadro entero / teselas ×2.
+            setOnClickListener {
+                val p = pipeline ?: return@setOnClickListener
+                p.zoom = if (p.zoom == 0.0) 2.0 else 0.0
+                Log.i(TAG, "ARGOS nativo modo: " + if (p.zoom == 0.0) "cuadro entero" else "teselas x2")
+            }
             addView(preview, FrameLayout.LayoutParams(-1, -1))
             addView(capa, FrameLayout.LayoutParams(-1, -1))
             addView(hud, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
@@ -77,6 +84,8 @@ class MainActivity : ComponentActivity() {
             Log.i(TAG, "ARGOS nativo detector: ONNX Runtime Android cpu, $threads hilo(s), " +
                        "entrada 416 px, primera inferencia $warm ms")
             selfTest(p)
+            // Si la actividad murió mientras cargaba, nadie cerraría esta sesión.
+            if (destroyed) { p.close(); return }
             pipeline = p
             Log.i(TAG, "ARGOS nativo listo")
         } catch (e: Throwable) {
@@ -157,8 +166,10 @@ class MainActivity : ComponentActivity() {
         val det = f.boxes.count { it.klassSrc == "det" }
         val txt = "%.0f fps · %dx%d\ncaptura %.1f · reducir %.1f · análisis %.1f ms\n".format(
             java.util.Locale.ROOT, p.fps, f.w, f.h, p.grabMs, p.scaleMs, p.engineMs) +
-            "detector %.0f ms (inferencia %.0f) · %d hilos · %d objetos\n".format(
-            java.util.Locale.ROOT, p.detMs, p.inferMs, p.threads, p.lastDets) +
+            "detector %.0f ms (inferencia %.0f, %d tesela%s) · %d hilos · %d objetos\n".format(
+            java.util.Locale.ROOT, p.detMs, p.inferMs, p.lastTiles, if (p.lastTiles == 1) "" else "s",
+            p.threads, p.lastDets) +
+            (if (p.zoom == 0.0) "cuadro entero · toca para teselas ×2\n" else "teselas ×2 · toca para cuadro entero\n") +
             "pistas %d · con clase del detector %d".format(f.boxes.size, det)
         runOnUiThread { hud.text = txt }
         if (now - lastLog > 3000) {
@@ -172,8 +183,14 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        destroyed = true
         super.onDestroy()
-        analysisExec.shutdownNow()
+        // Primero el reloj rápido (deja de mandar trabajo al detector), luego
+        // el detector, que espera a su inferencia en curso antes de liberar.
+        analysisExec.shutdown()
+        try { analysisExec.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS) }
+        catch (_: InterruptedException) { }
         pipeline?.close()
+        pipeline = null
     }
 }

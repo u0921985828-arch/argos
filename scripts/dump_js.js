@@ -40,7 +40,9 @@ function pasada(conDet){
   const e=new Engine(); const out=[];
   for(let f=0; f<260; f++){
     const data=frame();
-    const det=conDet ? objs.map(o=>({b:[RX+Math.floor(o.x)*SX, RY+Math.floor(o.y)*SY,
+    // Como en la app: las cajas del detector llegan una pasada cada pocos
+    // frames, no en todos.
+    const det=conDet && f%6===0 ? objs.map(o=>({b:[RX+Math.floor(o.x)*SX, RY+Math.floor(o.y)*SY,
                                          RX+(Math.floor(o.x)+o.w)*SX, RY+(Math.floor(o.y)+o.h)*SY],
                                      c:'person', score:0.9})) : null;
     const r=e.analyze({data, w:W, h:H, rx:conDet?RX:0, ry:conDet?RY:0, rw:SRCW, rh:SRCH},

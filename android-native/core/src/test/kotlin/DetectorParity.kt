@@ -18,8 +18,12 @@ import java.nio.FloatBuffer
  * El caso reservado va aquí también: la misma foto con cada fila rellenada
  * hasta un múltiplo de 64 bytes, como entrega CameraX. Tiene que dar lo mismo.
  *
- * Uso: java -cp parity.jar:onnxruntime.jar eus.argos.paridad.DetectorParityKt DIR
- *   DIR con yolox_nano.onnx, meta.json, *.rgba y ref_det_js.txt
+ * Dos modos: cuadro entero y teselas ×2 con la pasada completa.
+ *
+ * Generar la referencia (lo hace el CI, y se puede repetir en cualquier sitio):
+ *   python3 scripts/prep_detector_ref.py DIR bus.jpg zidane.jpg dog.jpg
+ *   node scripts/ref_detector.js DIR            (con yolox_nano.onnx en DIR)
+ *   ./gradlew :core:paridadDetector            (DIR = android-native/build/det)
  */
 fun main(args: Array<String>) {
     val dir = File(args.getOrElse(0) { "android-native/build/det" })
@@ -44,11 +48,12 @@ fun main(args: Array<String>) {
 
     var fallos = 0
     val tiempos = mutableListOf<Double>()
+    for ((modo, zoom) in listOf("completo" to 0.0, "x2" to 2.0))
     for ((name, w, h) in meta) {
         val rgba = File(dir, "$name.rgba").readBytes()
-        val mine = det.detect(rgba, w * 4, w, h)
-        tiempos.add(det.lastInferMs)
-        val theirs = ref.filter { it[0] == name }
+        val mine = det.detect(rgba, w * 4, w, h, zoom)
+        if (zoom == 0.0) tiempos.add(det.lastInferMs)
+        val theirs = ref.filter { it[0] == modo && it[1] == name }.map { it.drop(1) }
         var ok = mine.size == theirs.size
         val peor = DoubleArray(2)
         if (ok) for (i in mine.indices) {
@@ -60,7 +65,7 @@ fun main(args: Array<String>) {
             if (a.klass != b[1] || db > 0.5 || ds > 1e-3) ok = false
         }
         if (!ok) fallos++
-        println("C1 $name: KT ${mine.size} · JS ${theirs.size} · caja ±${"%.4f".format(peor[0])} px · " +
+        println("C1 $modo $name: KT ${mine.size} · JS ${theirs.size} · caja ±${"%.4f".format(peor[0])} px · " +
                 "puntuación ±${"%.2e".format(peor[1])} -> ${if (ok) "IGUALES" else "DISTINTOS"}")
         if (!ok) {
             println("   KT: " + mine.joinToString { "${it.klass} ${"%.3f".format(it.score)}" })
@@ -71,12 +76,12 @@ fun main(args: Array<String>) {
         val stride = (w * 4 + 63) / 64 * 64 + 64
         val pad = ByteArray(stride * h) { 7 }
         for (y in 0 until h) System.arraycopy(rgba, y * w * 4, pad, y * stride, w * 4)
-        val padded = det.detect(pad, stride, w, h)
+        val padded = det.detect(pad, stride, w, h, zoom)
         val same = padded.size == mine.size && padded.indices.all {
             padded[it].x1 == mine[it].x1 && padded[it].y2 == mine[it].y2 && padded[it].score == mine[it].score
         }
         if (!same) fallos++
-        println("   reservado $name (rowStride $stride en vez de ${w * 4}): " +
+        println("   reservado $modo $name (rowStride $stride en vez de ${w * 4}): " +
                 if (same) "IDÉNTICO" else "DISTINTO (${padded.size} frente a ${mine.size})")
     }
     println("inferencia ORT Java, 1 hilo: " + tiempos.joinToString { "%.0f ms".format(it) })

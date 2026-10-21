@@ -64,6 +64,12 @@ jobs:
         with:
           node-version: '20'
 
+      # Python propio: el del sistema en ubuntu-24.04 rechaza `pip install`
+      # (PEP 668), y la paridad del detector necesita OpenCV para decodificar.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Fetch detector weights and self-test photo
         run: |
           curl -sSL -o yolox_nano.onnx \
@@ -89,6 +95,25 @@ jobs:
         run: |
           node scripts/dump_js.js
           cd android-native && ./gradlew --no-daemon :core:paridad
+
+      # El detector contra detector.js sobre fotos reales (C1), en cuadro entero
+      # y en teselas ×2, y el caso reservado de las filas rellenadas. Sin esto
+      # una regresión en Detector.kt solo la vería la autoprueba del emulador,
+      # que mira una foto y tolera mucho más.
+      - name: Detector parity with detector.js
+        run: |
+          set -e
+          D=android-native/build/det
+          mkdir -p "$D" /tmp/fotos
+          cp yolox_nano.onnx "$D/"
+          curl -sSL -o /tmp/fotos/bus.jpg https://github.com/ultralytics/assets/releases/download/v0.0.0/bus.jpg
+          curl -sSL -o /tmp/fotos/zidane.jpg https://github.com/ultralytics/assets/releases/download/v0.0.0/zidane.jpg
+          cp autoprueba.jpg /tmp/fotos/dog.jpg
+          pip install -q opencv-python-headless
+          python3 scripts/prep_detector_ref.py "$D" /tmp/fotos/bus.jpg /tmp/fotos/zidane.jpg /tmp/fotos/dog.jpg
+          npm install -q --prefix /tmp/ortw onnxruntime-web@1.22.0
+          node scripts/ref_detector.js "$D" /tmp/ortw/node_modules/onnxruntime-web
+          cd android-native && ./gradlew --no-daemon :core:paridadDetector :core:casoReservado
 
       - name: Build debug APK
         working-directory: android-native

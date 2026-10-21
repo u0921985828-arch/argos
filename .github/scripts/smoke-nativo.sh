@@ -21,7 +21,9 @@ adb shell am start -n "$PKG/.MainActivity"
 for _ in $(seq 1 90); do
     adb logcat -d -s ARGOS:V AndroidRuntime:E > logcat.txt || true
     if grep -q 'FATAL EXCEPTION' logcat.txt; then break; fi
-    k=$(grep -o '[0-9]* inferencias' logcat.txt | tail -1 | awk '{print $1}')
+    # `|| true`: con `set -e` y `pipefail`, un grep sin coincidencias dentro
+    # de una sustitución mata el script en silencio, antes del primer log.
+    k=$(grep -o '[0-9]* inferencias' logcat.txt | tail -1 | awk '{print $1}' || true)
     if [ -n "${k:-}" ] && [ "$k" -ge 5 ]; then break; fi
     sleep 2
 done
@@ -51,7 +53,7 @@ fi
 # generó la referencia y unos pocos píxeles cambian. Clases y número, exactos.
 line=$(grep 'ARGOS autoprueba:' logcat.txt | tail -1 || true)
 echo "autoprueba: ${line#*ARGOS autoprueba: }"
-got=$(echo "$line" | sed 's/.*ms · //')
+got=$(echo "$line" | sed 's/.*ms · //' || true)
 ESPERADO="vehicle 0.767 · bike 0.787 · bike 0.309"
 python3 - "$got" "$ESPERADO" <<'PY' || { echo "::error::la autoprueba no coincide con detector.js"; exit 1; }
 import sys
@@ -64,8 +66,8 @@ sys.exit(0 if ok else 1)
 PY
 
 last=$(grep 'ARGOS nativo: frames' logcat.txt | tail -1 || true)
-frames=$(echo "$last" | grep -o 'frames [0-9]*' | awk '{print $2}')
-inf=$(echo "$last" | grep -o '[0-9]* inferencias' | awk '{print $1}')
+frames=$(echo "$last" | grep -o 'frames [0-9]*' | awk '{print $2}' || true)
+inf=$(echo "$last" | grep -o '[0-9]* inferencias' | awk '{print $1}' || true)
 if [ -z "${frames:-}" ] || [ "$frames" -eq 0 ]; then
     echo "::error::la cámara no entregó frames al núcleo"
     exit 1
@@ -77,4 +79,10 @@ fi
 echo "--- cifras ---"
 grep 'ARGOS nativo detector:' logcat.txt | tail -1
 echo "$last"
+# C3: la misma medida que la web (un `sess.run` sobre ceros, sin preproceso),
+# en el mismo emulador. 687 ms es la de la app web, run 25 del CI.
+warm=$(grep -o 'primera inferencia [0-9]* ms' logcat.txt | tail -1 | awk '{print $3}' || true)
+inf_med=$(echo "$last" | grep -o 'inferencia [0-9]* ms' | awk '{print $2}' || true)
+echo "C3 primera inferencia: nativo ${warm:-?} ms frente a 687 ms del APK web (mismo emulador)"
+echo "C3 inferencia en régimen: nativo ${inf_med:-?} ms por pasada"
 echo "OK: detector nativo vivo, autoprueba igual que detector.js, $frames frames analizados y $inf inferencias sobre la cámara."

@@ -78,7 +78,7 @@ fun main(args: Array<String>) {
         val out = mutableListOf<String>()
         for (f in 0 until 260) {
             val data = frame()
-            val det = if (!conDet) null else objs.map { o ->
+            val det = if (!conDet || f % 6 != 0) null else objs.map { o ->
                 val fx = Math.floor(o.x); val fy = Math.floor(o.y)
                 DetBox(RX + fx * SX, RY + fy * SY, RX + (fx + o.w) * SX, RY + (fy + o.h) * SY,
                        "person", 0.9)

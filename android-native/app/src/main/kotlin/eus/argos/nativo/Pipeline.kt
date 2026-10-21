@@ -46,9 +46,17 @@ class Pipeline(modelBytes: ByteArray, threads: Int) {
 
     private val detExec = Executors.newSingleThreadExecutor { r -> Thread(r, "argos-detector") }
     private val busy = AtomicBoolean(false)
+    /** Hay una pasada del detector que el seguimiento aún no ha recibido. */
+    private val fresh = AtomicBoolean(false)
 
     // Estadísticas: medias móviles, como el panel de la web, repartidas por
     // etapa. Un «ms de frame» total no señala a nada.
+    /**
+     * 0 = cuadro entero (por defecto, invariante 3); 2 = teselas ×2 para
+     * escenas amplias con objetos pequeños. No hay zoom universal: depende de
+     * cuántos píxeles ocupa el objeto, y eso solo lo ve quien mira la escena.
+     */
+    @Volatile var zoom = 0.0
     @Volatile var frames = 0L; private set
     @Volatile var grabMs = 0.0; private set
     @Volatile var scaleMs = 0.0; private set
@@ -57,6 +65,7 @@ class Pipeline(modelBytes: ByteArray, threads: Int) {
     @Volatile var detMs = 0.0; private set
     @Volatile var inferences = 0L; private set
     @Volatile var lastDets = 0; private set
+    @Volatile var lastTiles = 1; private set
     @Volatile var fps = 0.0; private set
     private var lastT = 0L
 
@@ -90,10 +99,12 @@ class Pipeline(modelBytes: ByteArray, threads: Int) {
      * ESTE aparato.
      */
     fun warmup(): Long {
-        val t0 = SystemClock.elapsedRealtime()
         val zeros = ByteArray(416 * 416 * 4)
         detector.detect(zeros, 416 * 4, 416, 416)
-        return SystemClock.elapsedRealtime() - t0
+        // Solo la inferencia, sin letterbox ni decodificación: es lo mismo que
+        // mide el calentamiento de la web (un `sess.run` sobre ceros), y sin
+        // eso las dos cifras no serían comparables.
+        return Math.round(detector.lastInferMs)
     }
 
     /**
@@ -115,7 +126,12 @@ class Pipeline(modelBytes: ByteArray, threads: Int) {
         downscaleRgba(src, rowStride, w, h, small, aw, ah)
         val t2 = System.nanoTime()
 
-        val r = engine.analyze(small, aw, ah, w, h, memory.forTracking())
+        // Las cajas del detector entran UNA vez, en el frame en que llegan.
+        // Repetirlas hasta la pasada siguiente congela la caja mientras la
+        // persona sigue andando; entre pasadas manda la resta de fondo y la
+        // pista conserva la clase que le dio el detector.
+        val det = if (fresh.getAndSet(false)) memory.forTracking() else null
+        val r = engine.analyze(small, aw, ah, w, h, det)
         val t3 = System.nanoTime()
 
         maybeDetect(rowStride, w, h)
@@ -145,12 +161,14 @@ class Pipeline(modelBytes: ByteArray, threads: Int) {
         if (detBuf.size < need) detBuf = ByteArray(need)
         System.arraycopy(src, 0, detBuf, 0, need)
         val buf = detBuf
-        detExec.execute {
+        try { detExec.execute {
             try {
                 val t0 = System.nanoTime()
-                val dets: List<DetBox> = detector.detect(buf, rowStride, w, h)
+                val dets: List<DetBox> = detector.detect(buf, rowStride, w, h, zoom)
+                lastTiles = detector.lastTiles
                 val ms = (System.nanoTime() - t0) / 1e6
                 memory.update(dets, SystemClock.elapsedRealtime().toDouble())
+                fresh.set(true)
                 val a = if (inferences == 0L) 1.0 else 0.2
                 detMs = detMs * (1 - a) + ms * a
                 inferMs = inferMs * (1 - a) + detector.lastInferMs * a
@@ -161,11 +179,21 @@ class Pipeline(modelBytes: ByteArray, threads: Int) {
             } finally {
                 busy.set(false)
             }
+        } } catch (e: java.util.concurrent.RejectedExecutionException) {
+            busy.set(false)      // cerrando: el frame simplemente no se detecta
         }
     }
 
+    /**
+     * Cierre ordenado. `shutdownNow()` no detiene código nativo: cerrar la
+     * sesión con un `session.run` en vuelo libera memoria que ORT sigue
+     * usando. Se deja de aceptar trabajo, se espera a la inferencia en curso
+     * y solo entonces se libera.
+     */
     fun close() {
-        detExec.shutdownNow()
+        detExec.shutdown()
+        try { detExec.awaitTermination(3, java.util.concurrent.TimeUnit.SECONDS) }
+        catch (_: InterruptedException) { }
         session.close()
     }
 }

@@ -22,3 +22,22 @@ tasks.register<JavaExec>("paridad") {
     workingDir = rootProject.projectDir.parentFile
     args = listOf("android-native/build/ref_js.txt")
 }
+
+// Paridad del detector con detector.js (C1). La referencia la generan
+// scripts/prep_detector_ref.py y scripts/ref_detector.js en android-native/build/det.
+tasks.register<JavaExec>("paridadDetector") {
+    group = "verification"
+    description = "Compara Detector.kt con detector.js sobre fotos reales, cuadro entero y teselas."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.DetectorParityKt")
+    workingDir = rootProject.projectDir.parentFile
+    args = listOf("android-native/build/det")
+}
+
+// Caso reservado: filas rellenadas como las entrega CameraX, mismas pistas.
+tasks.register<JavaExec>("casoReservado") {
+    group = "verification"
+    description = "Mismo vídeo con y sin relleno de filas (rowStride): pistas idénticas."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.StrideCaseKt")
+}

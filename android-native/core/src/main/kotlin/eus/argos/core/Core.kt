@@ -346,6 +346,10 @@ class Tracker(
      * prácticamente siempre.
      */
     private fun vote(t: Track, d: Det) {
+        // La clase del detector no la pisa la proporción de una mancha: entre
+        // pasadas la pista vive de la resta de fondo y sin esta guarda la
+        // primera mancha la rebautizaría por su forma.
+        if (t.klassSrc == "det") return
         val touching = d.x1 <= 1 || d.y1 <= 1 ||
             (frameW != 0 && d.x2 >= frameW - 1) || (frameH != 0 && d.y2 >= frameH - 1)
         if (touching) return
@@ -465,13 +469,29 @@ class Engine(
         // detector ha visto algo, y el que en JS estuvo roto sin que ninguna
         // paridad lo pisara: todas corrían sin detecciones.
         val dets = if (detections != null) {
-            detections.mapNotNull { d ->
+            val fromDet = detections.mapNotNull { d ->
                 val x1 = maxOf(0.0, (d.x1 - rx) / sx)
                 val y1 = maxOf(0.0, (d.y1 - ry) / sy)
                 val x2 = minOf(w.toDouble(), (d.x2 - rx) / sx)
                 val y2 = minOf(h.toDouble(), (d.y2 - ry) / sy)
                 if (x2 - x1 < 1 || y2 - y1 < 1) null else Det(x1, y1, x2, y2, 1.0, d.klass)
             }
+            // Lo que se mueve y el detector no ha visto sigue existiendo: se
+            // conservan las regiones que no caen mayormente dentro de una caja
+            // del detector, como «movimiento».
+            val out = ArrayList(fromDet)
+            for (r in regions) {
+                val rx1 = r.x1.toDouble(); val ry1 = r.y1.toDouble()
+                val rx2 = (r.x2 + 1).toDouble(); val ry2 = (r.y2 + 1).toDouble()
+                val ra = (rx2 - rx1) * (ry2 - ry1)
+                val dentro = fromDet.any { d ->
+                    val iw = minOf(rx2, d.x2) - maxOf(rx1, d.x1)
+                    val ih = minOf(ry2, d.y2) - maxOf(ry1, d.y1)
+                    iw > 0 && ih > 0 && iw * ih >= 0.3 * ra
+                }
+                if (!dentro) out.add(Det(rx1, ry1, rx2, ry2, r.fill))
+            }
+            out
         } else regions.map {
             Det(it.x1.toDouble(), it.y1.toDouble(),
                 (it.x2 + 1).toDouble(), (it.y2 + 1).toDouble(), it.fill)

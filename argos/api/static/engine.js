@@ -372,6 +372,11 @@ class Tracker {
    * persona en el 100 % de los casos.
    */
   _vote(t, det, w, h) {
+    // La clase que dio el detector no la pisa la proporción de una mancha.
+    // Entre pasadas del detector la pista se alimenta de la resta de fondo, y
+    // sin esta guarda la primera mancha que la toca la rebautiza «coche» o
+    // «persona» por su forma: el detector dice QUÉ, el fondo solo DÓNDE.
+    if (t.klassSrc === "det") return;
     const touching = det.x1 <= 1 || det.y1 <= 1 ||
                      (w && det.x2 >= w - 1) || (h && det.y2 >= h - 1);
     if (touching) return;
@@ -953,6 +958,26 @@ class Engine {
         dets.push({x1, y1, x2, y2, w: x2 - x1, h: y2 - y1, fill: 1,
                    rle: rleFromMask(mask, w, h, x1, y1, x2, y2),
                    klass: d.c, score: d.score});
+      }
+      // Lo que se mueve y el detector NO ha visto sigue existiendo. Antes, en
+      // cuanto había una caja del detector, las regiones de movimiento se
+      // tiraban enteras: un coche que el modelo no reconoce desaparecía de la
+      // escena. Se conservan las que no caen mayormente dentro de una caja del
+      // detector (esas ya son ese objeto) y salen como «movimiento».
+      const nDet = dets.length;
+      for (const r of regions) {
+        const rx1 = r.x1, ry1 = r.y1, rx2 = r.x2 + 1, ry2 = r.y2 + 1;
+        const ra = (rx2 - rx1) * (ry2 - ry1);
+        let dentro = false;
+        for (let k = 0; k < nDet && !dentro; k++) {
+          const d = dets[k];
+          const iw = Math.min(rx2, d.x2) - Math.max(rx1, d.x1);
+          const ih = Math.min(ry2, d.y2) - Math.max(ry1, d.y1);
+          if (iw > 0 && ih > 0 && iw * ih >= 0.3 * ra) dentro = true;
+        }
+        if (dentro) continue;
+        dets.push({x1: rx1, y1: ry1, x2: rx2, y2: ry2, w: r.w, h: r.h, fill: r.fill,
+                   rle: encodeRLE(labels, w, r, find)});
       }
     } else {
       dets = regions.map((r) => ({
