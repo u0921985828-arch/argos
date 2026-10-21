@@ -164,3 +164,46 @@ reales): mismas pistas que el mismo frame sin relleno.
   hilos nativos y NNAPI/XNNPACK. TFLite queda como paso siguiente si C3 lo pide.
 - El SDK de Android solo está en el CI (dl.google.com bloqueado aquí): el
   núcleo y el detector se verifican en la JVM, la app en el emulador del CI.
+
+## RESULTADO FASE 3 (medido)
+
+| criterio | resultado |
+|---|---|
+| C1 detector Kotlin = detector.js | **cumple**: bus, zidane, dog; cuadro entero y teselas ×2; cajas ±0,0005 px, puntuación ±9e-6. En el emulador, la autoprueba da `vehicle 0.767 · bike 0.787 · bike 0.309`, idéntico a detector.js |
+| C2 cámara → núcleo → detector | **cumple**: 219 frames analizados y 5 inferencias sobre frames de cámara en 20 s |
+| C3 inferencia nativa frente a 687 ms de la web | **peor en el emulador**: primera 1.313-1.782 ms, en régimen 2.587-2.787 ms |
+| caso reservado (rowStride relleno) | **cumple**: 220 frames, 0 divergencias, en local y en el CI |
+
+### C3, leído con cuidado
+El emulador del CI no predice un teléfono: el mismo `analyze()` cuesta 1,8 ms
+en la JVM de la máquina y 25-52 ms en el emulador, y la inferencia ORT de la
+JVM son 24 ms contra 2.787 ms en el emulador. Ese factor ~100 es del
+emulador (dos núcleos virtuales, la vista previa renderizada por software), no
+del código. Además el calentamiento nativo coincide con el arranque de la
+cámara y el de la web no se sabe si coincidía. **La cifra que decide es la del
+teléfono**, y el panel la da.
+
+### Lo que sí movió una medida
+Espera activa de ORT desactivada y un núcleo reservado al reloj rápido:
+fps 13-18 → 22-25 y análisis 38-52 ms → 26-35 ms, en el mismo emulador.
+
+### Arreglos en la app web que salieron de aquí
+- `analyze()` usaba `roi` fuera de ámbito: con el detector activo, cero pistas
+  en el navegador (NaN silencioso). `tests/test_engine_js.py`.
+- El detector repetía sus cajas en todos los frames y tiraba las regiones de
+  movimiento: persona congelada y lo no detectado desaparecía. Ahora entra una
+  vez por pasada y el fondo sigue. `tests/test_tracking_js.py`.
+
+## Caminos cerrados
+- `analyzeLuma` sobre el plano Y: descartado. El detector necesita color y la
+  imagen girada; CameraX ya da RGBA girado en código nativo y la conversión
+  que se ahorraba no es donde está el coste.
+- TFLite: aplazado. ORT Android ejecuta el mismo modelo ya validado; convertir
+  pide herramientas y otra validación. Solo si el teléfono dice que hace falta.
+
+## Siguiente (necesita el teléfono)
+1. Instalar ARGOS-nativo.apk y leer el panel: fps, captura · reducir ·
+   análisis, detector e inferencia.
+2. Si la inferencia en el teléfono es peor que la web: probar XNNPACK y NNAPI
+   y comparar con la misma autoprueba.
+3. Comprobar el rango del color de cámara (16-235 frente a 0-255).

@@ -284,7 +284,7 @@ paridad tiene que cubrir el camino con detector: es el que corre en uso real.
 ## Comandos
 
 ```bash
-python3 -m pytest tests/ -q          # 29 tests
+python3 -m pytest tests/ -q          # 30 tests
 python3 scripts/bundle.py --out argos.html
 python3 scripts/run_video.py VIDEO --out /tmp/x --stride 4
 python3 scripts/demo_viewer.py VIDEO --out v.mp4 --clean
@@ -299,7 +299,14 @@ versión mayor de numpy entra sola y rompe el pipeline sin que el repo cambie.
 
 **Funciona:** detección, seguimiento, siluetas, escala métrica aprendida,
 física en m/s, sinopsis, memoria persistente, comportamiento aprendido, enlace
-entre cámaras, 62 fps con el detector en hilo propio.
+entre cámaras, 62 fps con el detector en hilo propio. App nativa
+(`android-native/`): compila, pasa la paridad con el JS y analiza la cámara en
+el emulador del CI.
+
+**El detector dice QUÉ, el fondo dice DÓNDE, también en el código.** Las
+cajas del detector entran en el seguimiento una vez por pasada, no en cada
+frame; entre pasadas la pista vive de la resta de fondo y conserva la clase
+del detector, y lo que se mueve sin ser detectado sigue como «movimiento».
 
 **Abierto:**
 - Aceleración por hardware — WebGPU está en el código, sin medir por falta de GPU
