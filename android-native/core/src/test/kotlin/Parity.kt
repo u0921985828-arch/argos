@@ -1,3 +1,4 @@
+import eus.argos.core.DetBox
 import eus.argos.core.Engine
 import java.io.File
 
@@ -65,16 +66,34 @@ fun main(args: Array<String>) {
         return d
     }
 
-    val e = Engine()
-    val mine = mutableListOf<String>()
+    val RX = 40; val RY = 20
+    val SX = SRCW.toDouble() / W; val SY = SRCH.toDouble() / H
     val times = mutableListOf<Double>()
-    for (f in 0 until 260) {
-        val r = e.analyze(frame(), W, H, SRCW, SRCH)
-        times.add(r.ms)
-        mine.add(r.boxes.joinToString(";") {
-            "${it.id},${it.klass},${fmt(it.x1)},${fmt(it.y1)},${fmt(it.x2)},${fmt(it.y2)}"
-        })
+    fun pasada(conDet: Boolean): List<String> {
+        for (k in 0 until N) {
+            objs[k].x = ((k * 37) % W).toDouble(); objs[k].y = (40 + (k * 13) % 90).toDouble()
+            objs[k].vy = if (k % 2 != 0) 0.07 else -0.07
+        }
+        val e = Engine()
+        val out = mutableListOf<String>()
+        for (f in 0 until 260) {
+            val data = frame()
+            val det = if (!conDet) null else objs.map { o ->
+                val fx = Math.floor(o.x); val fy = Math.floor(o.y)
+                DetBox(RX + fx * SX, RY + fy * SY, RX + (fx + o.w) * SX, RY + (fy + o.h) * SY,
+                       "person", 0.9)
+            }
+            val r = e.analyze(data, W, H, SRCW, SRCH, det, if (conDet) RX else 0, if (conDet) RY else 0)
+            if (!conDet) times.add(r.ms)
+            out.add(r.boxes.joinToString(";") {
+                "${it.id},${it.klass}," + (if (conDet) "${it.klassSrc}," else "") +
+                    "${fmt(it.x1)},${fmt(it.y1)},${fmt(it.x2)},${fmt(it.y2)}"
+            })
+        }
+        return out
     }
+    val mine = pasada(false)
+    val mineDet = pasada(true)
 
     // El volcado de referencia llega por argumento; por defecto, donde lo deja
     // `dump_js.js`. Estaba fijado a una ruta absoluta de otra maquina.
@@ -82,7 +101,7 @@ fun main(args: Array<String>) {
     if (!refFile.exists()) {
         println("falta el volcado de referencia en ${refFile.path}")
         println("generalo antes con: node scripts/dump_js.js")
-        return
+        System.exit(1)
     }
     val ref = refFile.readLines()
     var dif = 0
@@ -93,6 +112,19 @@ fun main(args: Array<String>) {
     }
     println("C1 paridad: ${mine.size} frames · ${dif} divergencias " +
         if (dif == 0) "-> IDENTICOS" else "-> DIVERGEN (primero en frame $primero)\n  JS : ${ref.getOrNull(primero)}\n  KT : ${mine.getOrNull(primero)}")
+
+    val refDet = File(refFile.path.replace(Regex("\\.txt$"), "_det.txt")).readLines()
+    var difD = 0; var primD = -1
+    for (i in mineDet.indices) {
+        val r = if (i < refDet.size) refDet[i] else ""
+        if (mineDet[i] != r) { difD++; if (primD < 0) primD = i }
+    }
+    val conCajas = mineDet.count { it.isNotEmpty() }
+    println("C1 paridad con detector: ${mineDet.size} frames ($conCajas con cajas) · ${difD} divergencias " +
+        if (difD == 0) "-> IDENTICOS" else "-> DIVERGEN (primero en frame $primD)\n  JS : ${refDet.getOrNull(primD)}\n  KT : ${mineDet.getOrNull(primD)}")
+
+    // Una paridad que imprime «DIVERGEN» y sale con 0 pasa cualquier CI.
+    if (dif != 0 || difD != 0) { println("PARIDAD ROTA"); System.exit(1) }
 
     // Se descarta el calentamiento: el modelo de fondo no analiza nada hasta
     // que se asienta, y medir esos frames rebaja la media sin motivo.

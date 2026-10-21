@@ -1,0 +1,162 @@
+name: Build APK nativo
+
+# La app NATIVA (android-native/): CameraX + núcleo Kotlin + ONNX Runtime
+# Android. Convive con la app web (build-apk.yml), no la sustituye: las dos
+# empaquetan el mismo modelo y se comparan en el mismo emulador.
+
+on:
+  workflow_dispatch:
+    inputs:
+      apk_branch:
+        description: >-
+          `publicar` deja el APK en la rama `apk-nativo` para recogerlo con git
+          desde donde el almacén de artifacts no llega. `borrar` la elimina y no
+          compila nada: un binario no debe quedarse en el repositorio más de lo
+          necesario.
+        type: choice
+        options: [ 'no', 'publicar', 'borrar' ]
+        default: 'no'
+  push:
+    paths:
+      - 'android-native/**'
+      - 'argos/api/static/engine.js'
+      - 'scripts/dump_js.js'
+      - '.github/workflows/build-native.yml'
+      - '.github/scripts/smoke-nativo.sh'
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: inputs.apk_branch == 'borrar'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete the `apk-nativo` branch
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/git/refs/heads/apk-nativo" >/dev/null 2>&1; then
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/apk-nativo"
+            echo "rama apk-nativo borrada"
+          else
+            echo "no había rama apk-nativo"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build:
+    if: inputs.apk_branch != 'borrar'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # Igual que en la app web: `packages: ''` evita pedir el paquete `tools`,
+      # retirado del repositorio de Google, que tumba el job en el segundo 20.
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Fetch detector weights and self-test photo
+        run: |
+          curl -sSL -o yolox_nano.onnx \
+            https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_nano.onnx
+          test "$(stat -c%s yolox_nano.onnx)" -gt 3000000
+          # Perro, bicicleta y furgoneta; sin personas a propósito.
+          curl -sSL -o autoprueba.jpg \
+            https://raw.githubusercontent.com/pjreddie/darknet/master/data/dog.jpg
+          test "$(stat -c%s autoprueba.jpg)" -gt 100000
+
+      - name: Ensure Gradle wrapper
+        working-directory: android-native
+        run: |
+          if [ ! -f gradlew ]; then
+            gradle wrapper --gradle-version 8.9 --no-daemon
+          fi
+          chmod +x gradlew
+
+      # El núcleo contra engine.js, frame a frame, con y sin detector. Cero
+      # divergencias o no hay APK: dos implementaciones que se separan en
+      # silencio son peores que una sola.
+      - name: Core parity with engine.js
+        run: |
+          node scripts/dump_js.js
+          cd android-native && ./gradlew --no-daemon :core:paridad
+
+      - name: Build debug APK
+        working-directory: android-native
+        run: ./gradlew --no-daemon :app:assembleDebug
+
+      - name: Verify the APK carries what it needs
+        run: |
+          set -e
+          APK=android-native/app/build/outputs/apk/debug/app-debug.apk
+          unzip -l "$APK" > contenido.txt
+          for f in assets/yolox_nano.onnx assets/autoprueba.jpg \
+                   lib/arm64-v8a/libonnxruntime.so lib/x86_64/libonnxruntime.so; do
+            grep -q "$f" contenido.txt || { echo "::error::falta $f en el APK"; exit 1; }
+          done
+          ls -l "$APK"
+          cp "$APK" ARGOS-nativo.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-nativo
+          path: ARGOS-nativo.apk
+          if-no-files-found: error
+
+      - name: Publish APK to the `apk-nativo` branch
+        if: inputs.apk_branch == 'publicar'
+        run: |
+          set -e
+          work=$(mktemp -d)
+          cp ARGOS-nativo.apk "$work/"
+          cd "$work"
+          git init -q -b apk-nativo
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add ARGOS-nativo.apk
+          git commit -q -m "APK nativo de ${GITHUB_SHA::8}"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" apk-nativo
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  smoke:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: apk-nativo }
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+
+      # El MISMO emulador que la app web (API 34, x86_64, cámara emulada), para
+      # que las cifras de las dos se puedan poner una al lado de la otra.
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back emulated
+          script: bash .github/scripts/smoke-nativo.sh ARGOS-nativo.apk
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-nativo
+          path: |
+            screenshot.png
+            logcat.txt

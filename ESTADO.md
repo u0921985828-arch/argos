@@ -128,3 +128,39 @@ de fondo.
 ## Continuación recomendada: Claude Code
 El trabajo que queda necesita SDK, dispositivo y medidas en ARM. `CLAUDE.md` y
 este fichero bastan para retomarlo sin repetir nada.
+
+
+---
+
+# FASE 3 — app nativa que analiza de verdad
+
+## Objetivo
+Que el APK analice con la cámara sin el techo del WebView: sin `getImageData`
+(75 % del coste del frame) y sin la inferencia en un hilo que impone la falta
+de aislamiento entre orígenes (medido: el WebView no lo concede nunca).
+
+## Línea base (medida, APK web, emulador API 34 del CI, 2 núcleos, sin GPU)
+- primera inferencia 687 ms · 1 hilo · `aislado=false` · `SAB=false` (run 25)
+- captura: `drawImage`+`getImageData` = 75 % del coste del bucle rápido (FASE 1)
+
+## Criterios
+1. **C1** El detector Kotlin da las MISMAS detecciones que `detector.js` en
+   cuadro entero sobre bus.jpg, zidane.jpg y dog.jpg (cajas ±0,5 px,
+   puntuación ±1e-3, misma clase agrupada).
+2. **C2** En el emulador del CI el APK nativo arranca, CameraX entrega frames,
+   el núcleo analiza N>0 y el detector hace K>0 inferencias sobre frames de
+   cámara. Lo prueba logcat, no la ausencia de errores.
+3. **C3** Inferencia nativa medida en el mismo emulador frente a los 687 ms del
+   web. La entrega es la cifra, mejor o peor.
+
+## Caso reservado
+Plano Y con `rowStride > width` (relleno por fila, lo normal en móviles
+reales): mismas pistas que el mismo frame sin relleno.
+
+## Decisiones
+- **ONNX Runtime Android, no TFLite.** Reutiliza `yolox_nano.onnx`, ya validado
+  con su preproceso (BGR crudo 0-255, relleno 114). Convertir a TFLite pide
+  herramientas y una validación nueva del modelo; ORT da el mismo modelo con
+  hilos nativos y NNAPI/XNNPACK. TFLite queda como paso siguiente si C3 lo pide.
+- El SDK de Android solo está en el CI (dl.google.com bloqueado aquí): el
+  núcleo y el detector se verifican en la JVM, la app en el emulador del CI.

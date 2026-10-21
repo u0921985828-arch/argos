@@ -29,12 +29,29 @@ function frame(){
       const p=(yy*W+xx)*4; d[p]=216; d[p+1]=210; d[p+2]=196; d[p+3]=255; } }
   return d;
 }
-const e=new Engine();
-const out=[];
-for(let f=0; f<260; f++){
-  const r=e.analyze({data:frame(), w:W, h:H, rx:0, ry:0, rw:SRCW, rh:SRCH}, {});
-  out.push((r.boxes||[]).map(b=>`${b.id},${b.c},${b.b.map(v=>v.toFixed(4)).join(',')}`).join(';'));
+// Dos pasadas sobre la MISMA secuencia: sin detector (solo fondo) y con
+// detector. La segunda es la que corre la app en cuanto hay detecciones, y es
+// la que se rompió en JS sin que ninguna paridad lo viera: todas corrían sin.
+// Las detecciones son los propios rectángulos en píxeles de la fuente, con un
+// desplazamiento de región para que `rx`/`ry` también queden cubiertos.
+const RX=40, RY=20, SX=SRCW/W, SY=SRCH/H;
+function pasada(conDet){
+  for(let k=0;k<N;k++){ objs[k].x=(k*37)%W; objs[k].y=40+(k*13)%90; objs[k].vy=(k%2?0.07:-0.07); }
+  const e=new Engine(); const out=[];
+  for(let f=0; f<260; f++){
+    const data=frame();
+    const det=conDet ? objs.map(o=>({b:[RX+Math.floor(o.x)*SX, RY+Math.floor(o.y)*SY,
+                                         RX+(Math.floor(o.x)+o.w)*SX, RY+(Math.floor(o.y)+o.h)*SY],
+                                     c:'person', score:0.9})) : null;
+    const r=e.analyze({data, w:W, h:H, rx:conDet?RX:0, ry:conDet?RY:0, rw:SRCW, rh:SRCH},
+                      {detections:det});
+    out.push((r.boxes||[]).map(b=>`${b.id},${b.c},${conDet?b.cs+',':''}${b.b.map(v=>v.toFixed(4)).join(',')}`).join(';'));
+  }
+  return out;
 }
+const out=pasada(false), outDet=pasada(true);
 require('fs').mkdirSync(path.dirname(SALIDA),{recursive:true});
 require('fs').writeFileSync(SALIDA, out.join('\n'));
-console.log('JS: '+out.length+' frames, '+out.filter(x=>x).length+' con cajas -> '+SALIDA);
+require('fs').writeFileSync(SALIDA.replace(/\.txt$/,'_det.txt'), outDet.join('\n'));
+console.log('JS: '+out.length+' frames, '+out.filter(x=>x).length+' con cajas, '
+            +outDet.filter(x=>x).length+' con detector -> '+SALIDA);

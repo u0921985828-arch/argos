@@ -1,0 +1,255 @@
+package eus.argos.core
+
+import kotlin.math.exp
+import kotlin.math.floor
+import kotlin.math.max
+import kotlin.math.min
+
+/**
+ * Detector YOLOX, puerto de `detector.js` en su modo de cuadro entero.
+ *
+ * Igual que `Core.kt`, es un puerto LITERAL: hay una prueba que pasa las
+ * mismas fotos por el JS y por esto y compara caja a caja. Solo se porta el
+ * camino que corre la app —el cuadro entero, invariante 3—; las teselas, la
+ * pirámide y los modos foveales quedan en el JS hasta que una medida diga que
+ * hacen falta en el móvil.
+ *
+ * No sabe nada de ONNX Runtime: la inferencia entra como función. Así el
+ * preproceso y la decodificación, que es donde vive todo lo que puede salir
+ * mal sin dar un error, se prueban en la JVM sin dispositivo.
+ *
+ * Dos trampas que este código reproduce a propósito:
+ *  - la entrada es BGR CRUDO 0-255, sin normalizar, relleno 114 abajo-derecha;
+ *    normalizar deja el modelo mudo;
+ *  - la salida NO trae la rejilla decodificada; sin reconstruir las anclas de
+ *    los strides 8/16/32 salen cero detecciones, no un error.
+ */
+class YoloxDetector(
+    val size: Int = 416,
+    private val infer: (FloatArray) -> FloatArray,
+) {
+    companion object {
+        val COCO_NAMES = mapOf(0 to "person", 1 to "bicycle", 2 to "car", 3 to "motorcycle",
+                               5 to "bus", 7 to "truck", 15 to "cat", 16 to "dog")
+
+        /**
+         * Categoría gruesa. `truck`→`car` se confundió 40 veces en un frame: la
+         * subclase de vehículo no es fiable a estos tamaños, y el NMS opera
+         * DENTRO del grupo o la misma furgoneta sale como dos objetos.
+         */
+        val COARSE = mapOf("person" to "person", "bicycle" to "bike", "motorcycle" to "bike",
+                           "car" to "vehicle", "bus" to "vehicle", "truck" to "vehicle",
+                           "cat" to "animal", "dog" to "animal")
+    }
+
+    // Los mismos valores que DET_DEFAULTS en detector.js. Cada uno está medido
+    // allí; aquí solo se copian.
+    var scoreThresh = 0.15
+    var classThresh = mapOf("person" to 0.08, "bicycle" to 0.10, "motorcycle" to 0.12)
+    var softSigma = 0.5
+    /** Corte del soft-NMS y, a la vez, suelo de puntuación final (invariante 4). */
+    var softCut = 0.20
+    var allow = setOf("person", "vehicle", "bike")
+
+    private val floorThr get() = minOf(scoreThresh, classThresh.values.minOrNull() ?: scoreThresh)
+
+    private val gx: FloatArray
+    private val gy: FloatArray
+    private val st: FloatArray
+
+    init {
+        val n = intArrayOf(8, 16, 32).sumOf { (size / it) * (size / it) }
+        gx = FloatArray(n); gy = FloatArray(n); st = FloatArray(n)
+        var i = 0
+        for (stride in intArrayOf(8, 16, 32)) {
+            val m = size / stride
+            for (y in 0 until m) for (x in 0 until m) {
+                gx[i] = x.toFloat(); gy[i] = y.toFloat(); st[i] = stride.toFloat(); i++
+            }
+        }
+    }
+
+    class Prep(val tensor: FloatArray, val ratio: Double)
+
+    /**
+     * Letterbox al estilo YOLOX con vecino más cercano, como `_preprocess`.
+     *
+     * @param rowStride bytes por fila del búfer RGBA. En CameraX no es
+     *   `anchura × 4`; leer con la anchura cizalla la imagen y el detector, en
+     *   vez de fallar, simplemente deja de ver.
+     */
+    fun preprocess(rgba: ByteArray, rowStride: Int, tw: Int, th: Int): Prep {
+        val r = min(size.toDouble() / th, size.toDouble() / tw)
+        val nw = Math.round(tw * r).toInt()
+        val nh = Math.round(th * r).toInt()
+        val plane = size * size
+        val out = FloatArray(3 * plane) { 114f }
+        for (y in 0 until nh) {
+            val sy = min(th - 1, floor(y / r).toInt())
+            for (x in 0 until nw) {
+                val sx = min(tw - 1, floor(x / r).toInt())
+                val s = sy * rowStride + sx * 4
+                val d = y * size + x
+                out[d] = (rgba[s + 2].toInt() and 0xFF).toFloat()
+                out[plane + d] = (rgba[s + 1].toInt() and 0xFF).toFloat()
+                out[2 * plane + d] = (rgba[s].toInt() and 0xFF).toFloat()
+            }
+        }
+        return Prep(out, r)
+    }
+
+    class Raw(val boxes: List<DoubleArray>, val scores: List<Double>, val labels: List<Int>)
+
+    /** `_decode`: rejilla, umbral por clase y lista blanca por categoría gruesa. */
+    fun decode(raw: FloatArray, ratio: Double, tw: Int, th: Int): Raw {
+        val n = gx.size
+        val stride = raw.size / n
+        val nCls = stride - 5
+        val boxes = ArrayList<DoubleArray>(); val scores = ArrayList<Double>()
+        val labels = ArrayList<Int>()
+        val cheap = floorThr * 0.4
+        for (i in 0 until n) {
+            val o = i * stride
+            val obj = raw[o + 4].toDouble()
+            // El corte barato usa el umbral MÁS BAJO: con el general se
+            // descartaría a las personas antes de mirar de qué clase son.
+            if (obj < cheap) continue
+            var best = 0; var bestV = raw[o + 5].toDouble()
+            for (c in 1 until nCls) {
+                val v = raw[o + 5 + c].toDouble()
+                if (v > bestV) { bestV = v; best = c }
+            }
+            val score = obj * bestV
+            val name = COCO_NAMES[best] ?: continue
+            if (score < (classThresh[name] ?: scoreThresh)) continue
+            if (allow.isNotEmpty() && (COARSE[name] ?: "other") !in allow) continue
+
+            val s = st[i].toDouble()
+            val cx = (raw[o].toDouble() + gx[i]) * s
+            val cy = (raw[o + 1].toDouble() + gy[i]) * s
+            val bw = exp(min(10.0, raw[o + 2].toDouble())) * s
+            val bh = exp(min(10.0, raw[o + 3].toDouble())) * s
+            val x1 = max(0.0, (cx - bw / 2) / ratio)
+            val y1 = max(0.0, (cy - bh / 2) / ratio)
+            val x2 = min(tw.toDouble(), (cx + bw / 2) / ratio)
+            val y2 = min(th.toDouble(), (cy + bh / 2) / ratio)
+            if (x2 - x1 < 2 || y2 - y1 < 2) continue
+            boxes.add(doubleArrayOf(x1, y1, x2, y2)); scores.add(score); labels.add(best)
+        }
+        return Raw(boxes, scores, labels)
+    }
+
+    /**
+     * Soft-NMS gaussiano agrupado, como `softNMS` del JS, orden incluido: los
+     * grupos en orden de primera aparición y el mejor por `>` estricto, de modo
+     * que los empates resuelven igual. Devuelve las puntuaciones ORIGINALES de
+     * las supervivientes, que es lo que hace el JS.
+     */
+    fun softNms(raw: Raw, group: (Int) -> String): List<Int> {
+        val groups = LinkedHashMap<String, MutableList<Int>>()
+        for (i in raw.labels.indices) groups.getOrPut(group(raw.labels[i])) { mutableListOf() }.add(i)
+        val keep = ArrayList<Int>()
+        for (idx in groups.values) {
+            val s = DoubleArray(idx.size) { raw.scores[idx[it]] }
+            val alive = ArrayList(idx)
+            while (alive.isNotEmpty()) {
+                var best = 0
+                for (k in 1 until alive.size) {
+                    if (s[idx.indexOf(alive[k])] > s[idx.indexOf(alive[best])]) best = k
+                }
+                val i = alive.removeAt(best)
+                if (s[idx.indexOf(i)] < softCut) continue
+                keep.add(i)
+                val bi = raw.boxes[i]
+                for (k in alive.size - 1 downTo 0) {
+                    val j = alive[k]; val bj = raw.boxes[j]
+                    val x1 = max(bi[0], bj[0]); val y1 = max(bi[1], bj[1])
+                    val x2 = min(bi[2], bj[2]); val y2 = min(bi[3], bj[3])
+                    if (x2 <= x1 || y2 <= y1) continue
+                    val inter = (x2 - x1) * (y2 - y1)
+                    val ai = (bi[2] - bi[0]) * (bi[3] - bi[1])
+                    val aj = (bj[2] - bj[0]) * (bj[3] - bj[1])
+                    val ov = inter / (ai + aj - inter)
+                    val pos = idx.indexOf(j)
+                    s[pos] *= exp(-(ov * ov) / softSigma)
+                    if (s[pos] < softCut) alive.removeAt(k)
+                }
+            }
+        }
+        return keep
+    }
+
+    /** Milisegundos de la última inferencia, sin preproceso ni decodificación. */
+    var lastInferMs = 0.0; private set
+
+    /** Cuadro entero en una inferencia. Cajas en píxeles del búfer de entrada. */
+    fun detect(rgba: ByteArray, rowStride: Int, w: Int, h: Int): List<DetBox> {
+        val prep = preprocess(rgba, rowStride, w, h)
+        val t0 = System.nanoTime()
+        val out = infer(prep.tensor)
+        lastInferMs = (System.nanoTime() - t0) / 1e6
+        val raw = decode(out, prep.ratio, w, h)
+        if (raw.boxes.isEmpty()) return emptyList()
+        val keep = softNms(raw) { COARSE[COCO_NAMES[it]] ?: "other" }
+        return keep.map { i ->
+            val fine = COCO_NAMES[raw.labels[i]] ?: "object"
+            val b = raw.boxes[i]
+            DetBox(b[0], b[1], b[2], b[3], COARSE[fine] ?: "other", raw.scores[i], fine)
+        }
+    }
+}
+
+/**
+ * Memoria de detecciones entre pasadas, como `Brain.mergeDetections` en modo
+ * cuadro entero (cada pasada barre el cuadro completo).
+ *
+ * Una caja nueva se empareja con una viva de la misma clase si solapan más de
+ * `confirmIou`; reencontrada `confirmPasses` veces queda confirmada. Lo que no
+ * se reencuentra se SUELTA: mantenerla congelada deja recuadros pegados al
+ * suelo mientras la persona sigue andando --- es pedirle al detector que haga
+ * de tracker, resultado negativo documentado. Y lo inventado por un modelo
+ * pequeño parpadea de sitio entre pasadas, así que no llega a confirmarse.
+ */
+class DetectionMemory(
+    private val ttlMs: Double = 4000.0,
+    private val confirmPasses: Int = 2,
+    private val confirmIou: Double = 0.35,
+) {
+    class Mem(val d: DetBox, val t: Double, val seen: Int, val confirmed: Boolean)
+
+    @Volatile var boxes: List<Mem> = emptyList(); private set
+
+    fun update(dets: List<DetBox>, nowMs: Double) {
+        val vivas = boxes.filter { nowMs - it.t < ttlMs }
+        val usadas = HashSet<Mem>()
+        val fresh = ArrayList<Mem>()
+        for (d in dets) {
+            var mejor: Mem? = null; var mejorIoU = confirmIou
+            for (o in vivas) {
+                if (o.d.klass != d.klass || o in usadas) continue
+                val s = iouBox(o.d, d)
+                if (s > mejorIoU) { mejorIoU = s; mejor = o }
+            }
+            if (mejor != null) usadas.add(mejor)
+            val seen = if (mejor != null) mejor.seen + 1 else 1
+            fresh.add(Mem(d, nowMs, seen, mejor != null && seen >= confirmPasses))
+        }
+        boxes = fresh
+    }
+
+    /** `null` sin ninguna caja: entonces el seguimiento usa la resta de fondo. */
+    fun forTracking(): List<DetBox>? {
+        val b = boxes
+        if (b.isEmpty()) return null
+        return if (confirmPasses > 1) b.filter { it.confirmed || it.seen >= confirmPasses }.map { it.d }
+               else b.map { it.d }
+    }
+
+    private fun iouBox(a: DetBox, b: DetBox): Double {
+        val x1 = max(a.x1, b.x1); val y1 = max(a.y1, b.y1)
+        val x2 = min(a.x2, b.x2); val y2 = min(a.y2, b.y2)
+        if (x2 <= x1 || y2 <= y1) return 0.0
+        val i = (x2 - x1) * (y2 - y1)
+        return i / ((a.x2 - a.x1) * (a.y2 - a.y1) + (b.x2 - b.x1) * (b.y2 - b.y1) - i)
+    }
+}

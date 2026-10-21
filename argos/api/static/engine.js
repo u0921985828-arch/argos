@@ -935,12 +935,20 @@ class Engine {
       // fondo *dentro* de cada caja: el detector aporta el "qué y dónde", el
       // fondo aporta el "qué forma". Ninguno de los dos lo da todo --- el
       // detector no segmenta, y el fondo no ve lo que está parado.
+      //
+      // El desplazamiento de la región sale del propio frame (`rx`, `ry`), no
+      // de `roi`: `roi` es un parámetro de `capture()` y aquí no existe. Al
+      // partir `process()` en dos se quedó colgando, y en el navegador NO falla
+      // --- hay un `<div id="roi">`, y el acceso por nombre de `window` lo
+      // resuelve a ese elemento ---: `roi.x` vale `undefined`, cada caja del
+      // detector sale NaN y el seguimiento come basura sin una sola queja.
+      // Justo en el camino que corre el bucle principal cuando hay detector.
       dets = [];
       for (const d of detections) {
-        const x1 = Math.max(0, (d.b[0] - (roi ? roi.x : 0)) / sx);
-        const y1 = Math.max(0, (d.b[1] - (roi ? roi.y : 0)) / sy);
-        const x2 = Math.min(w, (d.b[2] - (roi ? roi.x : 0)) / sx);
-        const y2 = Math.min(h, (d.b[3] - (roi ? roi.y : 0)) / sy);
+        const x1 = Math.max(0, (d.b[0] - rx) / sx);
+        const y1 = Math.max(0, (d.b[1] - ry) / sy);
+        const x2 = Math.min(w, (d.b[2] - rx) / sx);
+        const y2 = Math.min(h, (d.b[3] - ry) / sy);
         if (x2 - x1 < 1 || y2 - y1 < 1) continue;
         dets.push({x1, y1, x2, y2, w: x2 - x1, h: y2 - y1, fill: 1,
                    rle: rleFromMask(mask, w, h, x1, y1, x2, y2),

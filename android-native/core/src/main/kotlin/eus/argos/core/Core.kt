@@ -247,6 +247,8 @@ class Track(val id: Int, var x1: Double, var y1: Double, var x2: Double, var y2:
     var vx = 0.0; var vy = 0.0
     var hits = 1; var miss = 0; var age = 1
     var klass = "object"
+    /** "det" si la clase la dio el detector; "forma" si sale de la proporción. */
+    var klassSrc = "forma"
     val votes = HashMap<String, Double>()
     var obs = 0
     var px1 = 0.0; var py1 = 0.0; var px2 = 0.0; var py2 = 0.0
@@ -353,6 +355,7 @@ class Tracker(
         var best: String? = null; var top = -1.0
         for ((key, v) in t.votes) if (v > top) { top = v; best = key }
         if (best != null) t.klass = best
+        t.klassSrc = "forma"
     }
 
     private fun hit(t: Track, frameIdx: Int, d: Det) {
@@ -364,15 +367,16 @@ class Tracker(
         t.vy = 0.65 * t.vy + 0.35 * (cyNew - cyOld)
         t.x1 = d.x1; t.y1 = d.y1; t.x2 = d.x2; t.y2 = d.y2
         t.hits++; t.miss = 0
-        if (d.klass != null) t.klass = d.klass else vote(t, d)
+        if (d.klass != null) { t.klass = d.klass; t.klassSrc = "det" } else vote(t, d)
         t.obs++
     }
 
     private fun spawn(frameIdx: Int, d: Det) {
         val t = Track(nextId++, d.x1, d.y1, d.x2, d.y2)
         t.klass = d.klass ?: classify(d.x1, d.y1, d.x2, d.y2)
+        t.klassSrc = if (d.klass != null) "det" else "forma"
         t.px1 = d.x1; t.py1 = d.y1; t.px2 = d.x2; t.py2 = d.y2
-        if (d.klass != null) t.klass = d.klass else vote(t, d)
+        if (d.klass != null) { t.klass = d.klass; t.klassSrc = "det" } else vote(t, d)
         t.obs++
         tracks.add(t)
     }
@@ -387,7 +391,12 @@ class Tracker(
 /* ------------------------------------------------------------------ */
 
 class Box(val id: Int, val klass: String, val age: Int,
-          val x1: Double, val y1: Double, val x2: Double, val y2: Double)
+          val x1: Double, val y1: Double, val x2: Double, val y2: Double,
+          val klassSrc: String = "forma")
+
+/** Caja del detector neuronal, en píxeles de la FUENTE (no del análisis). */
+class DetBox(val x1: Double, val y1: Double, val x2: Double, val y2: Double,
+             val klass: String, val score: Double, val fine: String = klass)
 
 class Result(val boxes: List<Box>, val disturbed: Boolean, val ms: Double)
 
@@ -425,7 +434,8 @@ class Engine(
      *   coordenadas de la fuente: quien dibuja no debería conocer la
      *   resolución interna del análisis.
      */
-    fun analyze(rgba: ByteArray, fw: Int, fh: Int, srcW: Int, srcH: Int): Result {
+    fun analyze(rgba: ByteArray, fw: Int, fh: Int, srcW: Int, srcH: Int,
+                detections: List<DetBox>? = null, rx: Int = 0, ry: Int = 0): Result {
         val t0 = System.nanoTime()
         ensure(fw, fh)
         val model = bg!!
@@ -448,7 +458,21 @@ class Engine(
         val minArea = maxOf(12, Math.round(minAreaFrac * w * h).toInt())
         val regions = components(mask, w, h, minArea)
 
-        val dets = regions.map {
+        val sx = srcW.toDouble() / w
+        val sy = srcH.toDouble() / h
+        // Con detector, las cajas son las suyas y la clase también; el fondo
+        // solo decide qué se mueve. Es el camino que corre la app en cuanto el
+        // detector ha visto algo, y el que en JS estuvo roto sin que ninguna
+        // paridad lo pisara: todas corrían sin detecciones.
+        val dets = if (detections != null) {
+            detections.mapNotNull { d ->
+                val x1 = maxOf(0.0, (d.x1 - rx) / sx)
+                val y1 = maxOf(0.0, (d.y1 - ry) / sy)
+                val x2 = minOf(w.toDouble(), (d.x2 - rx) / sx)
+                val y2 = minOf(h.toDouble(), (d.y2 - ry) / sy)
+                if (x2 - x1 < 1 || y2 - y1 < 1) null else Det(x1, y1, x2, y2, 1.0, d.klass)
+            }
+        } else regions.map {
             Det(it.x1.toDouble(), it.y1.toDouble(),
                 (it.x2 + 1).toDouble(), (it.y2 + 1).toDouble(), it.fill)
         }
@@ -458,12 +482,56 @@ class Engine(
         tracker.finished.clear()
         frameIdx++
 
-        val sx = srcW.toDouble() / w
-        val sy = srcH.toDouble() / h
         return Result(
-            live.map { Box(it.id, it.klass, it.miss, it.x1 * sx, it.y1 * sy, it.x2 * sx, it.y2 * sy) },
+            live.map { Box(it.id, it.klass, it.miss, rx + it.x1 * sx, ry + it.y1 * sy,
+                           rx + it.x2 * sx, ry + it.y2 * sy, it.klassSrc) },
             false,
             (System.nanoTime() - t0) / 1e6,
         )
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Entrada de cámara                                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Reduce un frame RGBA de cámara al tamaño de análisis, promediando por área.
+ *
+ * `rowStride` es la distancia en BYTES entre filas, que en un `ImageProxy` de
+ * CameraX casi nunca es `anchura × 4`: los móviles rellenan cada fila hasta un
+ * múltiplo que conviene al hardware. Leer con `anchura × 4` desplaza cada fila
+ * unos píxeles respecto a la anterior y la imagen sale cizallada; el modelo de
+ * fondo no lo nota como error, solo ve una escena que no se parece a nada.
+ *
+ * Promedio por área y no vecino más cercano: el lienzo del navegador también
+ * filtra al reducir, y el ruido de un píxel suelto es justo lo que el modelo de
+ * fondo convierte en primer plano falso.
+ */
+fun downscaleRgba(src: ByteArray, rowStride: Int, sw: Int, sh: Int,
+                  dst: ByteArray, dw: Int, dh: Int) {
+    require(rowStride >= sw * 4) { "rowStride $rowStride < anchura×4 ${sw * 4}" }
+    require(dst.size >= dw * dh * 4) { "destino pequeño" }
+    for (y in 0 until dh) {
+        val ya = y * sh / dh
+        val yb = maxOf(ya + 1, (y + 1) * sh / dh)
+        for (x in 0 until dw) {
+            val xa = x * sw / dw
+            val xb = maxOf(xa + 1, (x + 1) * sw / dw)
+            var r = 0; var g = 0; var b = 0
+            for (yy in ya until yb) {
+                var p = yy * rowStride + xa * 4
+                for (xx in xa until xb) {
+                    r += src[p].toInt() and 0xFF
+                    g += src[p + 1].toInt() and 0xFF
+                    b += src[p + 2].toInt() and 0xFF
+                    p += 4
+                }
+            }
+            val n = (yb - ya) * (xb - xa)
+            val o = (y * dw + x) * 4
+            dst[o] = (r / n).toByte(); dst[o + 1] = (g / n).toByte()
+            dst[o + 2] = (b / n).toByte(); dst[o + 3] = 255.toByte()
+        }
     }
 }

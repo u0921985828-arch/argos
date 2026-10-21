@@ -16,3 +16,6 @@ android/local.properties
 .pytest_cache/
 *.tar.gz
 *.zip
+
+# Contador del modo absoluto: estado de trabajo, no del proyecto.
+.modo-absoluto/

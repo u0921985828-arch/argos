@@ -29,14 +29,14 @@ node scripts/dump_js.js                     # -> android-native/build/ref_js.txt
 kotlinc android-native/core/src/main/kotlin/eus/argos/core/Core.kt \
         android-native/core/src/test/kotlin/Parity.kt \
         -include-runtime -d /tmp/parity.jar
-java -Dfile.encoding=UTF-8 -jar /tmp/parity.jar
+java -Dstdout.encoding=UTF-8 -jar /tmp/parity.jar
 ```
 
 Las dos puntas aceptan la ruta del volcado por argumento y por defecto usan la
 misma, derivada del repositorio. Antes estaban fijadas a rutas absolutas de la
 máquina donde se escribió la prueba, así que esta receta no podía funcionar en
 ningún otro sitio --- y una prueba de paridad que no se reproduce no demuestra
-nada. El `-Dfile.encoding=UTF-8` es para que los separadores de la salida no
+nada. El `-Dstdout.encoding=UTF-8` es para que los separadores de la salida no
 salgan como `?`.
 
 Comprobado de nuevo en otra máquina (kotlinc 2.0.21, JDK 21, 2 núcleos):
