@@ -675,11 +675,15 @@ class PatchBuffer {
     this.map = new Map();          // Map conserva orden de inserción
     this.bytes = 0;
     this.evicted = 0;
-    this.canvas = document.createElement("canvas");
-    this.ctx = this.canvas.getContext("2d", {alpha: false});
+    // Igual que en Engine: los recortes solo se hacen donde hay vídeo. En un
+    // Worker de análisis este búfer nunca se usa, así que no se crea.
+    this.canvas = typeof document !== "undefined"
+      ? document.createElement("canvas") : null;
+    this.ctx = this.canvas ? this.canvas.getContext("2d", {alpha: false}) : null;
   }
 
   async add(id, frameIdx, source, box) {
+    if (!this.ctx) return null;
     const w = Math.max(1, Math.round(box.x2 - box.x1));
     const h = Math.max(1, Math.round(box.y2 - box.y1));
 
@@ -758,8 +762,17 @@ class Engine {
     // Cadencia de captura de recortes, independiente de la de análisis.
     this.patchEvery = Math.max(1, patchEvery);
     this.dropped = {tubes: 0, obs: 0};
-    this.small = document.createElement("canvas");
-    this.smallCtx = this.small.getContext("2d", {alpha: false, willReadFrequently: true});
+    // El lienzo de reducción solo hace falta para CAPTURAR. Dentro de un
+    // Worker no hay `document`, y un Worker que solo analiza no necesita
+    // lienzo ninguno: recibe los píxeles ya reducidos. Crearlo aquí sin más
+    // hacía que el constructor reventara en el Worker, que es donde queremos
+    // que corra el análisis.
+    this.small = typeof document !== "undefined"
+      ? document.createElement("canvas")
+      : {width: 0, height: 0};
+    this.smallCtx = this.small.getContext
+      ? this.small.getContext("2d", {alpha: false, willReadFrequently: true})
+      : null;
     this.bg = null;
     this.scratch = null;
     this.tracker = new Tracker();
@@ -814,9 +827,21 @@ class Engine {
    * es otra, y conservar el modelo anterior marcaría el cuadro entero como
    * movimiento durante varios segundos.
    */
-  async process(video, {capturePatches = true, roi = null, detections = null} = {}) {
+  /**
+   * Captura: reduce el frame al búfer de análisis y lo devuelve.
+   *
+   * Está separado de `analyze` por una razón concreta: la captura necesita el
+   * elemento de vídeo y sólo puede ocurrir donde ese elemento vive, mientras
+   * que el análisis --- que es TODO el coste, 11 ms de 11 --- no necesita nada
+   * más que estos píxeles. Partirlo aquí es lo que permite mandar el análisis
+   * a un Worker y que al hilo principal le quede un `drawImage`.
+   *
+   * Lo que viaja es el búfer YA reducido (~320×180). Mandar el frame original
+   * costaría más que analizarlo.
+   */
+  capture(video, {roi = null} = {}) {
+    if (!this.smallCtx) throw new Error("capture() necesita un lienzo: usa analyze() en el Worker");
     if (!video.videoWidth) return null;
-    const t0 = performance.now();
 
     const rx = roi ? Math.max(0, Math.round(roi.x)) : 0;
     const ry = roi ? Math.max(0, Math.round(roi.y)) : 0;
@@ -835,8 +860,29 @@ class Engine {
     const {width: w, height: h} = this.small;
     this.smallCtx.drawImage(video, rx, ry, rw, rh, 0, 0, w, h);
     const frame = this.smallCtx.getImageData(0, 0, w, h);
+    return {data: frame.data, w, h, rx, ry, rw, rh};
+  }
 
-    const mask = this.bg.update(frame.data);
+  /**
+   * Análisis: fondo, morfología, componentes, siluetas y seguimiento.
+   * No toca el vídeo. Es lo que corre en el Worker.
+   */
+  analyze(cap, {detections = null} = {}) {
+    const t0 = performance.now();
+    const {w, h, rx, ry, rw, rh} = cap;
+    // En el Worker nadie ha llamado a `capture`, así que los búferes se
+    // dimensionan aquí, con el tamaño que trae el propio frame.
+    if (this.small.width !== w || this.small.height !== h || !this.bg) {
+      this.small.width = w; this.small.height = h;
+      this.bg = new BackgroundModel(w, h);
+      this.scratch = new Uint8Array(w * h);
+      this.tracker = new Tracker();
+      this.tubes = [];
+      this.frameIdx = 0;
+    }
+    this.sourceW = rw; this.sourceH = rh;
+    this.roi = {x: rx, y: ry, w: rw, h: rh};
+    const mask = this.bg.update(cap.data);
 
     // Si más de un tercio del cuadro se marca como primer plano, la causa no
     // son objetos: es que la cámara se ha movido o la luz ha cambiado de golpe.
@@ -886,7 +932,7 @@ class Engine {
     this.tracker.setFrameSize(w, h);
     const live = this.tracker.step(this.frameIdx, dets);
 
-    if (capturePatches && live.length) {
+    if (false && live.length) {
       // En paralelo y con cadencia, no en serie y en todos los frames.
       //
       // El `await` estaba DENTRO del bucle: con 130 objetos, ciento treinta
@@ -916,23 +962,10 @@ class Engine {
     this._prune();
     this.frameIdx++;
 
-    // Placa de fondo: se guarda un frame completo cuando no hay ningún objeto.
-    // Es mucho mejor que una mediana temporal aquí, porque un frame vacío real
-    // conserva sombras y grano coherentes; la mediana los promedia y deja un
-    // fondo plano sobre el que las siluetas flotan.
-    if (live.length === 0 && this.bg.ready &&
-        this.frameIdx - this.plateAt > 40) {
-      this.plateAt = this.frameIdx;
-      // Puede no existir fuera de un navegador (pruebas headless) y no es
-      // esencial: sin placa, el sinopsis compone sobre fondo plano.
-      if (typeof createImageBitmap === "function") {
-        this.plateAt = this.frameIdx;
-        createImageBitmap(video, rx, ry, rw, rh).then((bmp) => {
-          this.plate?.close?.();
-          this.plate = bmp;
-        }).catch(() => {});
-      }
-    }
+    // La placa de fondo necesita el frame original, así que la decide el
+    // análisis y la ejecuta quien tiene el vídeo. Aquí sólo se señala.
+    this.wantsPlate = (live.length === 0 && this.bg.ready &&
+                       this.frameIdx - this.plateAt > 40);
 
     const ms = performance.now() - t0;
     this.lastMs = ms;
@@ -948,8 +981,50 @@ class Engine {
       })),
       roi: this.roi,
       analysisSize: [w, h],
+      live: live.map((t) => ({id: t.id, x1: t.box.x1, y1: t.box.y1,
+                              x2: t.box.x2, y2: t.box.y2})),
+      wantsPlate: this.wantsPlate,
       ms, disturbed: false,
     };
+  }
+
+  /**
+   * Camino de siempre: capturar y analizar en el mismo hilo. Se conserva tal
+   * cual --- es el que usa la vista de una sola cámara, y meter un Worker ahí
+   * añadiría latencia de mensajes sin ganar nada.
+   */
+  async process(video, {capturePatches = true, roi = null, detections = null} = {}) {
+    const cap = this.capture(video, {roi});
+    if (!cap) return null;
+    const r = this.analyze(cap, {detections});
+    if (!r) return null;
+    if (capturePatches && r.live.length && this.frameIdx % this.patchEvery === 0) {
+      this._capturePatches(video, r, cap);
+    }
+    if (r.wantsPlate) this._capturePlate(video, cap);
+    return r;
+  }
+
+  /** Recortes de objeto. Necesitan el frame original, van con cadencia. */
+  _capturePatches(video, r, cap) {
+    const sx = cap.rw / cap.w, sy = cap.rh / cap.h;
+    const jobs = r.live.map((t) => this.patches.add(t.id, this.frameIdx - 1, video, {
+      x1: cap.rx + Math.max(0, t.x1 * sx),
+      y1: cap.ry + Math.max(0, t.y1 * sy),
+      x2: cap.rx + Math.min(this.sourceW, t.x2 * sx),
+      y2: cap.ry + Math.min(this.sourceH, t.y2 * sy),
+    }));
+    Promise.all(jobs).catch(() => {});
+  }
+
+  /** Placa de fondo: un frame completo sin ningún objeto. */
+  _capturePlate(video, cap) {
+    if (typeof createImageBitmap !== "function") return;
+    this.plateAt = this.frameIdx;
+    createImageBitmap(video, cap.rx, cap.ry, cap.rw, cap.rh).then((bmp) => {
+      this.plate?.close?.();
+      this.plate = bmp;
+    }).catch(() => {});
   }
 
   /**

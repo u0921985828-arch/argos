@@ -22,6 +22,8 @@
 <script src="/detector-worker.js" defer></script>
 <script src="/cameras.js" defer></script>
 <script src="/groundplane.js" defer></script>
+<script src="/ops.js" defer></script>
+<script src="/ask.js" defer></script>
 <style>
 /* ==========================================================================
    ARGOS · cliente móvil
@@ -275,6 +277,37 @@ button:disabled{opacity:.34;cursor:default}
     border-radius:var(--r-lg);bottom:calc(var(--eye) + var(--safe-b) + var(--sp-6))}
   #panel[data-open="1"]{translate:-50% 0}
 }
+
+/* ---- Consola ---- */
+#askLog{display:flex;flex-direction:column;gap:6px;max-height:40vh;overflow-y:auto;margin:6px 0}
+.askLine{padding:7px 10px;border-radius:var(--r-md);font-size:13px;line-height:1.45;max-width:92%}
+.askLine[data-rol="tu"]{align-self:flex-end;background:var(--accent);color:var(--accent-ink)}
+.askLine[data-rol="argos"]{align-self:flex-start;background:rgb(255 255 255 / .07);
+  border:1px solid var(--line);font-variant-numeric:tabular-nums}
+#askRow{display:flex;gap:6px}
+#askInput{flex:1;min-width:0}
+
+/* ---- Puesto de operaciones ---- */
+#opsGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:8px 0}
+.opsCam{border:1px solid var(--line);border-radius:var(--r-md);padding:8px;background:rgb(255 255 255 / .04);
+  position:relative;overflow:hidden}
+.opsCam[data-live="0"]{opacity:.45}
+.opsCam h4{margin:0 0 4px;font-size:13px;font-weight:600;letter-spacing:.01em}
+.opsCam .n{font-size:22px;font-weight:600;line-height:1}
+.opsCam .sub{font-size:11px;opacity:.7;margin-top:2px}
+/* Barra de cuota: cuánto detector se está llevando esta cámara. Es la cifra
+   que explica por qué una cámara va mejor que otra, así que se ve siempre. */
+.opsCam .quota{position:absolute;left:0;bottom:0;height:3px;background:var(--accent);transition:width .4s}
+.opsCam[data-alert="1"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+
+#opsQueue{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.opsItem{display:flex;gap:8px;align-items:baseline;border:1px solid var(--line);border-radius:var(--r-md);
+  padding:7px 9px;background:rgb(255 255 255 / .04);font-size:13px;cursor:pointer;text-align:left;width:100%}
+.opsItem:hover{border-color:var(--line-strong)}
+.opsItem .w{font-weight:600;min-width:34px;color:var(--accent)}
+.opsItem .who{font-variant-numeric:tabular-nums;opacity:.85}
+.opsItem .why{opacity:.7;font-size:12px}
+.opsItem[data-ack="1"]{opacity:.45}
 </style>
 </head>
 <body>
@@ -471,6 +504,32 @@ button:disabled{opacity:.34;cursor:default}
       <button id="btnExport" type="button" class="ghost">Exportar</button>
       <button id="btnWipe" type="button" class="ghost">Borrar todo</button>
     </div>
+  </fieldset>
+
+  <fieldset id="fsAsk" hidden>
+    <legend>Consola</legend>
+    <div id="askLog" aria-live="polite"></div>
+    <form id="askRow">
+      <input id="askInput" type="text" autocomplete="off"
+             placeholder="cuánta gente pasó en la última hora" />
+      <button type="submit">Preguntar</button>
+    </form>
+    <p class="note">Responde con datos del archivo, en una línea. <b>No hay un modelo
+      de lenguaje detrás</b>: entiende una gramática acotada y, cuando no entiende,
+      lo dice en vez de inventar. Devuelve números de objeto, nunca identidades.</p>
+  </fieldset>
+
+  <fieldset id="fsOps" hidden>
+    <legend>Puesto de operaciones</legend>
+    <div id="opsGrid"></div>
+    <div class="stat"><span>Pasadas de detector</span><b id="opsPasses">0</b></div>
+    <div class="stat"><span>En la cola</span><b id="opsQCount">0</b></div>
+    <div id="opsQueue" aria-live="polite"></div>
+    <p class="note">La cola ordena <b>sitios donde mirar</b>, no personas. Cada aviso
+      lleva el número del objeto y el motivo; quién sea no es cosa del sistema.
+      El detector es uno solo y se reparte: la cuota de cada cámara es la barra
+      naranja.</p>
+    <button id="btnOpsAdd" type="button" class="ghost">Añadir esta fuente al puesto</button>
   </fieldset>
 
   <fieldset id="fsOutput" hidden>
@@ -1308,6 +1367,174 @@ async function autoLoadModel() {
   }
 }
 
+
+/* ==================================================================== */
+/*  Puesto de operaciones                                               */
+/* ==================================================================== */
+
+/**
+ * El puesto vive al lado del análisis principal, no lo sustituye. La fuente
+ * que estás viendo es una cámara más dentro de él, y las demás se añaden
+ * desde el registro público.
+ *
+ * Una decisión que se nota: cada cámara tiene SU modelo de comportamiento.
+ * Lo normal en una calle canalizada no es lo normal en una plaza abierta, y
+ * un modelo compartido entre las dos no aprende ninguna de las dos.
+ */
+state.ops = null;
+state.opsTimer = null;
+
+function opsDeck() {
+  if (!state.ops && typeof OpsDeck !== "undefined") {
+    state.ops = new OpsDeck();
+    $("fsOps").hidden = false;
+    clearInterval(state.opsTimer);
+    state.opsTimer = setInterval(opsStep, 700);
+  }
+  return state.ops;
+}
+
+/** Modelo de comportamiento dimensionado a la fuente. */
+function newBehaviour(w, h) {
+  if (typeof BehaviourModel === "undefined") return null;
+  try { return new BehaviourModel(w || 640, h || 480); } catch { return null; }
+}
+
+/** Añade la fuente que se está viendo ahora como cámara del puesto. */
+function opsAddCurrent() {
+  const d = opsDeck();
+  if (!d || !state.brain) { setAlert("no hay análisis en marcha", "warn"); return; }
+  if (d.cams.has("principal")) { setAlert("esta fuente ya está en el puesto"); return; }
+  const v = $("video");
+  const cam = new OpsCamera("principal", state.brain, {
+    label: state.sourceLabel || "Fuente actual",
+    behaviour: newBehaviour(v.videoWidth, v.videoHeight),
+  });
+  cam.video = v;
+  cam.live = true;
+  d.add(cam);
+  opsRender();
+}
+
+/**
+ * Un paso del puesto. Alimenta el modelo de comportamiento de cada cámara con
+ * sus tubos terminados, puntúa, y mueve el detector a donde haga falta.
+ *
+ * Se alimenta con tubos TERMINADOS, no con los vivos: una trayectoria a medias
+ * tiene la dirección del tramo recorrido, no la del recorrido, y aprender de
+ * ella mete ruido en el modelo de la celda.
+ */
+function opsStep() {
+  const d = state.ops;
+  if (!d) return;
+
+  for (const cam of d.cams.values()) {
+    const tr = cam.brain?.engine?.tracker;
+    if (!tr || !cam.behaviour) continue;
+    // Tubos ya cerrados. Se marca el propio tubo en lugar de llevar un
+    // cursor por índice: `engine.tubes` se poda por retención, y un índice
+    // sobre un array que encoge vuelve a aprender de lo mismo o se salta
+    // tramos enteros sin avisar.
+    for (const t of cam.brain.engine.tubes || []) {
+      if (t._learned) continue;
+      t._learned = true;
+      try { cam.behaviour.learn(t); } catch {}
+    }
+  }
+
+  const next = d.step(Date.now());
+  // A quién le toca el detector. En esta versión el detector sigue atado a la
+  // fuente principal: el reparto se calcula y se muestra, pero mover el Worker
+  // entre cámaras necesita un modelo cargado por cámara y eso es otra pieza.
+  if (next) d.markDetected(next.id, Date.now() / 1000);
+  opsRender();
+}
+
+function opsRender() {
+  const d = state.ops;
+  if (!d) return;
+  const st = d.state(Date.now());
+
+  $("opsPasses").textContent = st.pasadas;
+  $("opsQCount").textContent = st.colaTotal;
+
+  const grid = $("opsGrid");
+  grid.replaceChildren(...st.camaras.map((c) => {
+    const el = document.createElement("div");
+    el.className = "opsCam";
+    el.dataset.live = c.live ? "1" : "0";
+    const alerta = st.cola.some((q) => q.cam === c.id);
+    el.dataset.alert = alerta ? "1" : "0";
+    const h = document.createElement("h4"); h.textContent = c.label;
+    const n = document.createElement("div"); n.className = "n"; n.textContent = c.objetos;
+    const sub = document.createElement("div"); sub.className = "sub";
+    sub.textContent = c.error ? c.error
+      : `${(c.cuota * 100).toFixed(0)}% detector · ${c.fps.toFixed(0)} fps`;
+    const q = document.createElement("div"); q.className = "quota";
+    q.style.width = `${Math.round(c.cuota * 100)}%`;
+    el.append(h, n, sub, q);
+    return el;
+  }));
+
+  const list = $("opsQueue");
+  list.replaceChildren(...st.cola.map((it) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "opsItem"; b.dataset.ack = it.ack ? "1" : "0";
+    const w = document.createElement("span"); w.className = "w"; w.textContent = it.weight.toFixed(1);
+    const who = document.createElement("span"); who.className = "who";
+    who.textContent = `${it.cam} · objeto ${it.track}`;
+    const why = document.createElement("span"); why.className = "why";
+    why.textContent = (it.reasons || []).slice(0, 2).join(", ") || "desviación";
+    b.append(w, who, why);
+    b.addEventListener("click", () => { d.queue.ack(it.key); opsRender(); });
+    return b;
+  }));
+}
+
+$("btnOpsAdd").addEventListener("click", opsAddCurrent);
+
+/* ==================================================================== */
+/*  Consola de consulta                                                 */
+/* ==================================================================== */
+
+state.ask = null;
+
+function askReady() {
+  if (!state.ask && typeof AskConsole !== "undefined" && state.archive) {
+    state.ask = new AskConsole(state.archive, {deck: state.ops});
+    $("fsAsk").hidden = false;
+    askSay("argos", "Listo. Pregunta por periodos, clases, anomalías o un objeto concreto.");
+  }
+  // El puesto puede crearse después que la consola; se enlaza al vuelo para
+  // que «qué hay ahora» no deje de funcionar según el orden de arranque.
+  if (state.ask && state.ops && !state.ask.deck) state.ask.deck = state.ops;
+  return state.ask;
+}
+
+function askSay(rol, texto) {
+  const log = $("askLog");
+  const el = document.createElement("div");
+  el.className = "askLine";
+  el.dataset.rol = rol === "tú" || rol === "tu" ? "tu" : "argos";
+  el.textContent = texto;
+  log.append(el);
+  log.scrollTop = log.scrollHeight;
+}
+
+$("askRow").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const input = $("askInput");
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = "";
+  askSay("tú", q);
+  const c = askReady();
+  if (!c) { askSay("argos", "El archivo todavía no está abierto."); return; }
+  const r = await c.ask(q);
+  askSay("argos", r.texto);
+});
+
+
 $("btnLoadModel").addEventListener("click", () => {
   const f = $("modelFile").files?.[0];
   if (f) {
@@ -1331,6 +1558,10 @@ async function startArchive() {
   state.archive = new Archive({camera: state.mode === "pantalla" ? "pantalla" : "camara"});
   const ok = await state.archive.open();
   $("fsMemory").hidden = !ok;
+  // La consola solo tiene sentido con archivo: sin él no hay nada a lo que
+  // preguntar, y un chat que siempre contesta "no tengo datos" es peor que
+  // no ofrecerlo.
+  if (ok) askReady();
   if (!ok) {
     // La memoria es opcional: si IndexedDB falla --- modo privado, cuota llena ---
     // el análisis en vivo sigue funcionando. Lo que no puede pasar es que un

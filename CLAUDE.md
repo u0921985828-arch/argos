@@ -29,9 +29,44 @@ lectura fue culpar al código.
 ## Arquitectura: dos relojes
 
 ```
-RÁPIDA   fondo + asociación + física + dibujo      6,5 ms    cada frame
+RÁPIDA   fondo + asociación + física + dibujo       11 ms    cada frame
 LENTA    detector neuronal por teselas          15-130 ms    en hilo propio
 ```
+
+**El bucle rápido corre en el hilo principal, y ahí está el techo multicámara.**
+Medido (1280×720, Engine real, 150 frames tras calentamiento):
+
+| cámaras | ronda mediana | p95 | ¿30 fps? |
+|---:|---:|---:|---|
+| 1 | 11,0 ms | 17,3 | sí |
+| 2 | 21,4 ms | 23,1 | sí |
+| 3 | 33,0 ms | 43,9 | justo al borde |
+| 4 | 43,4 ms | 49,5 | no |
+| 8 | 88,5 ms | 108,9 | no |
+
+**CUIDADO: estas cifras están medidas con node-canvas, no en navegador, y
+`getImageData` lo distorsiona todo.** El desglose real es:
+
+```
+capture()   7,62 ms   drawImage + getImageData   ← artefacto de node-canvas
+analyze()   2,58 ms   fondo+morfología+tracking  ← JS puro, representativo
+```
+
+En un navegador `getImageData` sobre 320×180 cuesta décimas, no 7,6 ms, así que
+**el coste real por cámara se parece a 2,6 ms y el techo de cámaras es bastante
+mayor que estas tablas.** Medir en navegador antes de citar un número.
+
+Tres cosas medidas que contradicen lo que parece obvio:
+- **La resolución de la fuente da igual.** De 1920×1080 a 352×288 el coste va de
+  11,1 a 10,7 ms. Bajar la cámara no compra cámaras; el coste está en el búfer
+  de análisis, no en leer el frame.
+- **El número de objetos casi da igual.** 8 objetos 10,8 ms, 25 objetos 11,1 ms.
+- **El escalado es lineal.** 8 cámaras son 8×11, sin penalización por caché.
+
+`Engine` está partido en `capture()` (necesita el vídeo, hilo principal) y
+`analyze()` (JS puro, apto para Worker). Los dos caminos dan resultados
+**idénticos**: 200 frames comparados, 0 divergencias. El Worker por cámara se
+puede montar sobre ese corte cuando una medida en navegador diga que hace falta.
 
 No se pueden fusionar. Un sistema que espera al detector en cada frame va a
 33 fps con tirones de 120 ms; con el detector en un Worker, **62 fps y 0 ms de
