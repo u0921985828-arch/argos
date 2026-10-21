@@ -29,7 +29,9 @@ import java.util.concurrent.Executors
 class MainActivity : ComponentActivity() {
     @Volatile private var pipeline: Pipeline? = null
     private lateinit var preview: PreviewView
-    private lateinit var overlay: Overlay
+    // No se llama `overlay`: dentro de `FrameLayout.apply` ese nombre es la
+    // `ViewGroupOverlay` de la propia vista y el compilador elige esa.
+    private lateinit var capa: Overlay
     private lateinit var hud: TextView
     private val analysisExec = Executors.newSingleThreadExecutor { r -> Thread(r, "argos-rapido") }
     private var lastLog = 0L
@@ -41,7 +43,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         preview = PreviewView(this).apply { scaleType = PreviewView.ScaleType.FIT_CENTER }
-        overlay = Overlay(this)
+        capa = Overlay(this)
         hud = TextView(this).apply {
             setTextColor(Color.WHITE); setBackgroundColor(Color.argb(150, 0, 0, 0))
             textSize = 13f; setPadding(18, 12, 18, 12); text = "Cargando el detector…"
@@ -49,7 +51,7 @@ class MainActivity : ComponentActivity() {
         setContentView(FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
             addView(preview, FrameLayout.LayoutParams(-1, -1))
-            addView(overlay, FrameLayout.LayoutParams(-1, -1))
+            addView(capa, FrameLayout.LayoutParams(-1, -1))
             addView(hud, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
         })
 
@@ -135,7 +137,7 @@ class MainActivity : ComponentActivity() {
                     if (p != null) {
                         val plane = image.planes[0]
                         val f = p.onFrame(plane.buffer, plane.rowStride, image.width, image.height)
-                        overlay.show(f)
+                        capa.show(f)
                         report(p, f)
                     }
                 } catch (e: Throwable) {
