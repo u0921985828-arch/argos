@@ -135,4 +135,9 @@ if grep -q 'ARGOS entorno:' logcat.txt && grep 'ARGOS entorno:' logcat.txt | gre
     exit 1
 fi
 
-echo "OK: instalado, arrancado, en primer plano, once módulos y detector neuronal vivo."
+# El recuento se lee de la propia marca y no se escribe aquí: cuando entraron
+# `ops.js` y `ask.js` esta línea seguía diciendo «once módulos», que ya era
+# mentira. Un resumen que se queda atrás es un diagnóstico que miente.
+echo "OK: instalado, arrancado, en primer plano, detector neuronal vivo y $(
+    grep -o 'ARGOS listo: [0-9]* modulos' logcat.txt | tail -1 | awk '{print $3}'
+) módulos cargados."

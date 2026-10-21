@@ -29,11 +29,46 @@ lectura fue culpar al código.
 ## Arquitectura: dos relojes
 
 ```
-RÁPIDA   fondo + asociación + física + dibujo      6,5 ms    cada frame
+RÁPIDA   fondo + asociación + física + dibujo       11 ms    cada frame
 LENTA    detector neuronal por teselas          15-130 ms    en hilo propio
 ```
 
-No se pueden fusionar. Un sistema que espera al detector en cada frame va a
+**El bucle rápido corre en el hilo principal, y ahí está el techo multicámara.**
+Medido (1280×720, Engine real, 150 frames tras calentamiento):
+
+| cámaras | ronda mediana | p95 | ¿30 fps? |
+|---:|---:|---:|---|
+| 1 | 11,0 ms | 17,3 | sí |
+| 2 | 21,4 ms | 23,1 | sí |
+| 3 | 33,0 ms | 43,9 | justo al borde |
+| 4 | 43,4 ms | 49,5 | no |
+| 8 | 88,5 ms | 108,9 | no |
+
+**CUIDADO: estas cifras están medidas con node-canvas, no en navegador, y
+`getImageData` lo distorsiona todo.** El desglose real es:
+
+```
+capture()   7,62 ms   drawImage + getImageData   ← artefacto de node-canvas
+analyze()   2,58 ms   fondo+morfología+tracking  ← JS puro, representativo
+```
+
+En un navegador `getImageData` sobre 320×180 cuesta décimas, no 7,6 ms, así que
+**el coste real por cámara se parece a 2,6 ms y el techo de cámaras es bastante
+mayor que estas tablas.** Medir en navegador antes de citar un número.
+
+Tres cosas medidas que contradicen lo que parece obvio:
+- **La resolución de la fuente da igual.** De 1920×1080 a 352×288 el coste va de
+  11,1 a 10,7 ms. Bajar la cámara no compra cámaras; el coste está en el búfer
+  de análisis, no en leer el frame.
+- **El número de objetos casi da igual.** 8 objetos 10,8 ms, 25 objetos 11,1 ms.
+- **El escalado es lineal.** 8 cámaras son 8×11, sin penalización por caché.
+
+`Engine` está partido en `capture()` (necesita el vídeo, hilo principal) y
+`analyze()` (JS puro, apto para Worker). Los dos caminos dan resultados
+**idénticos**: 200 frames comparados, 0 divergencias. El Worker por cámara se
+puede montar sobre ese corte cuando una medida en navegador diga que hace falta.
+
+Los dos RELOJES, en cambio, no se pueden fusionar. Un sistema que espera al detector en cada frame va a
 33 fps con tirones de 120 ms; con el detector en un Worker, **62 fps y 0 ms de
 peor frame** haciendo el mismo trabajo.
 
@@ -60,10 +95,23 @@ mientras la persona sigue andando.
 | `solver.js` | optimizador de sinopsis |
 | `groundplane.js` | rectificación métrica a vista cenital |
 | `cameras.js` | registro de 1.552 cámaras públicas |
+| `ops.js` | cuadro de mando multicámara: cola de atención y decaimiento |
+| `ask.js` | consulta en lenguaje natural sobre el archivo |
 | `index.html` | interfaz + el pegamento entre todo |
 
-`scripts/bundle.py` los inlina en **`argos.html`**, un fichero de 340 KB que es
+`scripts/bundle.py` los inlina en **`argos.html`**, un fichero de 409 KB que es
 lo que se entrega. El APK empaqueta ese mismo fichero.
+
+### Nativo (`android-native/`) — el núcleo portado, sin app todavía
+
+`core/Core.kt` es `engine.js` en Kotlin puro, verificado por paridad **exacta**
+contra el JS (260 frames, 0 divergencias) y 1,4× más rápido. No existe la app:
+falta CameraX, el dibujo, el detector por TFLite y el Gradle. El estado
+detallado y los criterios están en `ESTADO.md`, que se lee ANTES de retomarlo.
+
+Lo nativo no gana por ese 1,4×: gana porque `capture()` era el 75 % del coste y
+CameraX entrega los píxeles sin lienzo ni lectura de GPU. Y el plano Y de
+`YUV_420_888` ya es luma, que es lo que consume el modelo de fondo.
 
 ### Servidor (`argos/`) — opcional
 

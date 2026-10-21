@@ -338,6 +338,33 @@ class Archive {
     return rows.slice(0, limit).map((r) => ({...r, obs: unpackObs(r.obs)}));
   }
 
+  /**
+   * Consulta por hora de reloj, no por número de frame.
+   *
+   * `query()` filtra por `t0`, que es un índice de frame: sirve dentro de una
+   * sesión pero no responde a "entre las tres y las cuatro". El índice `wall`
+   * existe desde el principio --- lo usa la retención --- y aquí se aprovecha
+   * para acotar en el almacén en vez de traerlo todo y filtrar en memoria.
+   */
+  async queryWall({cls = null, since = null, until = null, limit = 500} = {}) {
+    if (!this.db) return [];
+    const t = tx(this.db, [STORE_TUBES], "readonly");
+    const range = IDBKeyRange.bound(since ?? -Infinity, until ?? Infinity);
+    let rows = await all(t.objectStore(STORE_TUBES).index("wall").getAll(range));
+    if (cls) rows = rows.filter((r) => r.cls === cls);
+    rows.sort((a, b) => b.wall - a.wall);
+    return rows.slice(0, limit).map((r) => ({...r, obs: unpackObs(r.obs)}));
+  }
+
+  async eventsWall({since = null, until = null, limit = 300} = {}) {
+    if (!this.db) return [];
+    const t = tx(this.db, [STORE_EVENTS], "readonly");
+    const range = IDBKeyRange.bound(since ?? -Infinity, until ?? Infinity);
+    const rows = await all(t.objectStore(STORE_EVENTS).index("wall").getAll(range));
+    rows.sort((a, b) => b.wall - a.wall);
+    return rows.slice(0, limit);
+  }
+
   async events({kind = null, since = null, until = null, limit = 300} = {}) {
     if (!this.db) return [];
     const t = tx(this.db, [STORE_EVENTS], "readonly");
