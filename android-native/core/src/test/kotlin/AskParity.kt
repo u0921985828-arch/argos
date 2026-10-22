@@ -65,6 +65,12 @@ fun main(args: Array<String>) {
         "gracias" to "De nada",
         "blablá" to "No te he entendido",
         "hay drones" to "La radio está apagada",
+        // Lo que la revisión vio tragado por la charla.
+        "hola, cuánta gente pasó en la última hora" to "1 persona en la última hora",
+        "vale, cuántas personas hoy" to "2 personas hoy",
+        "hay algo raro?" to "1 cosa fuera de lo normal",
+        "qué tal ayer" to "Sin actividad registrada ayer",
+        "buenas" to "Hola.",
     )
     for ((q, esperado) in casos) {
         val r = ask.ask(q)

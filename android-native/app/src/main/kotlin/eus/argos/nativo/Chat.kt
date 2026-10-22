@@ -62,7 +62,7 @@ class Chat(private val act: ComponentActivity, private val ask: () -> Ask?,
     val reconocimiento: String get() = when {
         !SpeechRecognizer.isRecognitionAvailable(act) && !enAparato() -> "no disponible"
         enAparato() && !usarSistema -> "en el aparato"
-        else -> "del sistema, pedido sin red"
+        else -> "del sistema (puede usar la red del fabricante)"
     }
 
     private fun enAparato() = Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(act)
@@ -145,7 +145,7 @@ class Chat(private val act: ComponentActivity, private val ask: () -> Ask?,
 
     private fun pintaEstado() = act.runOnUiThread {
         estadoVoz.text = (if (escuchando) "escuchando… " else "") + "reconocimiento $reconocimiento · " +
-            (if (ttsOk) voz else "sin voz") + " · nada sale del teléfono"
+            (if (ttsOk) voz else "sin voz") + (if (reconocimiento == "en el aparato") " · nada sale del teléfono" else "")
         mic.background = Ui.fondo(if (escuchando) Color.argb(230, 198, 40, 40) else Color.argb(200, 46, 125, 50), Ui.dp(act, 24).toFloat())
     }
 
@@ -212,9 +212,10 @@ class Chat(private val act: ComponentActivity, private val ask: () -> Ask?,
                 escuchando = false
                 act.runOnUiThread { input.hint = "Pregunta a ARGOS…" }
                 // 11 = servidor desconectado, 12 = idioma no admitido, 13 = idioma
-                // sin descargar, 5 = cliente: el reconocedor del aparato no está
-                // listo. No es culpa de quien habla: se pasa al del sistema.
-                if (delAparato && !reintento && error in setOf(5, 11, 12, 13)) {
+                // sin descargar: el reconocedor del aparato no está listo. No es
+                // culpa de quien habla: se pasa al del sistema, y el panel lo
+                // dice, porque ese puede usar la red del fabricante.
+                if (delAparato && !reintento && error in setOf(11, 12, 13)) {
                     Log.i(TAG, "ARGOS chat: reconocedor del aparato falló ($error), paso al del sistema")
                     usarSistema = true
                     act.runOnUiThread { escuchar(reintento = true) }
@@ -227,6 +228,7 @@ class Chat(private val act: ComponentActivity, private val ask: () -> Ask?,
                     SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT ->
                         "El reconocedor de este teléfono necesita red. En Ajustes → Sistema → Idiomas → Reconocimiento de voz, descarga el español para usarlo sin conexión."
                     12, 13 -> "Falta el paquete de voz en español. Descárgalo en Ajustes → Sistema → Idiomas → Reconocimiento de voz."
+                    SpeechRecognizer.ERROR_CLIENT -> return   // se paró a mano
                     else -> "El reconocimiento de voz falló (código $error). Puedes escribir la pregunta."
                 })
             }

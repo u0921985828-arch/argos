@@ -76,9 +76,6 @@ class MainActivity : ComponentActivity() {
         capa = Overlay(this)
         radio = RadioVigia(this)
         val d = { v: Int -> Ui.dp(this, v) }
-        val barraEstado = resources.getIdentifier("status_bar_height", "dimen", "android").let {
-            if (it > 0) resources.getDimensionPixelSize(it) else d(24)
-        }
 
         // Arriba: nombre, estado de un vistazo y las fichas de acción.
         estado = TextView(this).apply { text = "● cargando"; setTextColor(Ui.SUAVE); textSize = 12f }
@@ -86,7 +83,7 @@ class MainActivity : ComponentActivity() {
         fichaRadio = Ui.ficha(this, "Radio: no") { alternarRadio() }
         val barra = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(d(14), barraEstado + d(6), d(10), d(10))
+            setPadding(d(14), d(10), d(10), d(10))
             background = android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(Color.argb(200, 0, 0, 0), Color.TRANSPARENT))
@@ -153,6 +150,15 @@ class MainActivity : ComponentActivity() {
         }
         setContentView(FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
+            // El tema es de pantalla completa: arriba solo hace falta librar el
+            // recorte de la cámara frontal, no una barra de estado que no se ve.
+            setOnApplyWindowInsetsListener { _, ins ->
+                @Suppress("DEPRECATION")
+                val arriba = maxOf(ins.systemWindowInsetTop,
+                    if (android.os.Build.VERSION.SDK_INT >= 28) ins.displayCutout?.safeInsetTop ?: 0 else 0)
+                barra.setPadding(d(14), arriba + d(6), d(10), d(10))
+                ins
+            }
             addView(preview, FrameLayout.LayoutParams(-1, -1))
             addView(capa, FrameLayout.LayoutParams(-1, -1))
             addView(barra, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
@@ -333,9 +339,18 @@ class MainActivity : ComponentActivity() {
 
     private fun encenderRadio() {
         val problema = radio.empieza()
+        lRadio.visibility = android.view.View.VISIBLE
+        // Solo se recuerda «encendida» si algo arrancó de verdad. Con todo
+        // denegado se apaga y se dice por qué; no vuelve sola otro día.
+        if (!radio.bleEnMarcha && !radio.gnssEnMarcha) {
+            radio.para()
+            prefs.edit().putBoolean("radio", false).apply()
+            fichaRadio.text = "Radio: no"
+            lRadio.text = "radio apagada · ${problema ?: "no arrancó"}"
+            return
+        }
         prefs.edit().putBoolean("radio", true).apply()
         fichaRadio.text = "Radio: sí"
-        lRadio.visibility = android.view.View.VISIBLE
         if (problema != null) lRadio.text = "radio · $problema"
     }
 

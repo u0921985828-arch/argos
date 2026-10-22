@@ -52,6 +52,7 @@ class RadioVigia(private val ctx: Context) {
 
     private val ble = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, r: ScanResult) {
+            if (!activa) return
             val dir = r.device?.address ?: return
             val a = BleAd.parse(r.scanRecord?.bytes)
             synchronized(this@RadioVigia) { campo.oye(dir, r.rssi, a, ahora()) }
@@ -89,7 +90,12 @@ class RadioVigia(private val ctx: Context) {
             val scanner = if (adaptador?.isEnabled == true) adaptador.bluetoothLeScanner else null
             if (scanner == null) problemas.add("Bluetooth apagado")
             else try {
-                scanner.startScan(null, ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_BALANCED).build(), ble)
+                val ajustes = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_BALANCED)
+                // Remote ID en Bluetooth 5 viaja en anuncios EXTENDIDOS; el modo
+                // heredado no los entrega. Solo donde el chip los admite.
+                if (Build.VERSION.SDK_INT >= 26 && adaptador?.isLeExtendedAdvertisingSupported == true)
+                    ajustes.setLegacy(false).setPhy(ScanSettings.PHY_LE_ALL_SUPPORTED)
+                scanner.startScan(null, ajustes.build(), ble)
                 bleEnMarcha = true
             } catch (e: Exception) { problemas.add("Bluetooth: ${e.message}") }
         }
@@ -142,11 +148,15 @@ class RadioVigia(private val ctx: Context) {
             e.porClase.filterKeys { it.rastreador }.mapKeys { it.key.texto },
             e.drones.map { d ->
                 listOfNotNull(d.tipo ?: "dron", d.serie,
-                    d.alturaM.takeIf { it.isFinite() }?.let { "a %.0f m".format(it) },
+                    d.alturaM.takeIf { it.isFinite() }?.let {
+                        "a %.0f m %s".format(it, if (d.sobreSuelo) "sobre el suelo" else "sobre su despegue") },
                     d.velocidadMs.takeIf { it.isFinite() }?.let { "%.0f km/h".format(it * 3.6) }).joinToString(" ")
             },
             textoGnss(),
-            e.avisos.map { it.texto } + gnss.avisos.reversed())
+            // Lo más reciente primero: los de campo ya vienen así; del GNSS,
+            // solo los de los últimos 10 minutos.
+            e.avisos.map { it.texto } +
+                (if (!gnss.ultimoAvisoT.isNaN() && ahora() - gnss.ultimoAvisoT <= 600) gnss.avisos.reversed() else emptyList()))
     }
 
     /** Una línea para el panel. */
@@ -159,5 +169,6 @@ class RadioVigia(private val ctx: Context) {
             " · GPS ${v.gnss}" + (v.avisos.firstOrNull()?.let { "\n⚠ $it" } ?: "")
     }
 
+    /** Rojo en la barra: un aviso de los últimos 10 min o el GNSS en alarma AHORA. */
     fun hayAviso(): Boolean = vivo()?.let { v -> v.avisos.isNotEmpty() || v.gnss.startsWith("POSIBLE") } ?: false
 }

@@ -253,7 +253,9 @@ class Physics {
         // Un paso que ningún objeto de su clase puede dar es la caja saltando
         // (otra persona, un trozo, la cámara), no un movimiento: se toma la
         // posición nueva como punto de partida sin derivar de ella velocidad.
-        if (mpp.isFinite() && hypot(dx, dy) * mpp / dt > maxMs * 1.5) { px = cx; py = by; t = tSec; return }
+        if (mpp.isFinite() && hypot(dx, dy) * mpp / dt > maxMs * 1.5) {
+            px = cx; py = by; t = tSec; speedMs = Double.NaN; return
+        }
         pathPx += hypot(dx, dy)
         val k = min(1.0, dt * 6)
         val nvx = dx / dt; val nvy = dy / dt
@@ -400,7 +402,7 @@ class SceneBrain(
             // inmóvil que ya no existe: cada peatón que salía del cuadro dejaba
             // un «detenido» falso de nueve segundos y algún «corriendo» al
             // saltar la caja. Se cuenta, pero no se mide.
-            if (t.miss > 0) continue
+            if (t.miss > 0) { runSince.remove(t.id); continue }
             val p = physics.getOrPut(t.id) { Physics() }
             val path = paths.getOrPut(t.id) { Path(tSec) }
             val cxImg = (t.x1 + t.x2) / 2 * sx
@@ -548,10 +550,10 @@ class SceneBrain(
 
 /**
  * Lo más rápido que puede ir un objeto de cada clase, con margen. Una persona
- * esprintando ronda 10 m/s; por encima, lo que se mide es otra cosa.
+ * esprintando ronda 10 m/s; por encima, lo que se mide es otra cosa. «bike»
+ * incluye motos, así que va con los vehículos.
  */
 fun velocidadMaxima(cls: String): Double = when (cls) {
     "person" -> 10.0
-    "bike" -> 20.0
     else -> 70.0
 }

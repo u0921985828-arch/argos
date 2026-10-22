@@ -44,6 +44,8 @@ class Ask(private val src: Source, private val zone: ZoneId = ZoneId.systemDefau
     class Window(val desde: Long?, val hasta: Long?, val etiqueta: String)
 
     companion object {
+        /** Un saludo al principio de la frase, para separarlo de la pregunta. */
+        private val SALUDO = Regex("^\\W*(hola|buenas( tardes| noches)?|buenos dias|hey|ey|saludos)\\b")
         const val MIN = 60_000L; const val HORA = 3_600_000L; const val DIA = 24 * HORA
         val AYUDA = listOf("cuánta gente pasó en la última hora", "qué pasó entre las 3 y las 4", "algo raro hoy",
                            "vehículos esta semana", "objeto 47", "lo más rápido de hoy")
@@ -136,6 +138,9 @@ class Ask(private val src: Source, private val zone: ZoneId = ZoneId.systemDefau
         val q = raw.trim()
         val now = clock()
         if (q.isEmpty()) return "Pregúntame algo. Por ejemplo " + AYUDA.take(3).joinToString(", ") { "«$it»" } + "."
+        // «hola, cuánta gente pasó hoy»: el saludo no se come la pregunta.
+        val resto = SALUDO.replaceFirst(norm(q), "").trim(' ', ',', '.', '!', '¡', '?', '¿')
+        if (resto.isNotEmpty() && resto.length < norm(q).trim().length) return ask(resto)
         return try { charla(norm(q), now) ?: answer(parse(q, now, zone), now) }
         catch (e: Exception) { "No he podido consultar la memoria: ${e.message}" }
     }
@@ -158,7 +163,7 @@ class Ask(private val src: Source, private val zone: ZoneId = ZoneId.systemDefau
                 "lo raro. No reconozco caras ni identifico a nadie, y no guardo vídeo: solo recorridos durante 30 días."
             hay("\\b(grabas|guardas|privacidad|me (estas )?grabando|subes|envias|nube|internet)\\b") ->
                 "No grabo vídeo ni fotos. Guardo solo recorridos (clase, hora, velocidad y unos puntos del camino) " +
-                "durante 30 días, en este teléfono. Nada sale de él. Puedes borrarlo en la memoria (mantén pulsada la pantalla)."
+                "durante 30 días, en este teléfono. Nada sale de él. Puedes borrarlo desde el botón «Memoria»."
             hay("\\b(drones?|remote id|aeronaves?)\\b") -> conRadio { r ->
                 if (r.drones.isEmpty()) "No oigo ningún dron con Remote ID ahora mismo."
                 else "Oigo ${cuantos(r.drones.size, "dron", "drones")}: ${r.drones.joinToString("; ")}."
@@ -174,9 +179,10 @@ class Ask(private val src: Source, private val zone: ZoneId = ZoneId.systemDefau
                     (if (r.drones.isNotEmpty()) " y ${cuantos(r.drones.size, "dron", "drones")}" else "") + "."
             }
             hay("\\b(gps|gnss|satelites?|inhibidor(es)?|interferencias?|jammer|suplantacion|spoofing)\\b") -> conRadio { r -> "GNSS: ${r.gnss}." }
-            hay("\\b(gracias|muchas gracias|genial|perfecto|vale)\\b") && n.length < 30 -> "De nada. Aquí sigo mirando."
+            hay("^\\W*(muchas )?(gracias|genial|perfecto|vale|ok|de acuerdo)\\W*$") -> "De nada. Aquí sigo mirando."
             hay("\\bque hora es\\b") -> "Son las ${hora(now)}."
-            hay("^\\s*(hola|buenas|buenos dias|buenas tardes|buenas noches|hey|ey|saludos|que tal|como estas|como vas|que pasa)\\b") -> {
+            hay("^\\W*(hola|buenas( tardes| noches)?|buenos dias|hey|ey|saludos)\\W*$") ||
+            hay("^\\W*(que tal|como estas|como vas)\\W*$") -> {
                 val l = src.live()
                 val estado = when {
                     l == null -> "Estoy arrancando la cámara."
@@ -187,7 +193,10 @@ class Ask(private val src: Source, private val zone: ZoneId = ZoneId.systemDefau
                 "Hola. $estado Pregúntame «qué ves», «cuánta gente pasó hoy» o «algo raro», o di «ayuda»."
             }
             // Presencia en el momento, dicha de mil maneras.
-            ventana == null && hay("\\b(hay (alguien|gente|personas?|nadie|algo|coches?)|ves (a )?(alguien|algo|gente)|" +
+            // Sin ventana de tiempo y sin pedir nada concreto (raro, rápido, parado),
+            // que eso lo contesta la gramática de consultas.
+            ventana == null && !hay("\\b(raro|anomal|extran|inusual|fuera de lo|corr|rapid|aparcad|parad)\\w*") &&
+            hay("\\b(hay (alguien|gente|personas?|nadie|coches?)|ves (a )?(alguien|gente)|" +
                 "que (esta|estas) (pasando|viendo)|que pasa ahora|quien hay|alguien ahi)\\b") -> answer(
                 Parsed(Intent.AHORA, null, null, "objetos", null), now)
             else -> null

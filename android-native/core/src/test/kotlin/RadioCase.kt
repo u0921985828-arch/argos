@@ -51,8 +51,9 @@ fun main() {
     val basic = byteArrayOf(0x02, (1 shl 4 or 2).toByte()) + serie.toByteArray(Charsets.US_ASCII) + ByteArray(3)
     // Location: tipo 1, flags (EW=0, mult=0), dir 90, vel 50·0,25 = 12,5 m/s.
     val lat = 43.2630; val lon = -2.9350
-    val location = byteArrayOf(0x12, 0x00, 90, 50, 0) + le32(Math.round(lat * 1e7).toInt()) + le32(Math.round(lon * 1e7).toInt()) +
-        le16(0) + le16(((120 + 1000) / 0.5).toInt()) + ByteArray(8)
+    // Altura de 120 m sobre el suelo (bit 2) en 17-18; 720 m geodésicos en 15-16.
+    val location = byteArrayOf(0x12, 0x04, 90, 50, 0) + le32(Math.round(lat * 1e7).toInt()) + le32(Math.round(lon * 1e7).toInt()) +
+        le16(0) + le16(((720 + 1000) / 0.5).toInt()) + le16(((120 + 1000) / 0.5).toInt()) + ByteArray(6)
     // System: tipo 4, con la POSICIÓN DEL PILOTO, que no se debe leer.
     val pilotoLat = 43.3000; val pilotoLon = -2.9000
     val system = byteArrayOf(0x42, 0x00) + le32(Math.round(pilotoLat * 1e7).toInt()) + le32(Math.round(pilotoLon * 1e7).toInt()) + ByteArray(15)
@@ -61,9 +62,12 @@ fun main() {
     check(basic.size == 25 && location.size == 25 && system.size == 25 && operador.size == 25)
 
     val suelto = RemoteId.decodifica(byteArrayOf(0x0D, 0x01) + location)
-    pide("Location suelto: 43,2630 / -2,9350, 120 m, 12,5 m/s, rumbo 90",
+    pide("Location suelto: 43,2630 / -2,9350, 120 m sobre el suelo (720 geodésicos), 12,5 m/s, rumbo 90",
          suelto != null && Math.abs(suelto.lat - lat) < 1e-6 && Math.abs(suelto.lon - lon) < 1e-6 &&
-         Math.abs(suelto.alturaM - 120) < 0.6 && Math.abs(suelto.velocidadMs - 12.5) < 0.01 && suelto.rumbo == 90.0)
+         Math.abs(suelto.alturaM - 120) < 0.6 && suelto.sobreSuelo && Math.abs(suelto.altGeodesicaM - 720) < 0.6 &&
+         Math.abs(suelto.velocidadMs - 12.5) < 0.01 && suelto.rumbo == 90.0)
+    val sinRumbo = RemoteId.decodifica(byteArrayOf(0x0D, 0x01) + byteArrayOf(0x12, 0x02, 181.toByte()) + location.copyOfRange(3, 25))
+    pide("rumbo desconocido (361) no sale como 1°", sinRumbo != null && sinRumbo.rumbo.isNaN())
     val paquete = byteArrayOf(0x0D, 0x07, 0xF2.toByte(), 25, 4) + basic + location + system + operador
     val d = RemoteId.decodifica(paquete)
     pide("RESERVADO paquete 0xF: serie $serie, multirrotor, posición del dron",
@@ -108,6 +112,12 @@ fun main() {
     pide("dron: Basic ID y Location en anuncios distintos se juntan",
          de.drones.size == 1 && de.drones[0].serie == serie && Math.abs(de.drones[0].alturaM - 120) < 0.6 && dr.avisos.size == 1)
 
+    val apagada = CampoRadio()
+    apagada.olvida()
+    apagada.oye("AA:BB:CC:DD:EE:09", -70, sep, 1.0)
+    pide("con la radio apagada no entra nada", apagada.estado(2.0).aparatos == 0)
+    pide("el aviso de dron caduca a los 10 min", dr.estado(2.0).avisos.size == 1 && dr.estado(700.0).avisos.isEmpty())
+
     // 4. GNSS.
     val rnd = Random(3)
     val cielo = DoubleArray(10) { 26.0 + it * 2.0 }          // 26..44 dB-Hz, alturas distintas
@@ -142,6 +152,11 @@ fun main() {
     g = VigiaGnss(); ts = 0.0
     repeat(300) { epoca(g, ts) { _, c -> c - 16 }; ts += 1 }
     pide("inhibidor desde el principio: no se inventa un cambio", g.avisos.isEmpty())
+    // Cielo de interior: ningún satélite fuerte de base. Perderlos no es un inhibidor.
+    g = VigiaGnss(); ts = 0.0
+    repeat(120) { g.epoca((0 until 5).map { VigiaGnss.Sat(it, 20.0 + it + rnd.nextGaussian() * 0.5) }, ts); ts += 1 }
+    repeat(30) { g.epoca(emptyList(), ts); ts += 1 }
+    pide("interior sin satélites fuertes que se queda sin cielo: sin aviso", g.avisos.isEmpty())
 
     println(if (fallos == 0) "RADIO: CUMPLE" else "RADIO: FALLA ($fallos)")
     if (fallos > 0) System.exit(1)

@@ -88,9 +88,15 @@ object Clasificador {
     }
 }
 
-/** Lo que un dron dice de sí mismo por Remote ID. NaN = no lo ha dicho. */
+/**
+ * Lo que un dron dice de sí mismo por Remote ID. NaN = no lo ha dicho.
+ * `alturaM` es la altura sobre el punto de despegue o sobre el suelo (según
+ * `sobreSuelo`), que es la que entiende una persona; la geodésica, sobre el
+ * elipsoide, va aparte: en Madrid son 650 m de diferencia.
+ */
 class Dron(val serie: String?, val tipo: String?, val lat: Double, val lon: Double,
-           val alturaM: Double, val velocidadMs: Double, val rumbo: Double)
+           val alturaM: Double, val velocidadMs: Double, val rumbo: Double,
+           val sobreSuelo: Boolean = false, val altGeodesicaM: Double = Double.NaN)
 
 object RemoteId {
     private const val MSG = 25
@@ -100,6 +106,7 @@ object RemoteId {
         if (d.size < 2 + MSG || (d[0].toInt() and 0xFF) != 0x0D) return null
         var serie: String? = null; var tipo: String? = null
         var lat = Double.NaN; var lon = Double.NaN; var alt = Double.NaN; var vel = Double.NaN; var rumbo = Double.NaN
+        var geo = Double.NaN; var sobreSuelo = false
         for (m in mensajes(d, 2)) {
             when ((m[0].toInt() and 0xFF) shr 4) {
                 0 -> {   // Basic ID
@@ -112,23 +119,28 @@ object RemoteId {
                     if (idTipo == 1 && id.isNotEmpty()) serie = id
                     tipo = tipoUa(uaTipo) ?: tipo
                 }
-                1 -> {   // Location
+                1 -> {   // Location (ASTM F3411): 1 flags, 2 rumbo, 3 velocidad,
+                         // 4 vertical, 5-8 lat, 9-12 lon, 13-14 barométrica,
+                         // 15-16 geodésica, 17-18 ALTURA (despegue o suelo).
                     val flags = m[1].toInt() and 0xFF
-                    val dir = m[2].toInt() and 0xFF
-                    if (dir != 255) rumbo = ((dir + if ((flags shr 1) and 1 == 1) 180 else 0) % 360).toDouble()
+                    // 361 (desconocido) llega como 181 con el bit E/O: se descarta.
+                    val dir = (m[2].toInt() and 0xFF) + if ((flags shr 1) and 1 == 1) 180 else 0
+                    if (dir < 360) rumbo = dir.toDouble()
                     val v = m[3].toInt() and 0xFF
                     if (v != 255) vel = if (flags and 1 == 0) v * 0.25 else v * 0.75 + 255 * 0.25
                     lat = i32(m, 5) * 1e-7; lon = i32(m, 9) * 1e-7
-                    val a = u16(m, 15)
-                    if (a != 0) alt = a * 0.5 - 1000.0
+                    val g = u16(m, 15)
+                    if (g != 0) geo = g * 0.5 - 1000.0
+                    val h = u16(m, 17)
+                    if (h != 0) { alt = h * 0.5 - 1000.0; sobreSuelo = (flags shr 2) and 1 == 1 }
                     if (lat == 0.0 && lon == 0.0) { lat = Double.NaN; lon = Double.NaN }
                 }
                 // 3 = Self ID (texto libre del piloto), 4 = System (POSICIÓN DEL
                 // PILOTO), 5 = Operator ID: no se leen.
             }
         }
-        if (serie == null && lat.isNaN() && alt.isNaN()) return null
-        return Dron(serie, tipo, lat, lon, alt, vel, rumbo)
+        if (serie == null && lat.isNaN() && alt.isNaN() && geo.isNaN()) return null
+        return Dron(serie, tipo, lat, lon, alt, vel, rumbo, sobreSuelo, geo)
     }
 
     /** Un mensaje suelto o un paquete (tipo 0xF) con varios. */
@@ -167,17 +179,19 @@ object RemoteId {
  * (Find My separado la cambia una vez al día; la red de Google, cada ~17 min).
  */
 class CampoRadio(private val avisoS: Double = 600.0, private val huecoS: Double = 120.0,
-                 private val vivoS: Double = 60.0, sal: ByteArray? = null) {
+                 private val vivoS: Double = 60.0, private val recienteS: Double = 600.0, sal: ByteArray? = null) {
     private val sal = sal ?: ByteArray(16).also { SecureRandom().nextBytes(it) }
 
     class Visto(val clase: Clase, val desde: Double, var ultimo: Double, var rssi: Double, var avisado: Boolean = false,
                 var dron: Dron? = null)
     class Aviso(val t: Double, val texto: String)
+    /** `avisos` son solo los recientes (`recienteS`); los viejos siguen en `avisos` del campo. */
     class Estado(val aparatos: Int, val porClase: Map<Clase, Int>, val drones: List<Dron>,
                  val rastreadorMasLargoS: Double, val avisos: List<Aviso>)
 
     private val vistos = HashMap<String, Visto>()
     val avisos = ArrayDeque<Aviso>()
+    private var olvidado = false
 
     /** Resumen de la dirección con la sal de la sesión. La dirección no sale de aquí. */
     fun clave(direccion: String): String {
@@ -187,6 +201,9 @@ class CampoRadio(private val avisoS: Double = 600.0, private val huecoS: Double 
     }
 
     fun oye(direccion: String, rssi: Int, a: Anuncio, tSec: Double) {
+        // Un resultado que llega tarde, con la radio ya apagada, no entra: la
+        // sal ya no existe y el resumen sería deshacible.
+        if (olvidado) return
         val c = Clasificador.clase(a)
         val k = clave(direccion)
         var v = vistos[k]
@@ -206,7 +223,8 @@ class CampoRadio(private val avisoS: Double = 600.0, private val huecoS: Double 
     private fun mezcla(a: Dron?, b: Dron): Dron = if (a == null) b else Dron(
         b.serie ?: a.serie, b.tipo ?: a.tipo, if (b.lat.isNaN()) a.lat else b.lat, if (b.lon.isNaN()) a.lon else b.lon,
         if (b.alturaM.isNaN()) a.alturaM else b.alturaM, if (b.velocidadMs.isNaN()) a.velocidadMs else b.velocidadMs,
-        if (b.rumbo.isNaN()) a.rumbo else b.rumbo)
+        if (b.rumbo.isNaN()) a.rumbo else b.rumbo,
+        if (b.alturaM.isNaN()) a.sobreSuelo else b.sobreSuelo, if (b.altGeodesicaM.isNaN()) a.altGeodesicaM else b.altGeodesicaM)
 
     private fun avisa(t: Double, texto: String) {
         avisos.addFirst(Aviso(t, texto)); if (avisos.size > 30) avisos.removeLast()
@@ -219,11 +237,11 @@ class CampoRadio(private val avisoS: Double = 600.0, private val huecoS: Double 
         val vivos = vistos.values.filter { tSec - it.ultimo <= vivoS }
         val por = vivos.groupingBy { it.clase }.eachCount()
         val largo = vivos.filter { it.clase.rastreador }.maxOfOrNull { tSec - it.desde } ?: 0.0
-        return Estado(vivos.size, por, vivos.mapNotNull { it.dron }, largo, avisos.toList())
+        return Estado(vivos.size, por, vivos.mapNotNull { it.dron }, largo, avisos.filter { tSec - it.t <= recienteS })
     }
 
     /** Al apagar el módulo: todo fuera, sal incluida. */
-    fun olvida() { vistos.clear(); avisos.clear(); sal.fill(0) }
+    fun olvida() { olvidado = true; vistos.clear(); avisos.clear(); sal.fill(0) }
 }
 
 /**
@@ -237,6 +255,8 @@ class CampoRadio(private val avisoS: Double = 600.0, private val huecoS: Double 
  *  - suplantación: seis o más satélites con intensidades casi IGUALES (un
  *    emisor en tierra los manda todos con la misma potencia; los de verdad
  *    llegan a alturas distintas y varían varios dB), durante 10 s.
+ * La suplantación se mira en términos absolutos y solo después de aprender:
+ * si ya estaba al encender, se avisa al terminar el aprendizaje.
  * Es una pista, no una prueba, y no dice dónde está el emisor.
  */
 class VigiaGnss(private val aprendeS: Double = 60.0) {
@@ -246,7 +266,9 @@ class VigiaGnss(private val aprendeS: Double = 60.0) {
     var estado = Estado.APRENDIENDO; private set
     var base = Double.NaN; private set
     var baseFuertes = Double.NaN; private set
+    /** Avisos, el más reciente al final; como mucho 20. */
     val avisos = ArrayList<String>()
+    var ultimoAvisoT = Double.NaN; private set
     private var t0 = Double.NaN
     private var malDesde = Double.NaN
     private var igualDesde = Double.NaN
@@ -268,7 +290,9 @@ class VigiaGnss(private val aprendeS: Double = 60.0) {
         }
 
         val caida = base - tipica
-        val mal = caida >= 10.0 && fuertes <= baseFuertes * 0.5
+        // Hace falta un cielo bueno aprendido: con menos de 4 satélites fuertes
+        // de base (interior), perderlos no distingue nada.
+        val mal = baseFuertes >= 4 && caida >= 10.0 && fuertes <= baseFuertes * 0.5
         malDesde = if (mal) (if (malDesde.isNaN()) tSec else malDesde) else Double.NaN
 
         // Uniformidad: desviación típica de los 6 mejores, con cielo lleno.
@@ -284,8 +308,8 @@ class VigiaGnss(private val aprendeS: Double = 60.0) {
             else -> Estado.NORMAL
         }
         if (estado != antes) when (estado) {
-            Estado.INTERFERENCIA -> avisos.add("posible interferencia GNSS: los satélites bajan %.0f dB".format(java.util.Locale("es"), caida))
-            Estado.SUPLANTACION -> avisos.add("posible suplantación GNSS: satélites con intensidades casi idénticas")
+            Estado.INTERFERENCIA -> avisa("posible interferencia GNSS: los satélites bajan %.0f dB".format(java.util.Locale("es"), caida), tSec)
+            Estado.SUPLANTACION -> avisa("posible suplantación GNSS: satélites con intensidades casi idénticas", tSec)
             else -> {}
         }
         // Lo normal se sigue aprendiendo despacio, pero nunca durante un aviso.
@@ -294,5 +318,10 @@ class VigiaGnss(private val aprendeS: Double = 60.0) {
             baseFuertes += (fuertes - baseFuertes) * 0.002
         }
         return estado
+    }
+
+    private fun avisa(t: String, tSec: Double) {
+        avisos.add(t); ultimoAvisoT = tSec
+        while (avisos.size > 20) avisos.removeAt(0)
     }
 }

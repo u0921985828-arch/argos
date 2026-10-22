@@ -334,7 +334,8 @@ function median(arr) {
  */
 /** Lo más rápido que puede ir un objeto de cada clase, con margen. */
 function velocidadMaxima(cls) {
-  return cls === "person" ? 10 : cls === "bike" ? 20 : 70;
+  // «bike» incluye motos: va con los vehículos.
+  return cls === "person" ? 10 : 70;
 }
 
 class Physics {
@@ -367,7 +368,7 @@ class Physics {
     // la posición nueva pasa a ser el punto de partida, sin velocidad.
     const mpp0 = scale ? scale.metersPerPixel(by, cx) : NaN;
     if (Number.isFinite(mpp0) && Math.hypot(dx, dy) * mpp0 / dt > maxMs * 1.5) {
-      this._px = cx; this._py = by; this._t = tSec;
+      this._px = cx; this._py = by; this._t = tSec; this.speedMs = NaN;
       return;
     }
     const step = Math.hypot(dx, dy);
@@ -518,7 +519,7 @@ class Brain {
       // Una pista que este frame no ha visto nada se queda quieta mientras
       // agota su margen: medir ahí su física es medir un objeto que ya se fue.
       // Cada peatón que salía del cuadro dejaba un «detenido» falso.
-      if (t.miss > 0) continue;
+      if (t.miss > 0) { t._runSince = undefined; continue; }
       let p = this.physics.get(t.id);
       if (!p) { p = new Physics(); this.physics.set(t.id, p); }
 
