@@ -14,7 +14,7 @@ fun main(args: Array<String>) {
     var fallos = 0
     fun pide(n: String, ok: Boolean) { println((if (ok) "ok    " else "FALLA ") + n); if (!ok) fallos++ }
     val caltrans = """{"data":[
-      {"cctv":{"index":"1","inService":"true","location":{"district":"4","locationName":"I-80 : Bay Bridge","latitude":"37.79","longitude":"-122.39"},
+      {"cctv":{"index":"1","inService":"true","location":{"district":"4","locationName":"I-80 : Bay Bridge","nearbyPlace":"San Francisco","county":"San Francisco","latitude":"37.79","longitude":"-122.39"},
         "imageData":{"streamingVideoURL":"https://wzmedia.dot.ca.gov/D4/E80_at_Bay_Bridge.stream/playlist.m3u8","static":{"currentImageURL":"https://cwwp2.dot.ca.gov/x.jpg"}}}},
       {"cctv":{"index":"2","inService":"true","location":{"district":"4","locationName":"Solo foto","latitude":"37.7","longitude":"-122.4"},
         "imageData":{"streamingVideoURL":"Not Reported","static":{"currentImageURL":"https://cwwp2.dot.ca.gov/y.jpg"}}}},
@@ -30,12 +30,24 @@ fun main(args: Array<String>) {
         "additionalProperties":[{"key":"available","value":"false"},{"key":"videoUrl","value":"https://x/2.mp4"}]}]"""
     val t = Catalogo.tfl(tfl)
     pide("TfL: solo la disponible (${t.size}), en clips", t.size == 1 && t[0].video.endsWith(".mp4") && !t[0].directo)
+    pide("Caltrans: ciudad leída, sin repetir (${c[0].zona})", c[0].zona == "San Francisco")
+    val todas = c + t
+    fun n(q: String) = Catalogo.busca(todas, q).size
+    pide("búsqueda por ciudad, que no está en el nombre", n("san francisco") == 1)
+    pide("búsqueda sin tildes ni mayúsculas, palabras en cualquier orden", n("BRIDGE bay") == 1 && n("rómford") == 1)
+    pide("búsqueda por país, en español o en inglés", n("Londres") == 1 && n("london") == 1 && n("Estados Unidos") == 1)
+    pide("búsqueda vacía da todas; sin coincidencia, ninguna", n("  ") == 2 && n("madrid") == 0)
     pide("JSON roto no revienta", Catalogo.caltrans("{\"data\":[{\"cctv\":").isEmpty() && Catalogo.tfl("nada").isEmpty())
     if (args.getOrNull(0) == "vivo") {
         val dir = File(args[1])
         dir.listFiles()?.sortedBy { it.name }?.forEach { f ->
-            val n = if (f.name.startsWith("tfl")) Catalogo.tfl(f.readText()).size else Catalogo.caltrans(f.readText()).size
-            pide("en vivo ${f.name}: $n cámaras con vídeo", n > 0)
+            val l = if (f.name.startsWith("tfl")) Catalogo.tfl(f.readText()) else Catalogo.caltrans(f.readText())
+            pide("en vivo ${f.name}: ${l.size} cámaras con vídeo", l.isNotEmpty())
+            // Se busca por ciudad: si el organismo deja de darla, la búsqueda vuelve a fallar.
+            if (!f.name.startsWith("tfl")) {
+                val conZona = l.count { it.zona.isNotEmpty() }
+                pide("en vivo ${f.name}: $conZona con ciudad o condado (p. ej. «${l.firstOrNull { it.zona.isNotEmpty() }?.zona}»)", conZona * 2 >= l.size)
+            }
         }
     }
     println(if (fallos == 0) "CATÁLOGO: CUMPLE" else "CATÁLOGO: FALLA ($fallos)")

@@ -10,7 +10,9 @@ package eus.argos.core
  * ciudadana. Se leen como vídeo y se analizan en el teléfono; nada se reenvía.
  */
 data class CamaraPublica(val id: String, val nombre: String, val lat: Double, val lon: Double,
-                         val video: String, val proveedor: String, val directo: Boolean)
+                         val video: String, val proveedor: String, val directo: Boolean,
+                         /** Ciudad y condado, cuando el organismo los da: el nombre suele ser solo la vía. */
+                         val zona: String = "")
 
 object Catalogo {
     /** Distritos de Caltrans con vídeo en directo (HLS). */
@@ -29,8 +31,11 @@ object Catalogo {
             val video = (img["streamingVideoURL"] as? String)?.takeIf { it.startsWith("http") } ?: return@mapNotNull null
             if ((c["inService"] as? String)?.lowercase() == "false") return@mapNotNull null
             val nombre = (loc["locationName"] as? String)?.trim().orEmpty().ifEmpty { "sin nombre" }
+            // «Not Reported» es como Caltrans dice que no lo sabe.
+            val zona = listOf(loc["nearbyPlace"], loc["county"]).mapNotNull { (it as? String)?.trim() }
+                .filter { it.isNotEmpty() && !it.equals("Not Reported", true) }.distinct().joinToString(" · ")
             CamaraPublica("caltrans:${loc["district"] ?: ""}:${c["index"] ?: nombre}", nombre,
-                num(loc["latitude"]), num(loc["longitude"]), video, "California", true)
+                num(loc["latitude"]), num(loc["longitude"]), video, "California", true, zona)
         }
     }
 
@@ -46,6 +51,24 @@ object Catalogo {
             CamaraPublica("tfl:${p["id"]}", (p["commonName"] as? String).orEmpty().ifEmpty { "sin nombre" },
                 num(p["lat"]), num(p["lon"]), video, "Londres", false)
         }
+    }
+
+    /** Otros nombres con los que se busca cada sitio: en español y en inglés. */
+    private val ALIAS = mapOf(
+        "California" to "california ee uu eeuu estados unidos usa us america",
+        "Londres" to "londres london reino unido uk inglaterra england gran bretana")
+
+    /** Lo que se busca de una cámara: nombre, ciudad, condado y sitio, sin tildes ni mayúsculas. */
+    fun texto(c: CamaraPublica) = Ask.norm(c.nombre + " " + c.zona + " " + c.proveedor + " " + (ALIAS[c.proveedor] ?: ""))
+
+    /**
+     * Las cámaras que casan con lo escrito: cada palabra tiene que estar, en
+     * cualquier orden («angeles 405» encuentra «I-405 : Venice · Los Angeles»).
+     */
+    fun busca(todas: List<CamaraPublica>, consulta: String): List<CamaraPublica> {
+        val palabras = Ask.norm(consulta).split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }
+        if (palabras.isEmpty()) return todas
+        return todas.filter { c -> val t = texto(c); palabras.all { t.contains(it) } }
     }
 
     private fun num(v: Any?): Double = when (v) { is Number -> v.toDouble(); is String -> v.toDoubleOrNull() ?: Double.NaN; else -> Double.NaN }

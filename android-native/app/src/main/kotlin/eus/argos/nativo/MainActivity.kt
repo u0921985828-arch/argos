@@ -54,6 +54,9 @@ class MainActivity : ComponentActivity() {
     private val ocupadoRed = java.util.concurrent.atomic.AtomicBoolean(false)
     private var bufRed: ByteBuffer = ByteBuffer.allocate(0)
     @Volatile private var catalogo: List<eus.argos.core.CamaraPublica>? = null
+    @Volatile private var cargandoCatalogo = false
+    @Volatile private var fallosCatalogo = ""
+    @Volatile private var insetArriba = 0
     private val giro = eus.argos.core.EstabilizaGiro()
     @Volatile private var estabilizar = true
     @Volatile private var ois = false
@@ -241,6 +244,7 @@ class MainActivity : ComponentActivity() {
                     if (android.os.Build.VERSION.SDK_INT >= 28) ins.displayCutout?.safeInsetTop ?: 0 else 0)
                 @Suppress("DEPRECATION")
                 val bajo = ins.systemWindowInsetBottom
+                insetArriba = arriba
                 barra.setPadding(d(16), arriba + d(8), d(16), d(14))
                 abajo.setPadding(d(12), 0, d(12), d(12) + bajo)
                 ins
@@ -261,6 +265,10 @@ class MainActivity : ComponentActivity() {
                 setMargins(d(6), 0, d(6), d(6))
             })
         })
+
+        // La prueba del CI pide la lista de cámaras públicas al arrancar, para
+        // ver en el aparato que se baja y se lee (en uso, al abrir «Fuente»).
+        if (intent?.getBooleanExtra("catalogo", false) == true) cargaCatalogo()
 
         // La radio vuelve como se dejó, pero solo si sigue teniendo permisos:
         // nunca se pide nada sin que se pulse.
@@ -643,40 +651,87 @@ class MainActivity : ComponentActivity() {
         fuenteRed.abre(url, nombre, bucle)
     }
 
-    /** La lista de cámaras públicas, bajada una vez de los propios organismos. */
+    /** La lista de cámaras públicas, bajada de los propios organismos. */
     private var listaFuentes: android.widget.ArrayAdapter<String>? = null
+    private var estadoFuentes: TextView? = null
     private var filtradas: List<eus.argos.core.CamaraPublica> = emptyList()
     private var filtro = ""
 
+    /**
+     * Las diez listas se piden a la vez y cada una se enseña según llega: en
+     * serie, con un distrito lento, la lista tardaba un minuto en salir y
+     * parecía rota. Si no llega ninguna se puede reintentar.
+     */
     private fun cargaCatalogo() {
-        if (catalogo != null) return
+        if (cargandoCatalogo || !catalogo.isNullOrEmpty()) return
+        cargandoCatalogo = true; fallosCatalogo = ""
         catalogo = emptyList()
-        pintaLista("Buscando cámaras públicas…")
+        pintaLista()
         Thread({
+            val C = eus.argos.core.Catalogo
+            val listas = C.DISTRITOS.map { "California" to C.urlCaltrans(it) } + ("Londres" to C.URL_TFL)
             val todas = ArrayList<eus.argos.core.CamaraPublica>()
-            fun baja(url: String): String? = runCatching {
-                val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-                c.connectTimeout = 8000; c.readTimeout = 15000
-                c.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }.also { c.disconnect() }
-            }.getOrNull()
-            for (d in eus.argos.core.Catalogo.DISTRITOS)
-                baja(eus.argos.core.Catalogo.urlCaltrans(d))?.let { todas += eus.argos.core.Catalogo.caltrans(it) }
-            baja(eus.argos.core.Catalogo.URL_TFL)?.let { todas += eus.argos.core.Catalogo.tfl(it) }
-            Log.i(TAG, "ARGOS red: catálogo de cámaras públicas, ${todas.size} con vídeo")
-            catalogo = todas.sortedWith(compareBy({ it.proveedor }, { it.nombre }))
-            runOnUiThread { pintaLista(if (todas.isEmpty()) "No se pudo bajar la lista. ¿Hay conexión?" else null) }
+            val fallos = java.util.concurrent.ConcurrentHashMap<String, String>()
+            val pool = java.util.concurrent.Executors.newFixedThreadPool(4)
+            for ((sitio, url) in listas) pool.execute {
+                try {
+                    val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                    c.connectTimeout = 10000; c.readTimeout = 20000
+                    c.setRequestProperty("User-Agent", "ARGOS/1.0 (Android)")
+                    c.setRequestProperty("Accept", "application/json")
+                    val txt = try {
+                        if (c.responseCode != 200) throw java.io.IOException("HTTP ${c.responseCode}")
+                        c.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
+                    } finally { c.disconnect() }
+                    val nuevas = if (sitio == "Londres") C.tfl(txt) else C.caltrans(txt)
+                    if (nuevas.isEmpty()) throw java.io.IOException("lista vacía")
+                    synchronized(todas) {
+                        todas += nuevas
+                        catalogo = todas.sortedWith(compareBy({ it.proveedor }, { it.zona }, { it.nombre }))
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "ARGOS red: $url → ${e.javaClass.simpleName}: ${e.message}")
+                    fallos.putIfAbsent(sitio, when (e) {
+                        is java.net.UnknownHostException -> "sin conexión"
+                        is java.net.SocketTimeoutException -> "no responde"
+                        else -> e.message ?: e.javaClass.simpleName
+                    })
+                }
+                runOnUiThread { pintaLista() }
+            }
+            pool.shutdown()
+            pool.awaitTermination(3, java.util.concurrent.TimeUnit.MINUTES)
+            val n = synchronized(todas) { todas.size }
+            Log.i(TAG, "ARGOS red: catálogo de cámaras públicas, $n con vídeo" +
+                (if (fallos.isEmpty()) "" else " · fallos: $fallos"))
+            fallosCatalogo = fallos.entries.joinToString(" · ") { "${it.key}: ${it.value}" }
+            if (n == 0) catalogo = null      // así se puede volver a intentar
+            cargandoCatalogo = false
+            runOnUiThread { pintaLista() }
         }, "argos-catalogo").start()
     }
 
-    private fun pintaLista(aviso: String?) {
+    private fun pintaLista() {
         val a = listaFuentes ?: return
         val todas = catalogo.orEmpty()
-        val f = eus.argos.core.Ask.norm(filtro)
-        filtradas = if (f.isBlank()) todas else todas.filter { eus.argos.core.Ask.norm(it.nombre + " " + it.proveedor).contains(f) }
+        filtradas = eus.argos.core.Catalogo.busca(todas, filtro)
         a.clear()
-        if (aviso != null) a.add(aviso)
-        else a.addAll(filtradas.take(400).map { (if (it.directo) "● " else "○ ") + it.proveedor + " · " + it.nombre })
+        a.addAll(filtradas.take(400).map { c ->
+            (if (c.directo) "● " else "○ ") + c.nombre + "\n" + c.proveedor + (if (c.zona.isEmpty()) "" else " · " + c.zona)
+        })
         a.notifyDataSetChanged()
+        estadoFuentes?.text = when {
+            todas.isEmpty() && cargandoCatalogo -> "Buscando cámaras públicas…"
+            todas.isEmpty() -> "No se pudo bajar la lista" + (if (fallosCatalogo.isEmpty()) "" else " ($fallosCatalogo)") +
+                ". Toca aquí para reintentar."
+            filtradas.isEmpty() -> "Ninguna con «${filtro.trim()}». Hay cámaras de California (EE. UU.) y de Londres: " +
+                "prueba «Los Angeles», «San Diego», «Oakland» o «London»."
+            else -> (if (filtradas.size > 400) "400 de ${filtradas.size}" else "${filtradas.size}") +
+                " cámara${if (filtradas.size == 1) "" else "s"}" +
+                (if (cargandoCatalogo) " · buscando más…" else "") +
+                (if (!cargandoCatalogo && fallosCatalogo.isNotEmpty()) " · sin respuesta de $fallosCatalogo" else "") +
+                "   ● directo  ○ clips"
+        }
     }
 
     private fun construyeFuentes(cerrar: () -> Unit): android.widget.LinearLayout {
@@ -684,25 +739,71 @@ class MainActivity : ComponentActivity() {
         val lista = android.widget.ListView(this).apply { divider = null }
         val adapt = object : android.widget.ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, ArrayList()) {
             override fun getView(pos: Int, conv: android.view.View?, parent: android.view.ViewGroup): android.view.View =
-                (super.getView(pos, conv, parent) as TextView).apply { setTextColor(Ui.TEXTO); textSize = 15f; minHeight = d(48) }
+                (super.getView(pos, conv, parent) as TextView).apply {
+                    val t = getItem(pos).orEmpty(); val k = t.indexOf('\n')
+                    text = if (k < 0) t else Ui.textoFila(t.substring(0, k), t.substring(k + 1))
+                    setTextColor(Ui.TEXTO); textSize = 15f; minHeight = d(56)
+                }
         }
         listaFuentes = adapt
         lista.adapter = adapt
+        lateinit var caja: android.widget.LinearLayout
+        lateinit var buscar: android.widget.EditText
+        val teclado = { getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager }
+        val cierra = {
+            teclado().hideSoftInputFromWindow(buscar.windowToken, 0)
+            buscar.clearFocus(); cerrar()
+        }
         lista.setOnItemClickListener { _, _, pos, _ ->
             val c = filtradas.getOrNull(pos) ?: return@setOnItemClickListener
-            usarRed(c.video, c.nombre, !c.directo, c.id); cerrar()
+            usarRed(c.video, c.nombre, !c.directo, c.id); cierra()
         }
-        val buscar = android.widget.EditText(this).apply {
-            hint = "Buscar (ciudad, carretera…)"; setTextColor(Ui.TEXTO); setHintTextColor(Ui.SUAVE); isSingleLine = true
+        // Al deslizar la lista se baja el teclado para ver más resultados.
+        lista.setOnScrollListener(object : android.widget.AbsListView.OnScrollListener {
+            override fun onScrollStateChanged(v: android.widget.AbsListView?, estado: Int) {
+                if (estado == android.widget.AbsListView.OnScrollListener.SCROLL_STATE_TOUCH_SCROLL)
+                    teclado().hideSoftInputFromWindow(buscar.windowToken, 0)
+            }
+            override fun onScroll(v: android.widget.AbsListView?, a: Int, b: Int, c: Int) {}
+        })
+        val filaMovil = Ui.fila(this, "Cámara del móvil", "la de este teléfono") { usarMovil(); cierra() }
+        val filaIp = Ui.fila(this, "Cámara IP propia", "dirección RTSP de tu cámara") { pideRtsp(cierra) }
+        val rotulo = TextView(this).apply {
+            text = "Cámaras públicas de tráfico"
+            setTextColor(Ui.SUAVE); textSize = 13f; setPadding(d(4), d(14), 0, d(6))
+        }
+        estadoFuentes = TextView(this).apply {
+            setTextColor(Ui.SUAVE); textSize = 13f; setPadding(d(4), d(8), d(4), d(4))
+            setOnClickListener { if (catalogo == null && !cargandoCatalogo) cargaCatalogo() }
+        }
+        /*
+         * Escribir: el teclado tapa la mitad de abajo, que es donde estaba la
+         * lista, y con pantalla completa Android no encoge la ventana. Mientras
+         * se busca, el panel sube arriba y la lista queda bajo el buscador.
+         */
+        fun modoBusqueda(on: Boolean) {
+            filaMovil.visibility = if (on) android.view.View.GONE else android.view.View.VISIBLE
+            filaIp.visibility = filaMovil.visibility; rotulo.visibility = filaMovil.visibility
+            (caja.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
+                if (on) { lp.height = -1; lp.topMargin = insetArriba + d(6) }
+                else { lp.height = (resources.displayMetrics.heightPixels * 0.7).toInt(); lp.topMargin = 0 }
+                caja.layoutParams = lp
+            }
+        }
+        buscar = android.widget.EditText(this).apply {
+            hint = "Buscar: ciudad, carretera, país…"; setTextColor(Ui.TEXTO); setHintTextColor(Ui.SUAVE); isSingleLine = true
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
             background = Ui.fondo(Color.argb(140, 40, 44, 52), d(14).toFloat())
             setPadding(d(14), d(10), d(14), d(10))
+            setOnFocusChangeListener { _, foco -> modoBusqueda(foco) }
+            setOnEditorActionListener { _, _, _ -> teclado().hideSoftInputFromWindow(windowToken, 0); true }
             addTextChangedListener(object : android.text.TextWatcher {
-                override fun afterTextChanged(e: android.text.Editable?) { filtro = e?.toString().orEmpty(); pintaLista(null) }
+                override fun afterTextChanged(e: android.text.Editable?) { filtro = e?.toString().orEmpty(); pintaLista() }
                 override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
                 override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             })
         }
-        return android.widget.LinearLayout(this).apply {
+        caja = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             setPadding(d(18), d(14), d(18), d(14))
             background = Ui.fondo(Ui.FONDO, d(24).toFloat())
@@ -711,17 +812,16 @@ class MainActivity : ComponentActivity() {
                 addView(TextView(this@MainActivity).apply {
                     text = "Fuente de vídeo"; setTextColor(Ui.TEXTO); textSize = 18f; typeface = android.graphics.Typeface.DEFAULT_BOLD
                 }, android.widget.LinearLayout.LayoutParams(0, -2, 1f))
-                addView(Ui.boton(this@MainActivity, R.drawable.ic_cerrar, "Cerrar", 44, Color.TRANSPARENT) { cerrar() })
+                addView(Ui.boton(this@MainActivity, R.drawable.ic_cerrar, "Cerrar", 44, Color.TRANSPARENT) { cierra() })
             })
-            addView(Ui.fila(this@MainActivity, "Cámara del móvil", "la de este teléfono") { usarMovil(); cerrar() })
-            addView(Ui.fila(this@MainActivity, "Cámara IP propia", "dirección RTSP de tu cámara") { pideRtsp(cerrar) })
-            addView(TextView(this@MainActivity).apply {
-                text = "Cámaras públicas de tráfico   ● directo   ○ clips"
-                setTextColor(Ui.SUAVE); textSize = 13f; setPadding(d(4), d(14), 0, d(6))
-            })
+            addView(filaMovil)
+            addView(filaIp)
+            addView(rotulo)
             addView(buscar)
-            addView(lista, android.widget.LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = d(6) })
+            addView(estadoFuentes)
+            addView(lista, android.widget.LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = d(2) })
         }
+        return caja
     }
 
     /** Cámara IP: la dirección RTSP con usuario y clave; se recuerda en este teléfono. */

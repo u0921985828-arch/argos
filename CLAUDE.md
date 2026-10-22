@@ -338,7 +338,10 @@ TextureView pinta y se toma una imagen cada 80 ms para el mismo análisis. Al
 cambiar de fuente se empieza una escena nueva (núcleo y cerebro), y cada
 cámara aprende lo suyo y lo conserva entre sesiones (`memoria/escenas/`,
 nombre por hash del identificador, sin dirección ni clave; solo agregados). La red solo RECIBE
-vídeo: nada se envía.
+vídeo: nada se envía. La búsqueda va por nombre, ciudad, condado y país (en
+español o inglés): el nombre de Caltrans es solo la vía, así que buscar
+«Los Angeles» no encontraba nada. Con pantalla completa el teclado no encoge
+la ventana y tapaba la lista: al buscar, el panel sube arriba.
 
 **Física plausible.** Una escala con altura de cámara fuera de 2-150 m no vale;
 un paso imposible para la clase no da velocidad; «corriendo» pide 1 s seguido.

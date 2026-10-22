@@ -14,7 +14,7 @@ PKG=eus.argos.nativo
 adb install -r "$APK"
 adb shell pm grant "$PKG" android.permission.CAMERA || true
 adb logcat -c
-adb shell am start -n "$PKG/.MainActivity"
+adb shell am start -n "$PKG/.MainActivity" --ez catalogo true
 
 # Se espera a tener varias inferencias sobre frames de cámara, no solo la
 # primera: una sola puede ser la del arranque.
@@ -109,6 +109,17 @@ if ! grep -q 'ARGOS chat: .*«qué ves» -> Ahora' logcat.txt; then
     exit 1
 fi
 grep 'ARGOS chat:' logcat.txt | tail -1
+
+# Las cámaras públicas, bajadas EN EL APARATO, con su red y su cliente HTTP.
+# Depende de servidores ajenos: si no responden se avisa, no se bloquea.
+cat_line=$(grep 'ARGOS red: catálogo de cámaras públicas' logcat.txt | tail -1 || true)
+cat_n=$(echo "$cat_line" | grep -o 'públicas, [0-9]*' | awk '{print $2}' || true)
+if [ -z "$cat_n" ] || [ "$cat_n" -eq 0 ]; then
+    echo "::warning::el aparato no bajó la lista de cámaras públicas: ${cat_line:-sin línea}"
+    grep 'ARGOS red' logcat.txt | tail -12 || true
+else
+    echo "$cat_line"
+fi
 
 echo "--- cifras ---"
 grep 'ARGOS nativo detector:' logcat.txt | tail -1
