@@ -321,6 +321,13 @@ rastreadores BLE, Remote ID de drones y vigilancia GNSS. La dirección de un
 aparato se resume con una sal de sesión y no se guarda ni se cruza con la
 cámara; del dron no se lee la posición ni el identificador del piloto.
 
+**Estabilizado (nativa).** Óptico si la lente lo tiene (mueve el sensor: vista
+y análisis siguen alineados; el electrónico recorta y los desalinearía). En
+pantalla, `core/Estabiliza.kt` desplaza la escena (vista previa y cajas a la
+vez) con el movimiento de cámara que ya se estima. El análisis llega un frame
+tarde: sin adelantar la corrección, el balanceo bajaba un 12 %; con el
+adelanto, un 60 %.
+
 **Física plausible.** Una escala con altura de cámara fuera de 2-150 m no vale;
 un paso imposible para la clase no da velocidad; «corriendo» pide 1 s seguido.
 

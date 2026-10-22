@@ -41,6 +41,11 @@ class MainActivity : ComponentActivity() {
     private lateinit var lRadio: TextView
     private lateinit var fichaRadio: TextView
     private lateinit var fichaZoom: TextView
+    private lateinit var fichaEstable: TextView
+    /** Vista previa y capa juntas: el estabilizado las mueve a la vez y las cajas siguen en su sitio. */
+    private lateinit var escena: FrameLayout
+    private val estabilizador = eus.argos.core.Estabilizador()
+    @Volatile private var estabilizar = true
     private lateinit var estado: TextView
     private var detalles = false
     private lateinit var radio: RadioVigia
@@ -82,6 +87,14 @@ class MainActivity : ComponentActivity() {
         estado = TextView(this).apply { text = "● cargando"; setTextColor(Ui.SUAVE); textSize = 12f }
         fichaZoom = Ui.ficha(this, "Zoom: auto") { cambiarZoom() }
         fichaRadio = Ui.ficha(this, "Radio: no") { alternarRadio() }
+        estabilizar = prefs.getBoolean("estabilizar", true)
+        fichaEstable = Ui.ficha(this, if (estabilizar) "Estable: sí" else "Estable: no") {
+            estabilizar = !estabilizar
+            prefs.edit().putBoolean("estabilizar", estabilizar).apply()
+            fichaEstable.text = if (estabilizar) "Estable: sí" else "Estable: no"
+            if (!estabilizar) { escena.scaleX = 1f; escena.scaleY = 1f; escena.translationX = 0f; escena.translationY = 0f }
+            estabilizador.reinicia()
+        }
         val barra = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             setPadding(d(14), d(10), d(10), d(10))
@@ -107,6 +120,7 @@ class MainActivity : ComponentActivity() {
                 orientation = android.widget.LinearLayout.HORIZONTAL
                 setPadding(0, d(8), 0, 0)
                 addView(fichaZoom, android.widget.LinearLayout.LayoutParams(-2, -2).apply { rightMargin = d(8) })
+                addView(fichaEstable, android.widget.LinearLayout.LayoutParams(-2, -2).apply { rightMargin = d(8) })
                 addView(fichaRadio)
             })
         }
@@ -161,8 +175,11 @@ class MainActivity : ComponentActivity() {
                 barra.setPadding(d(14), arriba + d(6), d(10), d(10))
                 ins
             }
-            addView(preview, FrameLayout.LayoutParams(-1, -1))
-            addView(capa, FrameLayout.LayoutParams(-1, -1))
+            escena = FrameLayout(this@MainActivity).apply {
+                addView(preview, FrameLayout.LayoutParams(-1, -1))
+                addView(capa, FrameLayout.LayoutParams(-1, -1))
+            }
+            addView(escena, FrameLayout.LayoutParams(-1, -1))
             addView(barra, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
             addView(tarjeta, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { setMargins(d(10), 0, d(10), d(14)) })
             addView(botonChat, FrameLayout.LayoutParams(d(60), d(60), Gravity.BOTTOM or Gravity.END).apply {
@@ -276,8 +293,13 @@ class MainActivity : ComponentActivity() {
                 .setResolutionStrategy(ResolutionStrategy(Size(640, 480),
                     ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER))
                 .build()
-            val prev = Preview.Builder().setResolutionSelector(selector).build()
-                .also { it.setSurfaceProvider(preview.surfaceProvider) }
+            // Estabilización ÓPTICA si la lente la tiene: mueve el sensor de
+            // verdad, así que la vista previa y el análisis siguen alineados
+            // (la electrónica recorta y los desalinearía).
+            val ois = oisDisponible(provider)
+            val prevB = Preview.Builder().setResolutionSelector(selector)
+            if (ois) pideOis(prevB)
+            val prev = prevB.build().also { it.setSurfaceProvider(preview.surfaceProvider) }
             val analysis = ImageAnalysis.Builder()
                 .setResolutionSelector(selector)
                 // RGBA girado por CameraX: un solo búfer sirve al detector, que
@@ -286,6 +308,7 @@ class MainActivity : ComponentActivity() {
                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                 .setOutputImageRotationEnabled(true)
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .also { if (ois) pideOis(it) }
                 .build()
             analysis.setAnalyzer(analysisExec) { image ->
                 try {
@@ -294,6 +317,7 @@ class MainActivity : ComponentActivity() {
                         val plane = image.planes[0]
                         val f = p.onFrame(plane.buffer, plane.rowStride, image.width, image.height)
                         capa.show(f)
+                        estabiliza(f)
                         report(p, f)
                     }
                 } catch (e: Throwable) {
@@ -304,8 +328,42 @@ class MainActivity : ComponentActivity() {
             }
             provider.unbindAll()
             provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, prev, analysis)
-            Log.i(TAG, "ARGOS nativo cámara: análisis RGBA, objetivo 640x480")
+            Log.i(TAG, "ARGOS nativo cámara: análisis RGBA, objetivo 640x480 · estabilización óptica " +
+                       (if (ois) "sí" else "no disponible") + " · estabilizado en pantalla " + (if (estabilizar) "sí" else "no"))
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    @androidx.annotation.OptIn(markerClass = [androidx.camera.camera2.interop.ExperimentalCamera2Interop::class])
+    private fun oisDisponible(provider: ProcessCameraProvider): Boolean = runCatching {
+        val info = CameraSelector.DEFAULT_BACK_CAMERA.filter(provider.availableCameraInfos).firstOrNull() ?: return false
+        androidx.camera.camera2.interop.Camera2CameraInfo.from(info)
+            .getCameraCharacteristic(android.hardware.camera2.CameraCharacteristics.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION)
+            ?.contains(android.hardware.camera2.CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_ON) == true
+    }.getOrDefault(false)
+
+    @androidx.annotation.OptIn(markerClass = [androidx.camera.camera2.interop.ExperimentalCamera2Interop::class])
+    private fun <T> pideOis(b: androidx.camera.core.ExtendableBuilder<T>) {
+        androidx.camera.camera2.interop.Camera2Interop.Extender(b).setCaptureRequestOption(
+            android.hardware.camera2.CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
+            android.hardware.camera2.CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_ON)
+    }
+
+    /**
+     * Estabilizado en pantalla: con el movimiento de cámara que ya estima el
+     * núcleo, la escena (vista previa y cajas a la vez) se desplaza para
+     * quitar el balanceo de la mano, ampliada un 11 % para que no se vean los
+     * bordes. Un paneo se deja pasar.
+     */
+    private fun estabiliza(f: Pipeline.Frame) {
+        if (!estabilizar) return
+        val (dx, dy) = estabilizador.paso(f.camX, f.camY, f.w)
+        val z = estabilizador.zoom.toFloat()
+        runOnUiThread {
+            if (escena.width == 0 || f.w == 0) return@runOnUiThread
+            val s = minOf(escena.width.toFloat() / f.w, escena.height.toFloat() / f.h)
+            escena.scaleX = z; escena.scaleY = z
+            escena.translationX = (dx * s * z).toFloat(); escena.translationY = (dy * s * z).toFloat()
+        }
     }
 
     private fun cambiarZoom() {

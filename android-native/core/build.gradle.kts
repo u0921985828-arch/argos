@@ -52,6 +52,14 @@ tasks.register<JavaExec>("camaraEnMano") {
     args = listOf("persona", "exigir")
 }
 
+// Estabilizado en pantalla: quita el balanceo de la mano, deja pasar un paneo.
+tasks.register<JavaExec>("estabiliza") {
+    group = "verification"
+    description = "El balanceo de 2 Hz baja a menos de la mitad y un paneo se sigue."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.EstabilizaCaseKt")
+}
+
 // La voz: fonética del español contra espeak-ng (referencia guardada en
 // src/test/resources) y números, horas y unidades dichos bien.
 tasks.register<JavaExec>("voz") {
