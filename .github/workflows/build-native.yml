@@ -193,12 +193,15 @@ jobs:
         run: |
           set -e
           work=$(mktemp -d)
-          cp ARGOS-nativo.apk "$work/"
+          # Con la voz el APK pasa de 100 MB, el límite de un fichero en git: va
+          # en trozos de 90 MB que se juntan con `cat`.
+          split -b 90m ARGOS-nativo.apk "$work/ARGOS-nativo.apk.parte-"
+          sha256sum ARGOS-nativo.apk > "$work/ARGOS-nativo.apk.sha256"
           cd "$work"
           git init -q -b apk-nativo
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          git add ARGOS-nativo.apk
+          git add ARGOS-nativo.apk.parte-* ARGOS-nativo.apk.sha256
           git commit -q -m "APK nativo de ${GITHUB_SHA::8}"
           git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" apk-nativo
         env:
