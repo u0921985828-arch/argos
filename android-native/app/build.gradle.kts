@@ -80,9 +80,13 @@ dependencies {
 // como hace la app web: una sola fuente de verdad, nada duplicado a mano.
 val modelFile = rootProject.file("../yolox_nano.onnx")
 val probeFile = rootProject.file("../autoprueba.jpg")
+// La voz Piper es opcional: si el CI la descargó a la raíz, va dentro; si no,
+// el chat habla con la voz del sistema. Su ficha (licencia) viaja con ella.
+val vozFiles = listOf("voz.onnx", "voz.onnx.json", "voz-ficha.txt").map { rootProject.file("../$it") }
 val syncAssets by tasks.registering(Copy::class) {
     from(modelFile)
     from(probeFile)
+    from(vozFiles.filter { it.exists() })
     into(layout.buildDirectory.dir("generated/argos-assets"))
     doFirst {
         if (!modelFile.exists())

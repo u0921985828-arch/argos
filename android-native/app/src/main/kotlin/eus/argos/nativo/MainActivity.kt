@@ -51,6 +51,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var chat: Chat
     @Volatile private var ask: eus.argos.core.Ask? = null
     @Volatile private var store: eus.argos.core.TrackStore? = null
+    @Volatile private var voz: VozApp? = null
     private var chatProbado = false
 
     private val askMicro = registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
@@ -140,7 +141,8 @@ class MainActivity : ComponentActivity() {
             elevation = d(6).toFloat()
         }
         chat = Chat(this, { ask }, { askMicro.launch(Manifest.permission.RECORD_AUDIO) },
-                    { chatCaja.visibility = android.view.View.GONE; botonChat.visibility = android.view.View.VISIBLE })
+                    { chatCaja.visibility = android.view.View.GONE; botonChat.visibility = android.view.View.VISIBLE },
+                    { voz })
         chatCaja = FrameLayout(this).apply {
             visibility = android.view.View.GONE
             addView(chat.view, FrameLayout.LayoutParams(-1, -1))
@@ -224,6 +226,9 @@ class MainActivity : ComponentActivity() {
                 }
             })
             Log.i(TAG, "ARGOS nativo listo")
+            // La voz propia, si el APK la trae: después del detector, que es lo urgente.
+            voz = VozApp.carga(this)
+            if (destroyed) { voz?.close(); voz = null } else chat.vozLista()
         } catch (e: Throwable) {
             Log.e(TAG, "ARGOS nativo: el detector no cargó: ${e.message}", e)
             runOnUiThread { hud.text = "El detector no cargó: ${e.message}" }
@@ -410,6 +415,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         destroyed = true
         chat.close()
+        voz?.close()
         radio.para()
         super.onDestroy()
         // Primero el reloj rápido (deja de mandar trabajo al detector), luego

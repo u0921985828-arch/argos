@@ -368,3 +368,17 @@ las acciones del CI por SHA.
   las respuestas saldría del teléfono. Pendiente de decisión.
 - Radio: sin medir en un aparato real (el emulador del CI no tiene BLE ni
   satélites). La distancia a un dron necesitaría la posición del teléfono.
+
+## Voz propia (Piper), en curso
+- `core/Voz.kt`: fonética del español en Kotlin (sin espeak-ng nativo).
+  Medido contra espeak-ng 1.51: 98 % de palabras sueltas iguales, 90 % dentro
+  de frase. La referencia está en `core/src/test/resources/voz-espeak.tsv`.
+- Cifras, horas, unidades y siglas a palabras, con concordancia de género.
+- `VozPiper`: ruido de duración bajado a 0,3. Con el de fábrica (0,8), la
+  misma frase duraba de 2,2 a 10,9 s según la tirada; con 0,3, de 2,0 a 2,4.
+- En la app, `VozApp` habla con el modelo empaquetado si el APK lo trae y, si
+  no, con la voz del sistema.
+- `voces.yml` deja muestras de varias voces con su ficha de licencia en la
+  rama `voces-muestra`. Falta elegir una: la licencia importa para vender la
+  app (las MLS son CC BY 4.0, que pide atribución).
+- Desde este entorno huggingface.co está bloqueado; el CI sí llega.

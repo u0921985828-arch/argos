@@ -37,7 +37,8 @@ import java.util.Locale
  * no inventa.
  */
 class Chat(private val act: ComponentActivity, private val ask: () -> Ask?,
-           private val pedirMicro: () -> Unit, private val cerrar: () -> Unit) {
+           private val pedirMicro: () -> Unit, private val cerrar: () -> Unit,
+           private val vozPropia: () -> VozApp? = { null }) {
     val view: LinearLayout
     private val burbujas = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; setPadding(0, Ui.dp(act, 4), 0, Ui.dp(act, 4)) }
     private val scroll = ScrollView(act).apply { addView(burbujas) }
@@ -144,8 +145,9 @@ class Chat(private val act: ComponentActivity, private val ask: () -> Ask?,
     }
 
     private fun pintaEstado() = act.runOnUiThread {
+        val propia = vozPropia()
         estadoVoz.text = (if (escuchando) "escuchando… " else "") + "reconocimiento $reconocimiento · " +
-            (if (ttsOk) voz else "sin voz") + (if (reconocimiento == "en el aparato") " · nada sale del teléfono" else "")
+            (if (propia != null) "voz de ARGOS (${propia.nombre})" else if (ttsOk) voz else "sin voz") + (if (reconocimiento == "en el aparato") " · nada sale del teléfono" else "")
         mic.background = Ui.fondo(if (escuchando) Color.argb(230, 198, 40, 40) else Color.argb(200, 46, 125, 50), Ui.dp(act, 24).toFloat())
     }
 
@@ -180,7 +182,11 @@ class Chat(private val act: ComponentActivity, private val ask: () -> Ask?,
         val a = ask()
         val r = a?.ask(q) ?: "Aún estoy cargando el detector; pregúntame en un momento."
         di("argos", r)
-        if (porVoz && ttsOk) tts?.speak(r, TextToSpeech.QUEUE_FLUSH, null, "argos")
+        if (porVoz) {
+            val propia = vozPropia()
+            if (propia != null) propia.habla(r)
+            else if (ttsOk) tts?.speak(r, TextToSpeech.QUEUE_FLUSH, null, "argos")
+        }
         return r
     }
 
@@ -195,7 +201,7 @@ class Chat(private val act: ComponentActivity, private val ask: () -> Ask?,
         if (ContextCompat.checkSelfPermission(act, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             pedirMicro(); return
         }
-        tts?.stop()
+        tts?.stop(); vozPropia()?.para()
         recognizer?.destroy()
         val delAparato = enAparato() && !usarSistema
         val r = if (delAparato && Build.VERSION.SDK_INT >= 31) SpeechRecognizer.createOnDeviceSpeechRecognizer(act)
@@ -252,6 +258,9 @@ class Chat(private val act: ComponentActivity, private val ask: () -> Ask?,
             .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true))
         Log.i(TAG, "ARGOS chat: escuchando, reconocimiento $reconocimiento, idioma $idioma")
     }
+
+    /** La voz propia terminó de cargar: que el panel lo diga. */
+    fun vozLista() = pintaEstado()
 
     fun close() {
         recognizer?.destroy(); recognizer = null
