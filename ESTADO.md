@@ -248,3 +248,61 @@ Medido con bus y zidane oscurecidos a ×0,12: el detector NO pierde nada (bus
 Así que no se añade: una capa que no mejora ninguna medida es solo superficie
 para fallos. Los 0 objetos de la captura del teléfono no eran por la
 oscuridad: en esa habitación no había nadie.
+
+## Ataque a la compensación de cámara (revisión independiente) y arreglos
+Un revisor que no vio la construcción atacó el estimador con un mundo bilineal
+(`CasosCamara.kt`, tarea `:core:casosCamara`, en el CI). Arreglado y medido:
+
+| caso | antes | ahora |
+|---|---|---|
+| giro de muñeca ±1° | 150/150 frames con falsos, 1.526 pistas | 0 |
+| objeto grande cruzando con la cámara FIJA | 5 frames con falsos; luego «en mano» 167 frames | 0 y 0 |
+| arranque (fondo sin asentar) | «en mano» 26 frames en todo | 0 |
+| cámara en mano con persona (C1) | persona vista 100/150 | 150/150 |
+| deriva 0,25 y 0,5 px/f | — | 0 frames con falsos |
+
+Cómo: coste = fracción de píxeles que no casan (un objeto aporta solo su área);
+desplazamiento estimado por separado arriba y abajo (una traslación los mueve
+igual, un giro no); estado QUIETA/MOVIDA/INESTABLE con histéresis; con
+INESTABLE no se emite «movimiento», solo cajas del detector; INESTABLE exige
+desajuste repartido (≥ 11 de 16 celdas), no un objeto grande; la compensación
+no arranca hasta el frame 26, cuando el fondo ya está asentado.
+
+**Regla nueva — muestrear con el paso de la textura miente.** La medida de
+textura comparaba vecinos inmediatos con paso 3; con bloques de 6 px caía
+entera entre muestras (0,22 en vez de ~40), la escena se daba por lisa, el
+paneo no se compensaba y el modelo se reseteaba: de ahí los 100/150. La
+diferencia se toma ahora a la misma distancia que el paso.
+
+Velocidad y eventos: velocidad en coordenadas de ESCENA (se resta lo que se
+movió la cámara), escala anclada en coordenadas de IMAGEN; «detenido» por
+tiempo quieto acumulado, no por ventana; eventos y anomalía solo con clase del
+detector; la escala se rehace al asentarse un encuadre nuevo. La memoria
+guarda con un candado por proceso (Pipeline y pantalla de memoria abren cada
+una su `TrackStore`) y vuelca las pistas vivas al cerrar.
+
+### Acotado, no arreglado
+- Deriva de 0,1 px/f: 30/150 frames con falsos (sin compensar, 84). Los pasos
+  son enteros y la deriva es subpíxel; arreglarlo pide desplazar el fondo con
+  interpolación. El test impide que empeore (≤ 35).
+- Escena oscura de contraste 30 con temblor: 21/150, igual con y sin
+  compensación. No es del estimador. El test exige no empeorar.
+- Rayas periódicas en paneo: 0 falsos, pero 3 reinicios del fondo (el patrón
+  es ambiguo por naturaleza).
+
+## Seguridad (revisión con herramientas, 22-10)
+Semgrep (253 reglas Kotlin/Java/secretos/CI): 1 aviso, la actividad de
+arranque exportada, que es obligatoria. TruffleHog sobre todo el historial y
+los ficheros: 0 secretos. Arreglado, guiándose por OWASP MASVS:
+- El APK de entrega es release, no depurable (el CI lo comprueba con aapt). La
+  firma de tienda sale de los secretos `ARGOS_KEYSTORE_B64`,
+  `ARGOS_KEYSTORE_PASS`, `ARGOS_KEY_ALIAS` y `ARGOS_KEY_PASS`; sin ellos se usa
+  la clave de depuración del ejecutor, que CAMBIA en cada compilación: hay que
+  desinstalar antes de instalar un APK nuevo hasta que exista la clave propia.
+- `dataExtractionRules`: nada sale por copia en la nube ni por traspaso entre
+  móviles (en Android 12+ `allowBackup=false` no frenaba el traspaso).
+- Sin captura en la lista de recientes (API 33+). FLAG_SECURE NO se pone,
+  porque bloquearía las capturas que hace el usuario.
+- CI con permisos mínimos por trabajo.
+Pendiente: R8/ofuscación (necesita reglas medidas para ONNX Runtime) y fijar
+las acciones del CI por SHA.

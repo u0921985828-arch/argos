@@ -52,6 +52,17 @@ tasks.register<JavaExec>("camaraEnMano") {
     args = listOf("persona", "exigir")
 }
 
+// Ataques a la compensación de cámara: giro de muñeca, deriva subpíxel, objeto
+// grande con la cámara fija, pared lisa, rayas, escena oscura. Mundo sintético,
+// no necesita ficheros.
+tasks.register<JavaExec>("casosCamara") {
+    group = "verification"
+    description = "La compensación de cámara aguanta giros, derivas, objetos grandes y escenas sin textura."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.casos.CasosCamaraKt")
+    args = listOf("exigir")
+}
+
 // Zoom automático (C3 de la fase 4): cuadro entero con objetos grandes, teselas
 // con personas pequeñas. Necesita plaza.rgba de scripts/prep_plaza.py.
 tasks.register<JavaExec>("zoomAutomatico") {

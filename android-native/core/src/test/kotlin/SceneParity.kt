@@ -46,7 +46,7 @@ fun main(args: Array<String>) {
                 val (ent, sal) = lines[i + k].split(" | ")
                 val e = ent.split(" ").map { num(it) }
                 p.setStopThreshold(e[3])
-                p.update(e[0], e[1], e[2], escala)
+                p.update(e[0], e[1], e[0], e[1], e[2], escala)
                 val s = sal.split(" ")
                 val ok = igual(p.speedPx, num(s[0])) && igual(p.speedMs, num(s[1])) &&
                     igual(p.heading, num(s[2])) && igual(p.dwellS, num(s[3])) &&

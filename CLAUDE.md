@@ -308,7 +308,16 @@ cajas del detector entran en el seguimiento una vez por pasada, no en cada
 frame; entre pasadas la pista vive de la resta de fondo y conserva la clase
 del detector, y lo que se mueve sin ser detectado sigue como «movimiento».
 
+**Cámara en mano (nativa).** El fondo se compensa cuando la cámara se
+traslada y se congela cuando gira o tiembla: con la cámara INESTABLE no sale
+«movimiento», solo lo que ve el detector. La velocidad va en coordenadas de
+escena y la escala en coordenadas de imagen. Los ataques que lo prueban
+(giro, deriva, objeto grande con la cámara fija, pared lisa, rayas) están en
+`:core:casosCamara`. Una trampa que costó una tarde: medir la textura
+comparando vecinos con paso 3 hace invisible una textura de periodo 6.
+
 **Abierto:**
+- Deriva subpíxel lenta (0,1 px/f) — pasos enteros; 30/150 frames con falsos
 - Aceleración por hardware — WebGPU está en el código, sin medir por falta de GPU
 - Búsqueda semántica (CLIP) — pesos no accesibles para validar
 - Detector de cabezas para multitudes — necesita otro modelo

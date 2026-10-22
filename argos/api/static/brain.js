@@ -340,6 +340,7 @@ class Physics {
     this.dispPx = 0;
     this.straightness = 1;
     this.dwellS = 0;
+    this.stoppedS = 0;        // segundos PARADO sin interrupción, no edad
     this.stopped = false;
     this._x0 = null; this._y0 = null;
     this._px = null; this._py = null;
@@ -376,14 +377,19 @@ class Physics {
     this.dispPx = Math.hypot(cx - this._x0, by - this._y0);
     this.straightness = this.pathPx > 1 ? this.dispPx / this.pathPx : 1;
     this.dwellS = tSec - (this._tStart ?? (this._tStart = tSec));
-    // "Parado" se juzga contra el tamaño del propio objeto, no contra un umbral
-    // en píxeles: así vale igual para alguien al fondo y para alguien delante.
-    this.stopped = this.speedPx < this._stopThresh;
+    // Parado = de verdad quieto (con escala, <0,35 m/s; un paso corto es ~1
+    // m/s), y SIGUE parado: el cronómetro se reinicia al moverse. Antes se
+    // juzgaba solo por píxeles y una persona andando salía «detenida».
+    const quieto = Number.isFinite(this.speedMs) ? this.speedMs < 0.35
+                                                 : this.speedPx < this._stopThresh;
+    this._stoppedSince = quieto ? (this._stoppedSince ?? tSec) : null;
+    this.stopped = quieto;
+    this.stoppedS = this._stoppedSince !== null ? tSec - this._stoppedSince : 0;
     this._px = cx; this._py = by; this._t = tSec;
   }
 
   setStopThreshold(objHeightPx) {
-    this._stopThresh = Math.max(1.5, objHeightPx * 0.35);
+    this._stopThresh = Math.max(0.8, objHeightPx * 0.12);
   }
 
   summary() {
@@ -394,6 +400,7 @@ class Physics {
       accel_px_s2: +Math.hypot(this.ax, this.ay).toFixed(1),
       heading_deg: Number.isFinite(this.heading) ? Math.round(this.heading) : null,
       dwell_s: +this.dwellS.toFixed(1),
+      stopped_s: +this.stoppedS.toFixed(1),
       straightness: +this.straightness.toFixed(3),
       stopped: this.stopped,
     };
@@ -511,7 +518,9 @@ class Brain {
       // de toda la sesión con farolas y marcos de puerta.
       if (t.klass === "person" && t.klassSrc === "det") this._accumulateStature(t, by, hpx);
       if (this._fpVideo) this._accumulateFingerprint(t, this._fpVideo, this._fpRoi);
-      this._checkEvents(t, p, tSec);
+      // Eventos solo de lo que el detector clasificó: «detenido» sobre una
+      // mancha de «movimiento» es una alerta sobre nada.
+      if (t.klassSrc === "det") this._checkEvents(t, p, tSec);
     }
     // Las trayectorias muertas se sueltan: sin esto la memoria crece toda la
     // sesión con estado de objetos que ya no existen.
@@ -662,7 +671,7 @@ class Brain {
       if (this.events.length > 60) this.events.pop();
     };
 
-    if (p.stopped && p.dwellS > this.cfg.eventStopS) push("detenido", {dwell_s: +p.dwellS.toFixed(1)});
+    if (p.stoppedS > this.cfg.eventStopS) push("detenido", {stopped_s: +p.stoppedS.toFixed(1)});
     if (Number.isFinite(p.speedMs) && p.speedMs > this.cfg.eventRunMs
         && track.klass === "person" && track.klassSrc === "det") {
       push("corriendo", {speed_m_s: +p.speedMs.toFixed(1)});

@@ -202,7 +202,7 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
         // mueva) y escala métrica solo con la cámara quieta.
         val tSec = SystemClock.elapsedRealtime() / 1000.0
         val info = brain.update(engine.tracker.tracks, engine.tracker.minHits, tSec, sc, h.toDouble() / ah,
-                                w, h, engine.camX * sc, engine.camY * sc, !engine.cameraMoving)
+                                w, h, engine.camX * sc, engine.camY * sc, !engine.cameraMoving, engine.justSettled)
         if (tSec - lastSave > 60) {
             lastSave = tSec
             saveBehaviour(false)
@@ -246,14 +246,24 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
         try { detExec.execute {
             try {
                 val t0 = System.nanoTime()
+                // Una pasada es del modo PRINCIPAL o un SONDEO del otro. El
+                // sondeo solo sirve para decidir el modo: si sus (pocas) cajas
+                // entraran en la memoria del seguimiento, una de cada cuatro
+                // pasadas lo dejaría casi sin cajas durante ~1 s —más que el
+                // margen de una pista— y en una multitud las pistas morirían y
+                // renacerían con id nuevo. Así que el sondeo NO toca la memoria.
+                val modoPrincipal = if (autoZoomOn) autoZoom.mode else zoom
                 val z = if (autoZoomOn) autoZoom.next() else zoom
+                val esSondeo = autoZoomOn && z != modoPrincipal
                 val dets: List<DetBox> = detector.detect(buf, rowStride, w, h, z)
                 if (autoZoomOn) autoZoom.report(z, dets)
                 lastZoom = z
                 lastTiles = detector.lastTiles
                 val ms = (System.nanoTime() - t0) / 1e6
-                memory.update(dets.map { it.shifted(camX, camY) }, SystemClock.elapsedRealtime().toDouble())
-                fresh.set(true)
+                if (!esSondeo) {
+                    memory.update(dets.map { it.shifted(camX, camY) }, SystemClock.elapsedRealtime().toDouble())
+                    fresh.set(true)
+                }
                 val a = if (inferences == 0L) 1.0 else 0.2
                 detMs = detMs * (1 - a) + ms * a
                 inferMs = inferMs * (1 - a) + detector.lastInferMs * a
@@ -277,6 +287,8 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
      */
     fun close() {
         saveBehaviour(true)
+        // Lo que estaba en pantalla al cerrar también se guarda.
+        store?.let { s -> brain.flushLive().forEach { runCatching { s.save(it, t0Epoch) } } }
         ioExec.shutdown()
         detExec.shutdown()
         try { detExec.awaitTermination(3, java.util.concurrent.TimeUnit.SECONDS) }

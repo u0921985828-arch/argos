@@ -239,7 +239,7 @@ class MainActivity : ComponentActivity() {
         val ev = f.events.firstOrNull()?.let { "último: ${it.kind} #${it.id} · ${it.detail}" } ?: "sin eventos"
         val normal = if (f.behaviourReady) "lo normal de la escena: aprendido (${f.behaviourMature} zonas)"
                      else "lo normal de la escena: aprendiendo (${f.behaviourMature} zonas)"
-        val txt = "personas %d · vehículos %d · hoy %d personas distintas\n".format(loc, f.people, f.vehicles, f.peopleSeen) +
+        val txt = "personas %d · vehículos %d · %d en esta sesión\n".format(loc, f.people, f.vehicles, f.peopleSeen) +
             escena + "\n" + normal + "\n" + ev + "\n" +
             "%.0f fps · análisis %.1f ms · detector %.0f ms (%d tesela%s)\n".format(
                 loc, p.fps, p.engineMs, p.detMs, p.lastTiles, if (p.lastTiles == 1) "" else "s") +

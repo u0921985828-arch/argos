@@ -189,6 +189,8 @@ class SceneScale(
         return this
     }
 
+    fun reset() { valid = false; a = 0.0; b = 0.0; sigma = 0.0; n = 0; cx = 0.0; usesX = false; classScale.clear() }
+
     fun expected(y: Double, cls: String = "person", x: Double = 0.0) =
         (a * y + cx * x + b) * (classScale[cls] ?: 1.0)
 
@@ -214,13 +216,25 @@ class Physics {
     var speedPx = 0.0; var speedMs = Double.NaN; var heading = Double.NaN
     var pathPx = 0.0; var dispPx = 0.0; var straightness = 1.0
     var dwellS = 0.0; var stopped = false
+    /** Segundos PARADO sin interrupción, no la edad de la pista. */
+    var stoppedS = 0.0
     private var x0 = 0.0; private var y0 = 0.0
     private var px = 0.0; private var py = 0.0
     private var t: Double? = null
     private var tStart: Double? = null
+    private var stoppedSince: Double? = null
     private var stopThresh = Double.NaN
 
-    fun update(cx: Double, by: Double, tSec: Double, scale: SceneScale?) {
+    /**
+     * @param cx,by      posición en coordenadas de ESCENA (imagen + desplazamiento
+     *   de la cámara): la velocidad en píxeles sigue siendo buena aunque el móvil
+     *   se mueva, porque un paneo no parece una carrera.
+     * @param anchorCx,anchorBy  LA MISMA posición en coordenadas de IMAGEN, que es
+     *   donde se aprendió la escala fila→tamaño. Usar la de escena hacía que la
+     *   velocidad en m/s dependiera de cuánto se hubiera movido el móvil antes
+     *   (medido: 0,80 a 1,36 m/s para 1,20 m/s reales, o NaN).
+     */
+    fun update(cx: Double, by: Double, anchorCx: Double, anchorBy: Double, tSec: Double, scale: SceneScale?) {
         val tp = t
         if (tp == null) { x0 = cx; y0 = by; px = cx; py = by; t = tSec; return }
         val dt = max(1e-3, tSec - tp)
@@ -236,17 +250,25 @@ class Physics {
         ay += (((vy - pvy) / dt) - ay) * ka
         speedPx = hypot(vx, vy)
         heading = (atan2(vy, vx) * 180 / Math.PI + 360) % 360
-        val mpp = scale?.metersPerPixel(by, cx) ?: Double.NaN
+        val mpp = scale?.metersPerPixel(anchorBy, anchorCx) ?: Double.NaN
         speedMs = if (mpp.isFinite()) speedPx * mpp else Double.NaN
         dispPx = hypot(cx - x0, by - y0)
         straightness = if (pathPx > 1) dispPx / pathPx else 1.0
         if (tStart == null) tStart = tSec
         dwellS = tSec - tStart!!
-        stopped = speedPx < stopThresh
+        // Parado = de verdad quieto, no simplemente visto hace rato. Con escala
+        // válida, por debajo de 0,35 m/s (un paso corto es ~1 m/s); sin ella,
+        // una fracción pequeña de la altura del objeto. Y tiene que SEGUIR
+        // parado: el cronómetro se reinicia en cuanto se mueve.
+        val quieto = if (speedMs.isFinite()) speedMs < 0.35 else speedPx < stopThresh
+        stoppedSince = if (quieto) (stoppedSince ?: tSec) else null
+        stopped = quieto
+        stoppedS = stoppedSince?.let { tSec - it } ?: 0.0
         px = cx; py = by; t = tSec
     }
 
-    fun setStopThreshold(objHeightPx: Double) { stopThresh = max(1.5, objHeightPx * 0.35) }
+    // Suelo pequeño: una persona al fondo mide poco y aun así puede estar quieta.
+    fun setStopThreshold(objHeightPx: Double) { stopThresh = max(0.8, objHeightPx * 0.12) }
 }
 
 /**
@@ -311,6 +333,15 @@ class SceneBrain(
     /** Trayectorias que han terminado desde la última vez que se recogieron. */
     val finished = ArrayList<Trajectory>()
 
+    /** Vuelca los recorridos en curso al cerrar, para no perder lo que estaba
+     *  en pantalla. Vacía las pistas: no se guardan dos veces. */
+    fun flushLive(): List<Trajectory> {
+        val out = paths.values.filter { it.n >= 3 }
+            .map { Trajectory(-1, it.cls, it.det, it.start, it.end, it.vmax, it.pts, it.evs) }
+        paths.clear()
+        return out
+    }
+
     /** Pistas con clase del detector en pantalla ahora. */
     var people = 0; private set
     var vehicles = 0; private set
@@ -329,7 +360,14 @@ class SceneBrain(
      * @param still la cámara está quieta: solo entonces se aprende la escala
      */
     fun update(tracks: List<Track>, minHits: Int, tSec: Double, sx: Double, sy: Double,
-               srcW: Int, srcH: Int, camX: Double, camY: Double, still: Boolean): List<TrackInfo> {
+               srcW: Int, srcH: Int, camX: Double, camY: Double, still: Boolean,
+               reanchor: Boolean = false): List<TrackInfo> {
+        if (reanchor) {
+            // Encuadre nuevo y estable: la escala y lo aprendido del anterior ya
+            // no corresponden a este trozo de suelo. Se empieza de cero sin
+            // mezclar muestras de dos vistas.
+            trajectories.clear(); obs.clear(); scale.reset(); behaviour = null
+        }
         val live = HashSet<Int>()
         var p0 = 0; var v0 = 0; var u0 = 0
         // Lo aprendido vale para un encuadre: si cambia la resolución de la
@@ -355,7 +393,8 @@ class SceneBrain(
             val byImg = t.y2 * sy
             val hpx = (t.y2 - t.y1) * sy
             p.setStopThreshold(hpx)
-            p.update(cxImg + camX, byImg + camY, tSec, if (still) scale else null)
+            // Velocidad en coordenadas de escena; escala anclada en las de imagen.
+            p.update(cxImg + camX, byImg + camY, cxImg, byImg, tSec, if (still) scale else null)
             if (still) {
                 obs.getOrPut(t.id) { ArrayList() }.let {
                     it.add(doubleArrayOf(cxImg, byImg, hpx)); if (it.size > 240) it.removeAt(0)
@@ -367,7 +406,11 @@ class SceneBrain(
                 seen.getOrPut(t.klass) { HashSet() }.add(t.id)
                 when (t.klass) { "person" -> p0++; "vehicle", "bike" -> v0++ }
             } else u0++
-            checkEvents(t, p, tSec, sy)
+            // Los eventos (detenido, corriendo, merodeo, decorado, anomalías)
+            // solo se afirman de algo que el DETECTOR clasificó. Una mancha de
+            // «movimiento» no es una persona, y «detenido» sobre una mancha es
+            // una alerta sobre nada.
+            if (t.klassSrc == "det") checkEvents(t, p, tSec, sy)
             path.end = tSec; path.cls = t.klass; path.det = path.det || t.klassSrc == "det"
             if (!still) path.moved = true
             if (p.speedMs.isFinite() && !(p.speedMs <= path.vmax)) path.vmax = p.speedMs
@@ -378,7 +421,7 @@ class SceneBrain(
             // Puntuación en vivo, una vez por segundo y pista: cuánto se aparta
             // de lo que suele pasar ahí. Con la cámara quieta; moviéndose, las
             // celdas no corresponden al mismo trozo de suelo.
-            if (still && !path.moved && path.pts.size >= 6 && (frameN + t.id) % 30 == 0)
+            if (path.det && still && !path.moved && path.pts.size >= 6 && (frameN + t.id) % 30 == 0)
                 path.anomaly = beh.score(pathOf(path)).takeIf { it.mature }
             out.add(TrackInfo(t.id, t.klass, t.klassSrc == "det", p.speedMs, p.speedPx, p.dwellS,
                               p.stopped, statureOf(t.id), path.anomaly))
@@ -388,7 +431,9 @@ class SceneBrain(
         // para la escala, que ocupa unos bytes en vez de cientos.
         for (id in paths.keys.toList()) if (id !in live) {
             val pa = paths.remove(id)!!
-            if (!pa.moved && pa.pts.size >= 4) {
+            // Solo se aprende de —y se puntúa— lo que el detector clasificó y
+            // se recorrió con la cámara quieta.
+            if (pa.det && !pa.moved && pa.pts.size >= 4) {
                 // Se puntúa ANTES de aprender: un recorrido no puede servir de
                 // norma para sí mismo.
                 val s = beh.score(pathOf(pa))
@@ -465,7 +510,8 @@ class SceneBrain(
             paths[t.id]?.evs?.add(kind)
             if (events.size > 60) events.removeLast()
         }
-        if (p.stopped && p.dwellS > eventStopS) push("detenido", "%.1f s".format(java.util.Locale.ROOT, p.dwellS))
+        // "detenido" = parado DE VERDAD y durante un rato, no "visto hace rato".
+        if (p.stoppedS > eventStopS) push("detenido", "%.1f s".format(java.util.Locale.ROOT, p.stoppedS))
         if (p.speedMs.isFinite() && p.speedMs > eventRunMs && t.klass == "person" && t.klassSrc == "det")
             push("corriendo", "%.1f m/s".format(java.util.Locale.ROOT, p.speedMs))
         if (p.dwellS > loiterS && p.straightness < loiterStraightness)

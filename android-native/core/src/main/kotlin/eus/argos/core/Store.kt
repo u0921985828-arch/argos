@@ -19,26 +19,30 @@ class TrackStore(private val dir: File, private val zone: ZoneId = ZoneId.system
 
     init { dir.mkdirs() }
 
+    // El candado va por PROCESO, no por instancia: la pantalla de memoria crea
+    // su propio TrackStore sobre el mismo directorio, y `@Synchronized` (que es
+    // por objeto) no excluiría un guardado del Pipeline contra un borrado suyo.
+    private companion object { val LOCK = Any() }
+
     private fun fileFor(day: LocalDate) = File(dir, "trayectorias-$day.tsv")
     private fun dayOf(epochS: Double) = Instant.ofEpochMilli((epochS * 1000).toLong()).atZone(zone).toLocalDate()
 
     /** Retención: ficheros de días anteriores a hoy − 30. Devuelve cuántos borró. */
-    fun applyRetention(nowEpochS: Double): Int {
+    fun applyRetention(nowEpochS: Double): Int = synchronized(LOCK) {
         val limit = dayOf(nowEpochS).minusDays(retentionDays)
         var n = 0
         dir.listFiles { f -> f.name.startsWith("trayectorias-") && f.name.endsWith(".tsv") }?.forEach { f ->
             val d = runCatching { LocalDate.parse(f.name.removePrefix("trayectorias-").removeSuffix(".tsv")) }.getOrNull()
             if (d != null && d.isBefore(limit) && f.delete()) n++
         }
-        return n
+        n
     }
 
     /**
      * Guarda una trayectoria. `t0EpochS` convierte los tiempos de la sesión
      * (segundos desde que arrancó) a hora real.
      */
-    @Synchronized
-    fun save(tr: Trajectory, t0EpochS: Double) {
+    fun save(tr: Trajectory, t0EpochS: Double) = synchronized(LOCK) {
         val start = t0EpochS + tr.start; val end = t0EpochS + tr.end
         val pts = tr.points.joinToString(";") { "%.1f,%.0f,%.0f".format(java.util.Locale.ROOT, t0EpochS + it[0], it[1], it[2]) }
         val line = listOf(
@@ -96,19 +100,17 @@ class TrackStore(private val dir: File, private val zone: ZoneId = ZoneId.system
     }
 
     /** Borrado por objeto: la línea desaparece del fichero de su día. */
-    @Synchronized
-    fun delete(key: String): Boolean {
-        val ms = key.substringBefore("-").toLongOrNull() ?: return false
+    fun delete(key: String): Boolean = synchronized(LOCK) {
+        val ms = key.substringBefore("-").toLongOrNull() ?: return@synchronized false
         val f = fileFor(dayOf(ms / 1000.0))
-        if (!f.exists()) return false
-        val keep = f.readLines().filterNot { it.startsWith("$key\t") }
-        val changed = keep.size != f.readLines().size
+        if (!f.exists()) return@synchronized false
+        val all = f.readLines()
+        val keep = all.filterNot { it.startsWith("$key\t") }
         f.writeText(if (keep.isEmpty()) "" else keep.joinToString("\n") + "\n")
-        return changed
+        keep.size != all.size
     }
 
-    @Synchronized
-    fun deleteAll() {
+    fun deleteAll() = synchronized<Unit>(LOCK) {
         dir.listFiles { f -> f.name.startsWith("trayectorias-") }?.forEach { it.delete() }
     }
 }

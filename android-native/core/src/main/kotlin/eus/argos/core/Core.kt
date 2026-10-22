@@ -472,12 +472,22 @@ class Engine(
      */
     var egoMotion = false
     private var motion: CameraMotion? = null
+    /** La cámara hace algo que la compensación de traslación no explica (giro,
+     *  temblor, escena ambigua): se congela el aprendizaje y NO se emiten
+     *  pistas de «movimiento» inventadas. Con histéresis para no parpadear. */
+    var cameraUnstable = false; private set
+    /** Un solo frame: la cámara acaba de asentarse tras moverse. El cerebro
+     *  reinicia la escala para el nuevo encuadre. */
+    var justSettled = false; private set
+    private var unstableRun = 0
+    private var stillRun = 0
+    private var wasMoving = false
     /** Desplazamiento acumulado del contenido, en píxeles de análisis. */
     var camX = 0.0; private set
     var camY = 0.0; private set
     private var lastMove = -1000
     /** La cámara se ha movido en el último medio segundo, más o menos. */
-    val cameraMoving: Boolean get() = frameIdx - lastMove < 15
+    val cameraMoving: Boolean get() = frameIdx - lastMove < 15 || cameraUnstable
     val analysisW: Int get() = w
 
     private fun ensure(fw: Int, fh: Int) {
@@ -501,17 +511,43 @@ class Engine(
         val t0 = System.nanoTime()
         ensure(fw, fh)
         val model = bg!!
-        if (egoMotion && model.frames > 5) {
+        justSettled = false
+        var suppressForma = false
+        var justShifted = false
+        if (egoMotion && model.frames > 25) {
             val m = motion!!
-            if (m.estimate(rgba, model.mean)) {
-                model.shift(m.sx, m.sy)
-                // Lo que estaba en x+sx está ahora en x: las pistas se mueven
-                // con la imagen, o la asociación las perdería en cada paso.
-                tracker.shift(-m.sx.toDouble(), -m.sy.toDouble())
-                camX += m.sx; camY += m.sy
-                lastMove = frameIdx
+            when (m.estimate(rgba, model.mean)) {
+                CameraMotion.State.MOVED -> {
+                    model.shift(m.sx, m.sy)
+                    // Lo que estaba en x+sx está ahora en x: las pistas se mueven
+                    // con la imagen, o la asociación las perdería en cada paso.
+                    tracker.shift(-m.sx.toDouble(), -m.sy.toDouble())
+                    camX += m.sx; camY += m.sy
+                    lastMove = frameIdx
+                    unstableRun = 0; stillRun = 0; wasMoving = true
+                    justShifted = true
+                }
+                CameraMotion.State.UNSTABLE -> {
+                    // No se puede compensar un giro o un temblor con una sola
+                    // traslación. En vez de mover el fondo a ciegas —y emitir la
+                    // habitación entera como «movimiento», que es lo que se veía
+                    // con el móvil en la mano— se congela: el detector sigue
+                    // diciendo QUÉ hay, pero la resta de fondo no inventa nada.
+                    lastMove = frameIdx; stillRun = 0; wasMoving = true
+                    if (++unstableRun >= 3) cameraUnstable = true
+                }
+                CameraMotion.State.STILL -> {
+                    unstableRun = 0
+                    if (cameraUnstable) { if (++stillRun >= 3) cameraUnstable = false }
+                    if (wasMoving && !cameraUnstable && ++stillRun >= 8) {
+                        // Encuadre nuevo y estable: la escala del anterior ya no
+                        // vale. Se avisa una vez para rehacerla desde cero.
+                        wasMoving = false; justSettled = true
+                    }
+                }
             }
         }
+        if (cameraUnstable) suppressForma = true
         val mask = model.update(rgba)
 
         // Más de un tercio del cuadro en primer plano no son objetos: es que la
@@ -528,7 +564,10 @@ class Engine(
         openMask(mask, w, h, 1, scratch)
         closeMask(mask, w, h, 2, scratch)
 
-        val minArea = maxOf(12, Math.round(minAreaFrac * w * h).toInt())
+        // Tras compensar un paneo queda un desalineo subpíxel que deja tiras
+        // finas de primer plano en los bordes. Subiendo el área mínima esas
+        // tiras no llegan a pista, pero un objeto sólido (una persona) sí.
+        val minArea = maxOf(12, Math.round(minAreaFrac * w * h).toInt() * (if (justShifted || cameraMoving) 4 else 1))
         val regions = components(mask, w, h, minArea)
 
         val sx = srcW.toDouble() / w
@@ -547,9 +586,10 @@ class Engine(
             }
             // Lo que se mueve y el detector no ha visto sigue existiendo: se
             // conservan las regiones que no caen mayormente dentro de una caja
-            // del detector, como «movimiento».
+            // del detector, como «movimiento». Salvo con la cámara inestable:
+            // ahí la resta de fondo es ruido y solo valen las cajas del detector.
             val out = ArrayList(fromDet)
-            for (r in regions) {
+            for (r in if (suppressForma) emptyList() else regions) {
                 val rx1 = r.x1.toDouble(); val ry1 = r.y1.toDouble()
                 val rx2 = (r.x2 + 1).toDouble(); val ry2 = (r.y2 + 1).toDouble()
                 val ra = (rx2 - rx1) * (ry2 - ry1)
@@ -561,7 +601,7 @@ class Engine(
                 if (!dentro) out.add(Det(rx1, ry1, rx2, ry2, r.fill))
             }
             out
-        } else regions.map {
+        } else if (suppressForma) emptyList() else regions.map {
             Det(it.x1.toDouble(), it.y1.toDouble(),
                 (it.x2 + 1).toDouble(), (it.y2 + 1).toDouble(), it.fill)
         }
@@ -645,31 +685,90 @@ fun downscaleRgba(src: ByteArray, rowStride: Int, sw: Int, sh: Int,
  * arrastrar la estimación.
  */
 class CameraMotion(private val w: Int, private val h: Int, private val range: Int = 24) {
+    /** QUIETA: nada que compensar (o escena demasiado lisa para saberlo).
+     *  MOVIDA: traslación limpia, se compensa. INESTABLE: la imagen cambió y
+     *  ninguna traslación la explica (giro, temblor, patrón repetido). */
+    enum class State { STILL, MOVED, UNSTABLE }
+
     private val luma = FloatArray(w * h)
     var sx = 0; private set
     var sy = 0; private set
-    /** Mejora del ajuste frente a no moverse; ~1 = sin textura o sin movimiento. */
-    var gain = 1.0; private set
 
-    private fun cost(ref: FloatArray, dx: Int, dy: Int, step: Int): Double {
-        var s = 0.0; var n = 0
+    /**
+     * Fracción de píxeles que NO casan con el fondo tras el desplazamiento
+     * (dx, dy). No la media de la diferencia: un objeto grande que se mueve
+     * contribuye solo su área (una minoría), así que no arrastra la estimación
+     * hacia su desplazamiento. Un paneo verdadero casa casi todo y da ~0.
+     */
+    /**
+     * Fracción de píxeles que NO casan con el fondo tras el desplazamiento
+     * (dx, dy), contando solo filas en [y0, y1). No la media de la diferencia:
+     * un objeto grande que se mueve contribuye solo su área (una minoría) y no
+     * arrastra la estimación; una traslación verdadera casa casi todo y da ~0.
+     */
+    private fun cost(ref: FloatArray, dx: Int, dy: Int, step: Int, y0: Int, y1: Int,
+                     x0: Int = 0, x1: Int = w): Double {
+        var mal = 0; var n = 0
         val m = range + 2
-        var y = m
-        while (y < h - m) {
+        var y = maxOf(m, y0)
+        val yf = minOf(h - m, y1)
+        while (y < yf) {
             val ry = y + dy
-            var x = m
-            while (x < w - m) {
-                val d = Math.abs(luma[y * w + x] - ref[ry * w + x + dx])
-                s += if (d > 40f) 40.0 else d.toDouble()
+            var x = maxOf(m, x0)
+            val xf = minOf(w - m, x1)
+            while (x < xf) {
+                if (Math.abs(luma[y * w + x] - ref[ry * w + x + dx]) > 18f) mal++
                 n++
                 x += step
             }
             y += step
         }
+        return if (n == 0) 1.0 else mal.toDouble() / n
+    }
+
+    private fun texture(): Double {
+        var s = 0.0; var n = 0
+        // La diferencia se toma a la misma distancia que el paso de muestreo.
+        // Con vecinos inmediatos y paso 3, una textura de periodo múltiplo de 3
+        // cae entera entre muestras: bloques de 6 px dieron 0,22 en ciertos
+        // desplazamientos, la escena se declaró lisa y el paneo no se compensó.
+        var y = 2
+        while (y < h - 5) {
+            var x = 2
+            while (x < w - 5) {
+                val i = y * w + x
+                s += Math.abs(luma[i + 3] - luma[i]) + Math.abs(luma[i + 3 * w] - luma[i])
+                n++; x += 3
+            }
+            y += 3
+        }
         return if (n == 0) 0.0 else s / n
     }
 
-    fun estimate(rgba: ByteArray, ref: FloatArray): Boolean {
+    /** Mejor desplazamiento entero en una banda de filas: grueso y luego fino. */
+    private fun mejorEnBanda(ref: FloatArray, y0: Int, y1: Int): IntArray {
+        var best = cost(ref, 0, 0, 4, y0, y1); var bx = 0; var by = 0
+        var dy = -range
+        while (dy <= range) {
+            var dx = -range
+            while (dx <= range) {
+                val c = cost(ref, dx, dy, 4, y0, y1)
+                if (c < best) { best = c; bx = dx; by = dy }
+                dx += 4
+            }
+            dy += 4
+        }
+        val cx = bx; val cy = by
+        for (ddy in -3..3) for (ddx in -3..3) {
+            val dx2 = cx + ddx; val dy2 = cy + ddy
+            if (Math.abs(dx2) > range || Math.abs(dy2) > range) continue
+            val c = cost(ref, dx2, dy2, 2, y0, y1)
+            if (c < best) { best = c; bx = dx2; by = dy2 }
+        }
+        return intArrayOf(bx, by)
+    }
+
+    fun estimate(rgba: ByteArray, ref: FloatArray): State {
         var p = 0
         for (i in 0 until w * h) {
             val r = rgba[p].toInt() and 0xFF; val g = rgba[p + 1].toInt() and 0xFF
@@ -677,34 +776,42 @@ class CameraMotion(private val w: Int, private val h: Int, private val range: In
             luma[i] = ((r * 77 + g * 150 + b * 29) shr 8).toFloat()
             p += 4
         }
-        val c0 = cost(ref, 0, 0, 2)
-        var best = c0; var bx = 0; var by = 0
-        // Gruesa: rejilla de 4 px, muestreo cada 4.
-        var dy = -range
-        while (dy <= range) {
-            var dx = -range
-            while (dx <= range) {
-                val c = cost(ref, dx, dy, 4)
-                if (c < best) { best = c; bx = dx; by = dy }
-                dx += 4
-            }
-            dy += 4
-        }
-        // Fina: ±3 alrededor, muestreo cada 2.
-        val cx = bx; val cy = by
-        best = cost(ref, cx, cy, 2)
-        for (ddy in -3..3) for (ddx in -3..3) {
-            val dx2 = cx + ddx; val dy2 = cy + ddy
-            if (Math.abs(dx2) > range || Math.abs(dy2) > range) continue
-            val c = cost(ref, dx2, dy2, 2)
-            if (c < best) { best = c; bx = dx2; by = dy2 }
-        }
-        gain = if (best <= 1e-9) 1.0 else c0 / best
-        // Solo se acepta un desplazamiento que explique la imagen claramente
-        // mejor que quedarse quieto: en una pared lisa todo da igual y mover el
-        // fondo a ciegas sería peor que no moverlo.
-        if ((bx != 0 || by != 0) && gain > 1.15) { sx = bx; sy = by; return true }
         sx = 0; sy = 0
-        return false
+        // Escena sin textura (una pared): no se puede saber si se ha movido.
+        // Se declara QUIETA en vez de inventar un movimiento. Medido: sin esto,
+        // «cámara en mano» en 368 de 400 frames sobre una pared lisa fija.
+        if (texture() < 3.0) return State.STILL
+
+        val c0 = cost(ref, 0, 0, 2, 0, h)
+        // El desplazamiento se estima por separado en la mitad de arriba y la de
+        // abajo. Una TRASLACIÓN mueve las dos igual; un GIRO de muñeca las mueve
+        // en sentidos opuestos. Así se distingue un paneo (que se compensa) de
+        // un giro o un temblor (que no se puede compensar con una traslación).
+        val top = mejorEnBanda(ref, range + 2, h / 2)
+        val bot = mejorEnBanda(ref, h / 2, h - range - 2)
+        val coinciden = Math.abs(top[0] - bot[0]) <= 2 && Math.abs(top[1] - bot[1]) <= 2
+        val bx = Math.round((top[0] + bot[0]) / 2.0).toInt()
+        val by = Math.round((top[1] + bot[1]) / 2.0).toInt()
+        val best = cost(ref, bx, by, 2, 0, h)
+
+        val movido = bx != 0 || by != 0
+        val mejora = best < c0 - 0.08       // una minoría (un objeto) no mueve el total
+        // La traslación explica casi todo el cuadro. Un paso entero deja hasta
+        // medio píxel de residuo, que en una textura fina pasa del 18 %: se
+        // acepta también si el desajuste baja a menos de dos tercios.
+        val limpio = best < 0.18 || (best < 0.30 && best < c0 * 0.65)
+        if (movido && coinciden && mejora && limpio) { sx = bx; sy = by; return State.MOVED }
+        // Mucho del cuadro no casa y ninguna traslación lo explica: giro,
+        // temblor o ambigüedad. No se compensa y se avisa de inestabilidad.
+        // Pero solo si el desajuste está repartido: un autobús que pasa cerca
+        // ocupa mucho cuadro y no casa, pero deja quieta la mayor parte. Se
+        // parte en 4×4 y hace falta desajuste en más de la mitad de las celdas.
+        if (c0 > 0.22) {
+            var revueltos = 0
+            for (qy in 0..3) for (qx in 0..3)
+                if (cost(ref, 0, 0, 2, qy * h / 4, (qy + 1) * h / 4, qx * w / 4, (qx + 1) * w / 4) > 0.15) revueltos++
+            if (revueltos >= 11) return State.UNSTABLE
+        }
+        return State.STILL
     }
 }
