@@ -14,4 +14,4 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - run: python3 .github/scripts/sondas-camaras.py
+      - run: python3 .github/scripts/sondas-camaras.py es
