@@ -92,6 +92,20 @@ jobs:
             https://raw.githubusercontent.com/pjreddie/darknet/master/data/dog.jpg
           test "$(stat -c%s autoprueba.jpg)" -gt 100000
 
+      # La voz de ARGOS: Piper es_ES «davefx», calidad media, CC0. Se fija por
+      # su sha256: si en Hugging Face cambia el fichero, el CI lo dice en vez
+      # de meter en el APK una voz distinta.
+      - name: Fetch ARGOS voice (Piper es_ES davefx medium)
+        run: |
+          set -e
+          base=https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/davefx/medium
+          curl -fsSL -o voz.onnx "$base/es_ES-davefx-medium.onnx"
+          curl -fsSL -o voz.onnx.json "$base/es_ES-davefx-medium.onnx.json"
+          curl -fsSL -o voz-ficha.txt "$base/MODEL_CARD"
+          echo "6658b03b1a6c316ee4c265a9896abc1393353c2d9e1bca7d66c2c442e222a917  voz.onnx" | sha256sum -c -
+          python3 -c "import json; d=json.load(open('voz.onnx.json')); assert 'phoneme_id_map' in d"
+          grep -q "CC0" voz-ficha.txt
+
       - name: Ensure Gradle wrapper
         working-directory: android-native
         run: |
@@ -161,7 +175,7 @@ jobs:
             echo "::error::el APK de entrega es depurable"; exit 1
           fi
           unzip -l "$APK" > contenido.txt
-          for f in assets/yolox_nano.onnx assets/autoprueba.jpg \
+          for f in assets/yolox_nano.onnx assets/autoprueba.jpg assets/voz.onnx assets/voz.onnx.json assets/voz-ficha.txt \
                    lib/arm64-v8a/libonnxruntime.so lib/x86_64/libonnxruntime.so; do
             grep -q "$f" contenido.txt || { echo "::error::falta $f en el APK"; exit 1; }
           done

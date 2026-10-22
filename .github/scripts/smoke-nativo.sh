@@ -77,6 +77,20 @@ if [ -z "${inf:-}" ] || [ "$inf" -eq 0 ]; then
     exit 1
 fi
 # La escena y la memoria: que el cerebro corre y la retención se aplicó.
+# La voz carga después del detector (copia 63 MB y abre el modelo): se le dan
+# hasta 60 s antes de darla por perdida.
+for i in $(seq 1 30); do
+    adb logcat -d -s ARGOS:V AndroidRuntime:E > logcat.txt || true
+    grep -q 'ARGOS voz: \(Piper\|no cargó\)' logcat.txt && break
+    sleep 2
+done
+if ! grep -q 'ARGOS voz: Piper' logcat.txt; then
+    echo "::error::la voz de ARGOS no cargó"
+    grep 'ARGOS voz' logcat.txt || true
+    exit 1
+fi
+grep 'ARGOS voz' logcat.txt | tail -1
+
 if ! grep -q 'ARGOS nativo memoria: retención aplicada' logcat.txt; then
     echo "::error::la memoria no se abrió (sin línea de retención)"
     exit 1
