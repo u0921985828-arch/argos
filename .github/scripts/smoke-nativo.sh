@@ -121,6 +121,20 @@ else
     echo "$cat_line"
 fi
 
+# Y el retraso de una muestra, medido desde el aparato: sin búsqueda salen
+# primero las de menos retraso. También depende de servidores ajenos.
+ret_line=""
+for _ in $(seq 1 30); do
+    ret_line=$(adb logcat -d -s ARGOS:V | grep 'ARGOS red: retraso medido' | tail -1 || true)
+    [ -n "$ret_line" ] && break
+    sleep 2
+done
+if [ -z "$ret_line" ]; then
+    echo "::warning::el aparato no terminó de medir el retraso de las cámaras públicas"
+else
+    echo "$ret_line"
+fi
+
 echo "--- cifras ---"
 grep 'ARGOS nativo detector:' logcat.txt | tail -1
 echo "$last"

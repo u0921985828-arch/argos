@@ -708,18 +708,108 @@ class MainActivity : ComponentActivity() {
             if (n == 0) catalogo = null      // así se puede volver a intentar
             cargandoCatalogo = false
             runOnUiThread { pintaLista() }
+            // Sin búsqueda salen primero las de menos retraso: se mide una
+            // muestra de cada sitio y de cada distrito.
+            catalogo?.let { mide(eus.argos.core.Retraso.muestra(it, 160, System.currentTimeMillis()), false) }
         }, "argos-catalogo").start()
     }
+
+    /*
+     * Retraso de cada cámara, medido desde ESTE teléfono: lo que tarda su red
+     * en contestar más lo que el vídeo va por detrás de la realidad. Las que
+     * no contestan, o dan una lista vacía o un clip viejo, quedan fuera.
+     */
+    private val retrasos = java.util.concurrent.ConcurrentHashMap<String, Double>()
+    private val caidas: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+    private val porMedir = java.util.concurrent.LinkedBlockingDeque<eus.argos.core.CamaraPublica>()
+    private val pendientes: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+    private val midiendo = java.util.concurrent.atomic.AtomicInteger()
+    private val medidores = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val refrescoPedido = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** `primero`: lo que se acaba de buscar pasa delante de la muestra. */
+    private fun mide(cams: List<eus.argos.core.CamaraPublica>, primero: Boolean) {
+        for (c in (if (primero) cams.asReversed() else cams)) {
+            if (c.id in retrasos || c.id in caidas || !pendientes.add(c.id)) continue
+            if (primero) porMedir.addFirst(c) else porMedir.addLast(c)
+        }
+        if (medidores.compareAndSet(false, true)) repeat(6) { k ->
+            Thread({
+                while (true) {
+                    val c = porMedir.take()
+                    midiendo.incrementAndGet()
+                    try { mideUna(c) } finally { pendientes.remove(c.id); midiendo.decrementAndGet() }
+                    refresca()
+                    if (porMedir.isEmpty() && midiendo.get() == 0) {
+                        val mejor = retrasos.entries.filter { !it.value.isNaN() }.minByOrNull { it.value }
+                        Log.i(TAG, "ARGOS red: retraso medido en ${retrasos.size} cámaras, ${caidas.size} caídas" +
+                            (mejor?.let { m -> "; la de menos, %.1f s (%s)".format(m.value,
+                                catalogo.orEmpty().firstOrNull { it.id == m.key }?.nombre ?: m.key) } ?: ""))
+                    }
+                }
+            }, "argos-mide-$k").apply { isDaemon = true }.start()
+        }
+    }
+
+    private class Respuesta(val codigo: Int, val texto: String, val ultimaMs: Long, val redS: Double)
+
+    private fun pideHttp(url: String, cabeza: Boolean): Respuesta {
+        val t0 = SystemClock.elapsedRealtime()
+        val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+        try {
+            c.connectTimeout = 5000; c.readTimeout = 5000
+            c.setRequestProperty("User-Agent", "ARGOS/1.0 (Android)")
+            if (cabeza) c.requestMethod = "HEAD"
+            val codigo = c.responseCode
+            val red = (SystemClock.elapsedRealtime() - t0) / 1000.0
+            val txt = if (cabeza || codigo != 200) "" else c.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
+            return Respuesta(codigo, txt, c.lastModified, red)
+        } finally { c.disconnect() }
+    }
+
+    private fun mideUna(c: eus.argos.core.CamaraPublica) {
+        val rt = eus.argos.core.Retraso
+        val r: Double? = try {
+            if (c.directo) {
+                var url = c.video
+                var res = pideHttp(url, false)
+                var h = if (res.codigo == 200) rt.leeHls(res.texto) else null
+                val variante = h?.variante
+                if (variante != null) {
+                    url = java.net.URI(url).resolve(variante).toString()
+                    res = pideHttp(url, false)
+                    h = if (res.codigo == 200) rt.leeHls(res.texto) else null
+                }
+                h?.let { rt.directo(it, System.currentTimeMillis(), res.redS) }
+            } else {
+                val res = pideHttp(c.video, true)
+                if (res.codigo == 200) rt.clip(res.ultimaMs, System.currentTimeMillis(), res.redS) else null
+            }
+        } catch (e: Exception) { null }
+        if (r == null) caidas.add(c.id) else retrasos[c.id] = r
+    }
+
+    /** Las medidas llegan de seis en seis: la lista se repinta como mucho dos veces por segundo. */
+    private fun refresca() {
+        if (!refrescoPedido.compareAndSet(false, true)) return
+        window.decorView.postDelayed({ refrescoPedido.set(false); pintaLista() }, 500)
+    }
+
+    private var medirBusqueda: Runnable? = null
 
     private fun pintaLista() {
         val a = listaFuentes ?: return
         val todas = catalogo.orEmpty()
-        filtradas = eus.argos.core.Catalogo.busca(todas, filtro)
+        val encontradas = eus.argos.core.Catalogo.busca(todas, filtro)
+        filtradas = eus.argos.core.Retraso.ordena(encontradas, retrasos, caidas)
         a.clear()
         a.addAll(filtradas.take(400).map { c ->
-            (if (c.directo) "● " else "○ ") + c.nombre + "\n" + c.proveedor + (if (c.zona.isEmpty()) "" else " · " + c.zona)
+            (if (c.directo) "● " else "○ ") + c.nombre + "\n" + c.proveedor + (if (c.zona.isEmpty()) "" else " · " + c.zona) +
+                (retrasos[c.id]?.let { " · " + eus.argos.core.Retraso.texto(it, c.directo) } ?: "")
         })
         a.notifyDataSetChanged()
+        val medidas = filtradas.count { it.id in retrasos }
+        val enMedida = !porMedir.isEmpty() || midiendo.get() > 0
         estadoFuentes?.text = when {
             todas.isEmpty() && cargandoCatalogo -> "Buscando cámaras públicas…"
             todas.isEmpty() -> "No se pudo bajar la lista" + (if (fallosCatalogo.isEmpty()) "" else " ($fallosCatalogo)") +
@@ -728,7 +818,8 @@ class MainActivity : ComponentActivity() {
                 "prueba «Los Angeles», «San Diego», «Oakland» o «London»."
             else -> (if (filtradas.size > 400) "400 de ${filtradas.size}" else "${filtradas.size}") +
                 " cámara${if (filtradas.size == 1) "" else "s"}" +
-                (if (cargandoCatalogo) " · buscando más…" else "") +
+                (if (medidas > 0) ", primero las de menos retraso" else "") +
+                (if (cargandoCatalogo) " · buscando más…" else if (enMedida) " · midiendo…" else "") +
                 (if (!cargandoCatalogo && fallosCatalogo.isNotEmpty()) " · sin respuesta de $fallosCatalogo" else "") +
                 "   ● directo  ○ clips"
         }
@@ -798,7 +889,15 @@ class MainActivity : ComponentActivity() {
             setOnFocusChangeListener { _, foco -> modoBusqueda(foco) }
             setOnEditorActionListener { _, _, _ -> teclado().hideSoftInputFromWindow(windowToken, 0); true }
             addTextChangedListener(object : android.text.TextWatcher {
-                override fun afterTextChanged(e: android.text.Editable?) { filtro = e?.toString().orEmpty(); pintaLista() }
+                override fun afterTextChanged(e: android.text.Editable?) {
+                    filtro = e?.toString().orEmpty(); pintaLista()
+                    // Lo buscado se mide antes que la muestra, cuando se deja de escribir.
+                    medirBusqueda?.let { removeCallbacks(it) }
+                    medirBusqueda = Runnable {
+                        if (filtro.isNotBlank()) mide(eus.argos.core.Catalogo.busca(catalogo.orEmpty(), filtro)
+                            .filter { it.id !in retrasos && it.id !in caidas }.take(40), true)
+                    }.also { postDelayed(it, 600) }
+                }
                 override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
                 override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             })

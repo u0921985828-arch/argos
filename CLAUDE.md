@@ -341,7 +341,10 @@ nombre por hash del identificador, sin dirección ni clave; solo agregados). La 
 vídeo: nada se envía. La búsqueda va por nombre, ciudad, condado y país (en
 español o inglés): el nombre de Caltrans es solo la vía, así que buscar
 «Los Angeles» no encontraba nada. Con pantalla completa el teclado no encoge
-la ventana y tapaba la lista: al buscar, el panel sube arriba.
+la ventana y tapaba la lista: al buscar, el panel sube arriba. Sin búsqueda,
+primero las de menos retraso (`core/Retraso`): se mide desde el teléfono una
+muestra de cada sitio y distrito (red + lo que el directo va por detrás, o la
+edad del clip); lo buscado se mide antes que la muestra y las caídas no salen.
 
 **Física plausible.** Una escala con altura de cámara fuera de 2-150 m no vale;
 un paso imposible para la clase no da velocidad; «corriendo» pide 1 s seguido.

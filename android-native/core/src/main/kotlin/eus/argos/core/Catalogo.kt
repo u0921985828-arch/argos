@@ -75,6 +75,91 @@ object Catalogo {
 }
 
 /**
+ * Cuánto va por detrás de la realidad lo que se ve de una cámara pública, y
+ * si está viva. Se mide desde el propio teléfono: la red cuenta.
+ *
+ *  · Directo (HLS): lo que tarda la red, más lo que el reproductor se queda
+ *    detrás del borde en vivo (unos tres segmentos) y lo que tarda el servidor
+ *    en publicar uno. Si la lista trae la hora de cada segmento, se usa.
+ *  · Clips (TfL): la edad del clip, por su `Last-Modified`. Uno de más de una
+ *    hora no es una cámara viva.
+ */
+object Retraso {
+    /** Una lista HLS leída: o apunta a una variante, o trae segmentos. */
+    data class Hls(val variante: String?, val objetivoS: Double, val segmentos: Int,
+                   val finUltimoMs: Long?)
+
+    const val CLIP_MUERTO_S = 3600.0
+
+    fun leeHls(texto: String): Hls? {
+        val l = texto.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        if (l.firstOrNull()?.startsWith("#EXTM3U") != true) return null
+        // Lista maestra: la primera variante (Caltrans da una sola).
+        val k = l.indexOfFirst { it.startsWith("#EXT-X-STREAM-INF") }
+        if (k >= 0) return Hls(l.drop(k + 1).firstOrNull { !it.startsWith("#") }, 0.0, 0, null)
+        var objetivo = 0.0; var segs = 0; var pdt: Long? = null; var dur = 0.0; var fin: Long? = null
+        for (x in l) when {
+            x.startsWith("#EXT-X-TARGETDURATION:") -> objetivo = x.substringAfter(':').toDoubleOrNull() ?: 0.0
+            x.startsWith("#EXT-X-PROGRAM-DATE-TIME:") -> pdt = fecha(x.substringAfter(':'))
+            x.startsWith("#EXTINF:") -> dur = x.substringAfter(':').substringBefore(',').toDoubleOrNull() ?: 0.0
+            !x.startsWith("#") -> { segs++; fin = pdt?.let { it + (dur * 1000).toLong() }; pdt = null }
+        }
+        return Hls(null, objetivo, segs, fin)
+    }
+
+    private fun fecha(s: String): Long? = runCatching { java.time.OffsetDateTime.parse(s.trim()).toInstant().toEpochMilli() }
+        .recoverCatching { java.time.Instant.parse(s.trim()).toEpochMilli() }.getOrNull()
+
+    /** Segundos de retraso de un directo; null si la lista no tiene segmentos (cámara caída). */
+    fun directo(h: Hls, ahoraMs: Long, redS: Double): Double? {
+        if (h.segmentos == 0 || h.objetivoS <= 0) return null
+        val borde = h.finUltimoMs?.let { maxOf(0.0, (ahoraMs - it) / 1000.0) } ?: h.objetivoS
+        return redS + borde + 3 * h.objetivoS
+    }
+
+    /** Segundos de retraso de un clip; null si es de hace más de una hora. NaN si el servidor no dice la hora. */
+    fun clip(ultimaMs: Long, ahoraMs: Long, redS: Double): Double? {
+        if (ultimaMs <= 0) return Double.NaN
+        val edad = maxOf(0.0, (ahoraMs - ultimaMs) / 1000.0)
+        return if (edad > CLIP_MUERTO_S) null else redS + edad
+    }
+
+    fun texto(s: Double, directo: Boolean): String = when {
+        s.isNaN() -> if (directo) "en directo" else "clip"
+        s < 90 -> "%.0f s de retraso".format(s)
+        else -> "%.0f min de retraso".format(s / 60)
+    }
+
+    /**
+     * Sin búsqueda: las medidas y vivas primero, de menos a más retraso; luego
+     * las que aún no se han medido. Las caídas no salen.
+     */
+    fun ordena(lista: List<CamaraPublica>, retraso: Map<String, Double>, caidas: Set<String>): List<CamaraPublica> {
+        val vivas = lista.filter { it.id !in caidas }
+        val medidas = vivas.filter { retraso[it.id]?.isNaN() == false }.sortedBy { retraso[it.id] }
+        val sinDato = vivas.filter { retraso[it.id]?.isNaN() == true }
+        val resto = vivas.filter { it.id !in retraso }
+        return medidas + sinDato + resto
+    }
+
+    /**
+     * Qué medir primero: un poco de cada sitio y de cada distrito, para que
+     * lo primero que salga no sea todo de la misma carretera.
+     */
+    fun muestra(lista: List<CamaraPublica>, n: Int, semilla: Long): List<CamaraPublica> {
+        val grupos = lista.groupBy { it.id.substringBeforeLast(':') }.values
+            .map { it.shuffled(java.util.Random(semilla)) }
+        val out = ArrayList<CamaraPublica>(n)
+        var r = 0
+        while (out.size < n && grupos.any { r < it.size }) {
+            for (g in grupos) if (r < g.size && out.size < n) out += g[r]
+            r++
+        }
+        return out
+    }
+}
+
+/**
  * Lector de JSON mínimo (objetos, listas, cadenas, números, true/false/null),
  * para no arrastrar una biblioteca a un núcleo que se prueba en la JVM.
  */
