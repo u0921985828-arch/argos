@@ -326,7 +326,9 @@ y análisis siguen alineados; el electrónico recorta y los desalinearía). En
 pantalla, `core/Estabiliza.kt` desplaza la escena (vista previa y cajas a la
 vez) con el movimiento de cámara que ya se estima. El análisis llega un frame
 tarde: sin adelantar la corrección, el balanceo bajaba un 12 %; con el
-adelanto, un 60 %.
+adelanto, un 60 %. El giro de muñeca, que la imagen no ve, lo corrige el
+giroscopio (sin retraso): un temblor de 3 Hz baja de 0,85° a 0,15°; la
+inclinación a propósito no se toca y la corrección no pasa de ±2°.
 
 **Física plausible.** Una escala con altura de cámara fuera de 2-150 m no vale;
 un paso imposible para la clase no da velocidad; «corriendo» pide 1 s seguido.

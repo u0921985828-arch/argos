@@ -43,6 +43,32 @@ fun main() {
     var mq = 0.0
     for (i in 0 until 100) { val (dx, dy) = q.paso(12.0, -4.0, w); mq = maxOf(mq, Math.abs(dx), Math.abs(dy)) }
     pide("cámara quieta: la vista no se mueve (%.3f px)".format(mq), mq < 1e-9)
+    // Giro de muñeca con el giroscopio a 200 Hz: temblor de ±1,2° a 3 Hz sobre
+    // una inclinación lenta de 10° en 5 s. El temblor visto en pantalla (giro
+    // real menos corrección, sin la tendencia lenta) baja más de un 70 % y la
+    // inclinación a propósito no se corrige.
+    run {
+        val g = eus.argos.core.EstabilizaGiro()
+        val dt = 1 / 200.0
+        fun real(t: Double) = 1.2 * Math.sin(2 * Math.PI * 3 * t) + 2.0 * t
+        fun dreal(t: Double) = Math.toRadians(1.2 * 2 * Math.PI * 3 * Math.cos(2 * Math.PI * 3 * t) + 2.0)
+        val sin = ArrayList<Double>(); val con = ArrayList<Double>()
+        var corrFinal = 0.0
+        for (i in 0 until 1000) {
+            val t = i * dt
+            val c = g.paso(dreal(t), dt)
+            if (i > 300) { sin.add(real(t) - 2.0 * t); con.add(real(t) - c - 2.0 * t) }
+            corrFinal = c
+        }
+        pide("giro de muñeca de 3 Hz: %.2f° → %.2f°".format(rms(sin), rms(con)), rms(con) < rms(sin) * 0.3)
+        pide("inclinación a propósito no se corrige (al final %.2f°)".format(corrFinal - 1.2 * Math.sin(2 * Math.PI * 3 * 999 * dt)),
+             Math.abs(corrFinal - 1.2 * Math.sin(2 * Math.PI * 3 * 999 * dt)) < 1.5)
+        var maxC = 0.0
+        val h = eus.argos.core.EstabilizaGiro()
+        for (i in 0 until 400) maxC = maxOf(maxC, Math.abs(h.paso(Math.toRadians(90.0), dt)))
+        pide("giro brusco de 90°/s: corrección limitada a %.1f°".format(maxC), maxC <= 2.0 + 1e-9)
+        pide("ampliación para ±2° en 9:16: %.3f".format(g.zoom(16 / 9.0)), g.zoom(16 / 9.0) in 1.05..1.07)
+    }
     println(if (fallos == 0) "ESTABILIZADO: CUMPLE" else "ESTABILIZADO: FALLA ($fallos)")
     if (fallos > 0) System.exit(1)
 }

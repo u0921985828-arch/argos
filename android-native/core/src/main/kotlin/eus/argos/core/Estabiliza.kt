@@ -51,3 +51,37 @@ class Estabilizador(private val rapida: Double = 0.8, private val lenta: Double 
     /** Cuánto ampliar la vista para que el desplazamiento máximo no enseñe bordes. */
     val zoom: Double get() = 1.0 + 2 * maxFrac + 0.01
 }
+
+/**
+ * Giro de muñeca (alabeo), con el giroscopio. El estimador de imagen solo ve
+ * desplazamientos; un giro alrededor del eje de la cámara lo da por
+ * «inestable» y no lo corrige. El giroscopio lo mide directamente y sin el
+ * retraso del análisis (llega a cientos de veces por segundo).
+ *
+ * Se integra la velocidad de giro y se le quita su media lenta (~0,6 s): queda
+ * el temblor, que es lo que se corrige, y no la inclinación que se quiera dar
+ * a propósito. La corrección se limita a ±`maxGrados`.
+ */
+class EstabilizaGiro(private val lentaS: Double = 0.6, val maxGrados: Double = 2.0) {
+    private var angulo = 0.0
+    private var lento = 0.0
+    var correccion = 0.0; private set
+
+    /** Velocidad de giro alrededor del eje de la cámara (rad/s) y tiempo desde la anterior (s). Devuelve grados. */
+    fun paso(radS: Double, dt: Double): Double {
+        if (dt <= 0 || dt > 0.5) return correccion        // hueco: no se integra basura
+        angulo += Math.toDegrees(radS * dt)
+        lento += (angulo - lento) * (1 - Math.exp(-dt / lentaS))
+        correccion = (angulo - lento).coerceIn(-maxGrados, maxGrados)
+        if (Math.abs(angulo - lento) > maxGrados) lento = angulo - Math.signum(angulo - lento) * maxGrados
+        return correccion
+    }
+
+    fun reinicia() { angulo = 0.0; lento = 0.0; correccion = 0.0 }
+
+    /** Ampliación para que girar la vista `maxGrados` no enseñe esquinas en una pantalla alto/ancho = `aspecto`. */
+    fun zoom(aspecto: Double): Double {
+        val r = Math.toRadians(maxGrados)
+        return Math.cos(r) + aspecto * Math.sin(r)
+    }
+}

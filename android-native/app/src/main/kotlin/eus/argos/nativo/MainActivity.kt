@@ -45,7 +45,26 @@ class MainActivity : ComponentActivity() {
     /** Vista previa y capa juntas: el estabilizado las mueve a la vez y las cajas siguen en su sitio. */
     private lateinit var escena: FrameLayout
     private val estabilizador = eus.argos.core.Estabilizador()
+    private val giro = eus.argos.core.EstabilizaGiro()
     @Volatile private var estabilizar = true
+    @Volatile private var ois = false
+    // Lo último de cada fuente: desplazamiento (del análisis) y giro (del giroscopio).
+    @Volatile private var despX = 0f
+    @Volatile private var despY = 0f
+    @Volatile private var giroGrados = 0f
+    private var ultimoGiroNs = 0L
+    private val sensores by lazy { getSystemService(SENSOR_SERVICE) as android.hardware.SensorManager }
+    private val oyenteGiro = object : android.hardware.SensorEventListener {
+        override fun onSensorChanged(e: android.hardware.SensorEvent) {
+            val dt = if (ultimoGiroNs == 0L) 0.0 else (e.timestamp - ultimoGiroNs) / 1e9
+            ultimoGiroNs = e.timestamp
+            // values[2]: giro alrededor del eje que sale de la pantalla, el de
+            // la cámara trasera. Positivo = antihorario visto de frente.
+            giroGrados = giro.paso(e.values[2].toDouble(), dt).toFloat()
+            if (estabilizar) aplicaVista()
+        }
+        override fun onAccuracyChanged(s: android.hardware.Sensor?, a: Int) {}
+    }
     private lateinit var estado: TextView
     private var detalles = false
     private lateinit var radio: RadioVigia
@@ -91,9 +110,9 @@ class MainActivity : ComponentActivity() {
         fichaEstable = Ui.ficha(this, if (estabilizar) "Estable: sí" else "Estable: no") {
             estabilizar = !estabilizar
             prefs.edit().putBoolean("estabilizar", estabilizar).apply()
-            fichaEstable.text = if (estabilizar) "Estable: sí" else "Estable: no"
-            if (!estabilizar) { escena.scaleX = 1f; escena.scaleY = 1f; escena.translationX = 0f; escena.translationY = 0f }
-            estabilizador.reinicia()
+            fichaEstable.text = if (estabilizar) (if (ois) "Estable: sí · óptico" else "Estable: sí") else "Estable: no"
+            if (!estabilizar) { escena.scaleX = 1f; escena.scaleY = 1f; escena.translationX = 0f; escena.translationY = 0f; escena.rotation = 0f }
+            estabilizador.reinicia(); giro.reinicia()
         }
         val barra = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
@@ -296,7 +315,8 @@ class MainActivity : ComponentActivity() {
             // Estabilización ÓPTICA si la lente la tiene: mueve el sensor de
             // verdad, así que la vista previa y el análisis siguen alineados
             // (la electrónica recorta y los desalinearía).
-            val ois = oisDisponible(provider)
+            ois = oisDisponible(provider)
+            runOnUiThread { fichaEstable.text = if (estabilizar) (if (ois) "Estable: sí · óptico" else "Estable: sí") else "Estable: no" }
             val prevB = Preview.Builder().setResolutionSelector(selector)
             if (ois) pideOis(prevB)
             val prev = prevB.build().also { it.setSurfaceProvider(preview.surfaceProvider) }
@@ -329,7 +349,8 @@ class MainActivity : ComponentActivity() {
             provider.unbindAll()
             provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, prev, analysis)
             Log.i(TAG, "ARGOS nativo cámara: análisis RGBA, objetivo 640x480 · estabilización óptica " +
-                       (if (ois) "sí" else "no disponible") + " · estabilizado en pantalla " + (if (estabilizar) "sí" else "no"))
+                       (if (ois) "sí" else "no disponible") + " · estabilizado en pantalla " + (if (estabilizar) "sí" else "no") +
+                       " · giroscopio " + (if (sensores.getDefaultSensor(android.hardware.Sensor.TYPE_GYROSCOPE) != null) "sí" else "no"))
         }, ContextCompat.getMainExecutor(this))
     }
 
@@ -355,15 +376,42 @@ class MainActivity : ComponentActivity() {
      * bordes. Un paneo se deja pasar.
      */
     private fun estabiliza(f: Pipeline.Frame) {
-        if (!estabilizar) return
+        if (!estabilizar || f.w == 0) return
         val (dx, dy) = estabilizador.paso(f.camX, f.camY, f.w)
-        val z = estabilizador.zoom.toFloat()
         runOnUiThread {
-            if (escena.width == 0 || f.w == 0) return@runOnUiThread
+            if (escena.width == 0) return@runOnUiThread
             val s = minOf(escena.width.toFloat() / f.w, escena.height.toFloat() / f.h)
-            escena.scaleX = z; escena.scaleY = z
-            escena.translationX = (dx * s * z).toFloat(); escena.translationY = (dy * s * z).toFloat()
+            despX = (dx * s).toFloat(); despY = (dy * s).toFloat()
+            aplicaVista()
         }
+    }
+
+    /**
+     * Desplazamiento (de la imagen) y giro (del giroscopio) sobre la escena,
+     * con la ampliación justa para que ninguno de los dos enseñe bordes. Un
+     * giro antihorario del móvil hace girar la imagen en sentido horario en
+     * pantalla; se compensa girando la vista al revés.
+     */
+    private fun aplicaVista() {
+        if (escena.width == 0) return
+        val aspecto = escena.height.toDouble() / escena.width
+        val z = (estabilizador.zoom * giro.zoom(aspecto)).toFloat()
+        escena.scaleX = z; escena.scaleY = z
+        escena.translationX = despX * z; escena.translationY = despY * z
+        escena.rotation = -giroGrados
+    }
+
+    override fun onResume() {
+        super.onResume()
+        sensores.getDefaultSensor(android.hardware.Sensor.TYPE_GYROSCOPE)?.let {
+            ultimoGiroNs = 0L
+            sensores.registerListener(oyenteGiro, it, android.hardware.SensorManager.SENSOR_DELAY_GAME)
+        }
+    }
+
+    override fun onPause() {
+        sensores.unregisterListener(oyenteGiro)
+        super.onPause()
     }
 
     private fun cambiarZoom() {
