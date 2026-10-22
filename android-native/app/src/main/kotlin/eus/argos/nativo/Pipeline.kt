@@ -37,7 +37,9 @@ const val TAG = "ARGOS"
  * del coste del frame en el navegador.
  */
 class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStore? = null,
-               private val behaviourFile: java.io.File? = null) {
+               behaviourFile: java.io.File? = null) {
+    /** Dónde se guarda lo normal de la escena actual: uno por cámara, para que cada una aprenda lo suyo. */
+    @Volatile private var archivoEscena: java.io.File? = behaviourFile
     /**
      * Lo que ve la interfaz en cada frame: cajas, y lo que se sabe de cada una
      * y de la escena. `camX/camY` en píxeles de fuente, para dibujar estelas
@@ -62,10 +64,13 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
      * mitad de uno. `movil` = la cámara del teléfono, que se mueve; una cámara
      * fija remota no, así que no se compensa movimiento.
      */
-    @Volatile private var nuevaEscena: Boolean? = null
-    fun nuevaEscena(movil: Boolean) { nuevaEscena = movil }
-    /** Lo normal de la escena solo se guarda para la cámara del móvil; las remotas son otras escenas. */
-    @Volatile var guardarComportamiento = true
+    @Volatile private var nuevaEscena: Pair<Boolean, java.io.File?>? = null
+    /**
+     * `archivo`: dónde guardar y de dónde recuperar lo normal de ESA escena.
+     * Cada cámara pública aprende lo suyo y lo conserva entre sesiones: son
+     * agregados por celda (rumbos, velocidades, clases), ningún recorrido.
+     */
+    fun nuevaEscena(movil: Boolean, archivo: java.io.File?) { nuevaEscena = movil to archivo }
     // Hora real del instante 0 de la sesión, para guardar con fecha y hora.
     private val t0Epoch = System.currentTimeMillis() / 1000.0 - SystemClock.elapsedRealtime() / 1000.0
     private val ioExec = Executors.newSingleThreadExecutor { r -> Thread(r, "argos-memoria") }
@@ -76,15 +81,14 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
     init {
         // Lo normal de la escena sobrevive a cerrar la app: son agregados por
         // celda (rumbos, velocidades, clases), ningún recorrido individual.
-        behaviourFile?.takeIf { it.exists() }?.let { f ->
+        archivoEscena?.takeIf { it.exists() }?.let { f ->
             runCatching { eus.argos.core.BehaviourModel.deserialize(f.readText()) }.getOrNull()
                 ?.let { brain.behaviour = it }
         }
     }
 
     private fun saveBehaviour(sync: Boolean) {
-        if (!guardarComportamiento) return
-        val f = behaviourFile ?: return
+        val f = archivoEscena ?: return
         val txt = brain.behaviour?.serialize() ?: return
         val job = Runnable { runCatching { f.parentFile?.mkdirs(); f.writeText(txt) } }
         if (sync) job.run() else try { ioExec.execute(job) } catch (_: Exception) {}
@@ -181,7 +185,7 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
      * `rowStride`, que casi nunca es anchura × 4.
      */
     fun onFrame(buf: ByteBuffer, rowStride: Int, w: Int, h: Int): Frame {
-        nuevaEscena?.let { movil ->
+        nuevaEscena?.let { (movil, archivo) ->
             nuevaEscena = null
             saveBehaviour(false)            // lo aprendido de la escena que se deja
             // Lo que estaba vivo se guarda en la memoria antes de cambiar.
@@ -189,8 +193,8 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
             store?.let { s -> try { ioExec.execute { vivos.forEach { s.save(it, t0Epoch) } } } catch (_: Exception) {} }
             engine = Engine().apply { egoMotion = movil }
             brain = SceneBrain()
-            guardarComportamiento = movil
-            if (movil) behaviourFile?.takeIf { it.exists() }?.let { f ->
+            archivoEscena = archivo
+            archivo?.takeIf { it.exists() }?.let { f ->
                 runCatching { eus.argos.core.BehaviourModel.deserialize(f.readText()) }.getOrNull()?.let { brain.behaviour = it }
             }
             fresh.set(false)

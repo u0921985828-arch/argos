@@ -618,20 +618,27 @@ class MainActivity : ComponentActivity() {
         fuenteMovil = true
         textura.visibility = android.view.View.GONE
         preview.visibility = android.view.View.VISIBLE
-        pipeline?.nuevaEscena(true)
+        pipeline?.nuevaEscena(true, java.io.File(filesDir, "memoria/comportamiento.txt"))
         estabilizador.reinicia(); giro.reinicia()
         fichaFuente.text = Ui.textoFila("Fuente", "cámara del móvil")
         lEvento.text = "cámara del móvil"
         startCamera()
     }
 
-    private fun usarRed(url: String, nombre: String, bucle: Boolean) {
+    /** Archivo de lo aprendido de una cámara remota: nombre a partir de su identificador, sin la dirección ni claves. */
+    private fun archivoDe(id: String): java.io.File {
+        val h = java.security.MessageDigest.getInstance("SHA-256").digest(id.toByteArray())
+            .take(8).joinToString("") { "%02x".format(it) }
+        return java.io.File(filesDir, "memoria/escenas/$h.txt")
+    }
+
+    private fun usarRed(url: String, nombre: String, bucle: Boolean, id: String) {
         fuenteMovil = false
         proveedor?.unbindAll()
         preview.visibility = android.view.View.GONE
         textura.visibility = android.view.View.VISIBLE
         quitaEstabilizado()
-        pipeline?.nuevaEscena(false)
+        pipeline?.nuevaEscena(false, archivoDe(id))
         fichaFuente.text = Ui.textoFila("Fuente", nombre)
         fuenteRed.abre(url, nombre, bucle)
     }
@@ -683,7 +690,7 @@ class MainActivity : ComponentActivity() {
         lista.adapter = adapt
         lista.setOnItemClickListener { _, _, pos, _ ->
             val c = filtradas.getOrNull(pos) ?: return@setOnItemClickListener
-            usarRed(c.video, c.nombre, !c.directo); cerrar()
+            usarRed(c.video, c.nombre, !c.directo, c.id); cerrar()
         }
         val buscar = android.widget.EditText(this).apply {
             hint = "Buscar (ciudad, carretera…)"; setTextColor(Ui.TEXTO); setHintTextColor(Ui.SUAVE); isSingleLine = true
@@ -731,7 +738,8 @@ class MainActivity : ComponentActivity() {
                 val url = campo.text.toString().trim()
                 if (url.startsWith("rtsp://", ignoreCase = true) || url.startsWith("http", ignoreCase = true)) {
                     prefs.edit().putString("rtsp", url).apply()
-                    usarRed(url, "cámara IP", false); cerrar()
+                    // La clave no entra en el identificador: solo servidor y ruta.
+                    usarRed(url, "cámara IP", false, "ip:" + url.substringAfter("@")); cerrar()
                 }
             }
             .setNegativeButton("Cancelar", null)

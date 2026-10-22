@@ -51,12 +51,16 @@ class ResumenActivity : ComponentActivity() {
             true
         }
         val olvidar = Button(this).apply {
-            text = "Olvidar lo aprendido de la escena"
+            text = "Olvidar lo aprendido de las escenas"
             setOnClickListener {
                 AlertDialog.Builder(this@ResumenActivity)
-                    .setMessage("Se olvida qué es normal en esta escena (rumbos, velocidades, clases por zona). " +
+                    .setMessage("Se olvida qué es normal en cada escena, la del móvil y las de las cámaras por red " +
+                                "(rumbos, velocidades, clases por zona). " +
                                 "Hazlo si has movido la cámara a otro sitio.")
-                    .setPositiveButton("Olvidar") { _, _ -> File(filesDir, "memoria/comportamiento.txt").delete(); pinta() }
+                    .setPositiveButton("Olvidar") { _, _ ->
+                        File(filesDir, "memoria/comportamiento.txt").delete()
+                        File(filesDir, "memoria/escenas").deleteRecursively(); pinta()
+                    }
                     .setNegativeButton("Cancelar", null).show()
             }
         }
@@ -101,10 +105,12 @@ class ResumenActivity : ComponentActivity() {
     private fun normalidad(): String {
         val f = File(filesDir, "memoria/comportamiento.txt")
         val m = f.takeIf { it.exists() }?.let { runCatching { eus.argos.core.BehaviourModel.deserialize(it.readText()) }.getOrNull() }
-            ?: return "lo normal de la escena: sin aprender todavía\n"
+        val red = File(filesDir, "memoria/escenas").listFiles { x -> x.name.endsWith(".txt") }?.size ?: 0
+        val otras = if (red == 0) "" else "cámaras por red con lo suyo aprendido: $red\n"
+        if (m == null) return "lo normal de la escena: sin aprender todavía\n" + otras
         val mt = m.maturity()
         return "lo normal de la escena: ${mt.cellsMature} zonas aprendidas, ${mt.directional} con flujo propio" +
-            (if (mt.ready) "" else " (aún aprendiendo)") + "\n"
+            (if (mt.ready) "" else " (aún aprendiendo)") + "\n" + otras
     }
 
     private fun nombre(k: String) = when (k) {

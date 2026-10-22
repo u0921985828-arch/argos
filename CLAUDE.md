@@ -335,8 +335,9 @@ públicas de tráfico (Caltrans en directo por HLS, TfL en clips), que la app
 baja y lista ella sola (`core/Catalogo.kt`, el mismo catálogo que
 `cameras.js`), y cámaras IP propias por RTSP. Media3 decodifica, un
 TextureView pinta y se toma una imagen cada 80 ms para el mismo análisis. Al
-cambiar de fuente se empieza una escena nueva (núcleo y cerebro); lo normal
-de la escena solo se guarda para la cámara del móvil. La red solo RECIBE
+cambiar de fuente se empieza una escena nueva (núcleo y cerebro), y cada
+cámara aprende lo suyo y lo conserva entre sesiones (`memoria/escenas/`,
+nombre por hash del identificador, sin dirección ni clave; solo agregados). La red solo RECIBE
 vídeo: nada se envía.
 
 **Física plausible.** Una escala con altura de cámara fuera de 2-150 m no vale;
