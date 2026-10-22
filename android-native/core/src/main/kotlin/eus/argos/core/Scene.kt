@@ -291,7 +291,22 @@ class SceneBrain(
     private class Path(val start: Double) {
         var end = start; var cls = "object"; var det = false; var vmax = Double.NaN
         val pts = ArrayList<DoubleArray>(); val evs = ArrayList<String>(); var n = 0
+        /** La cámara se movió en algún momento del recorrido. */
+        var moved = false
+        var anomaly: BehaviourModel.Score? = null
     }
+
+    /**
+     * Lo normal de esta escena (behaviour.js). Solo aprende de recorridos
+     * hechos con la cámara quieta y con escala métrica: sin velocidad en m/s
+     * una celda no aprende rumbos, igual que en la web.
+     */
+    var behaviour: BehaviourModel? = null
+    private var frameN = 0
+
+    private fun pathOf(pa: Path) = BehaviourModel.Path(
+        pa.pts.map { doubleArrayOf(it[1], it[2]) }, DoubleArray(pa.pts.size) { pa.pts[it][3] }, null,
+        if (pa.det) pa.cls else null)
     private val paths = HashMap<Int, Path>()
     /** Trayectorias que han terminado desde la última vez que se recogieron. */
     val finished = ArrayList<Trajectory>()
@@ -304,7 +319,8 @@ class SceneBrain(
     val seen = HashMap<String, HashSet<Int>>()
 
     class TrackInfo(val id: Int, val cls: String, val fromDet: Boolean, val speedMs: Double,
-                    val speedPx: Double, val dwellS: Double, val stopped: Boolean, val stature: Stature?)
+                    val speedPx: Double, val dwellS: Double, val stopped: Boolean, val stature: Stature?,
+                    val anomaly: BehaviourModel.Score? = null)
 
     /**
      * @param tracks pistas confirmadas del núcleo, en píxeles de análisis
@@ -316,6 +332,13 @@ class SceneBrain(
                srcW: Int, srcH: Int, camX: Double, camY: Double, still: Boolean): List<TrackInfo> {
         val live = HashSet<Int>()
         var p0 = 0; var v0 = 0; var u0 = 0
+        // Lo aprendido vale para un encuadre: si cambia la resolución de la
+        // cámara, las celdas ya no son el mismo trozo de suelo.
+        val bw = behaviour
+        if (bw == null || bw.w != srcW.toDouble() || bw.h != srcH.toDouble())
+            behaviour = BehaviourModel(srcW.toDouble(), srcH.toDouble())
+        val beh = behaviour!!
+        frameN++
         val out = ArrayList<TrackInfo>()
         for (t in tracks) {
             if (t.hits < minHits) continue
@@ -346,18 +369,38 @@ class SceneBrain(
             } else u0++
             checkEvents(t, p, tSec, sy)
             path.end = tSec; path.cls = t.klass; path.det = path.det || t.klassSrc == "det"
+            if (!still) path.moved = true
             if (p.speedMs.isFinite() && !(p.speedMs <= path.vmax)) path.vmax = p.speedMs
             // Un punto cada 5 observaciones, en coordenadas de escena: basta
             // para dibujar el recorrido y ocupa unos cientos de bytes.
-            if (path.n++ % 5 == 0) path.pts.add(doubleArrayOf(tSec, (t.x1 + t.x2) / 2 * sx + camX, t.y2 * sy + camY))
+            if (path.n++ % 5 == 0)
+                path.pts.add(doubleArrayOf(tSec, (t.x1 + t.x2) / 2 * sx + camX, t.y2 * sy + camY, p.speedMs))
+            // Puntuación en vivo, una vez por segundo y pista: cuánto se aparta
+            // de lo que suele pasar ahí. Con la cámara quieta; moviéndose, las
+            // celdas no corresponden al mismo trozo de suelo.
+            if (still && !path.moved && path.pts.size >= 6 && (frameN + t.id) % 30 == 0)
+                path.anomaly = beh.score(pathOf(path)).takeIf { it.mature }
             out.add(TrackInfo(t.id, t.klass, t.klassSrc == "det", p.speedMs, p.speedPx, p.dwellS,
-                              p.stopped, statureOf(t.id)))
+                              p.stopped, statureOf(t.id), path.anomaly))
         }
         people = p0; vehicles = v0; unclassified = u0
         // Lo que ya no está se suelta; de cada trayectoria queda UNA muestra
         // para la escala, que ocupa unos bytes en vez de cientos.
         for (id in paths.keys.toList()) if (id !in live) {
             val pa = paths.remove(id)!!
+            if (!pa.moved && pa.pts.size >= 4) {
+                // Se puntúa ANTES de aprender: un recorrido no puede servir de
+                // norma para sí mismo.
+                val s = beh.score(pathOf(pa))
+                if (s.mature && s.score >= 0.2) {
+                    val why = s.reasons.firstOrNull() ?: "fuera de lo habitual"
+                    events.addFirst(SceneEvent(if (s.score >= 0.5) "anómalo" else "inusual", id, pa.cls, tSec,
+                                               "%.2f · %s".format(java.util.Locale("es"), s.score, why)))
+                    if (events.size > 60) events.removeLast()
+                    pa.evs.add(if (s.score >= 0.5) "anómalo" else "inusual")
+                }
+                beh.learn(pathOf(pa))
+            }
             if (pa.n >= 3) finished.add(Trajectory(id, pa.cls, pa.det, pa.start, pa.end, pa.vmax, pa.pts, pa.evs))
         }
         for (id in physics.keys.toList()) if (id !in live) {

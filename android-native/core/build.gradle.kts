@@ -89,3 +89,19 @@ tasks.register<JavaExec>("memoria") {
     classpath = sourceSets["test"].runtimeClasspath
     mainClass.set("eus.argos.paridad.StoreCaseKt")
 }
+
+// Lo normal de la escena (behaviour.js): paridad numérica y una escena viva
+// donde el único que va a contramano sale marcado y ningún normal lo hace.
+tasks.register<JavaExec>("paridadComportamiento") {
+    group = "verification"
+    description = "BehaviourModel contra behaviour.js: madurez, perfiles y puntuaciones."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.BehaviourParityKt")
+    workingDir = rootProject.projectDir.parentFile
+}
+tasks.register<JavaExec>("comportamientoVivo") {
+    group = "verification"
+    description = "Escena sintética: aprende el sentido de una acera y marca al que va en contra."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.BehaviourScenarioKt")
+}

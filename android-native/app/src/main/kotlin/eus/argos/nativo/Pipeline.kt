@@ -36,7 +36,8 @@ const val TAG = "ARGOS"
  * los píxeles en memoria de CPU, sin lienzo ni `getImageData`, que era el 75 %
  * del coste del frame en el navegador.
  */
-class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStore? = null) {
+class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStore? = null,
+               private val behaviourFile: java.io.File? = null) {
     /**
      * Lo que ve la interfaz en cada frame: cajas, y lo que se sabe de cada una
      * y de la escena. `camX/camY` en píxeles de fuente, para dibujar estelas
@@ -47,7 +48,8 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
                 val camX: Double = 0.0, val camY: Double = 0.0,
                 val moving: Boolean = false, val people: Int = 0, val vehicles: Int = 0,
                 val peopleSeen: Int = 0, val scaleValid: Boolean = false, val scaleN: Int = 0,
-                val events: List<SceneEvent> = emptyList())
+                val events: List<SceneEvent> = emptyList(),
+                val behaviourMature: Int = 0, val behaviourReady: Boolean = false)
 
     // Con el móvil en la mano todo se mueve: el núcleo estima el desplazamiento
     // de la imagen y mantiene el fondo y las pistas alineados con la escena.
@@ -57,6 +59,25 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
     // Hora real del instante 0 de la sesión, para guardar con fecha y hora.
     private val t0Epoch = System.currentTimeMillis() / 1000.0 - SystemClock.elapsedRealtime() / 1000.0
     private val ioExec = Executors.newSingleThreadExecutor { r -> Thread(r, "argos-memoria") }
+    private var lastSave = 0.0
+    private var behaviourMature = 0
+    private var behaviourReady = false
+
+    init {
+        // Lo normal de la escena sobrevive a cerrar la app: son agregados por
+        // celda (rumbos, velocidades, clases), ningún recorrido individual.
+        behaviourFile?.takeIf { it.exists() }?.let { f ->
+            runCatching { eus.argos.core.BehaviourModel.deserialize(f.readText()) }.getOrNull()
+                ?.let { brain.behaviour = it }
+        }
+    }
+
+    private fun saveBehaviour(sync: Boolean) {
+        val f = behaviourFile ?: return
+        val txt = brain.behaviour?.serialize() ?: return
+        val job = Runnable { runCatching { f.parentFile?.mkdirs(); f.writeText(txt) } }
+        if (sync) job.run() else try { ioExec.execute(job) } catch (_: Exception) {}
+    }
     private val memory = DetectionMemory()
 
     private val env = OrtEnvironment.getEnvironment()
@@ -179,6 +200,11 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
         val tSec = SystemClock.elapsedRealtime() / 1000.0
         val info = brain.update(engine.tracker.tracks, engine.tracker.minHits, tSec, sc, h.toDouble() / ah,
                                 w, h, engine.camX * sc, engine.camY * sc, !engine.cameraMoving)
+        if (tSec - lastSave > 60) {
+            lastSave = tSec
+            saveBehaviour(false)
+            brain.behaviour?.maturity()?.let { behaviourMature = it.cellsMature; behaviourReady = it.ready }
+        }
         if (brain.finished.isNotEmpty()) {
             val done = ArrayList(brain.finished); brain.finished.clear()
             store?.let { s -> try { ioExec.execute { done.forEach { s.save(it, t0Epoch) } } } catch (_: Exception) {} }
@@ -198,7 +224,7 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
         frames++
         return Frame(r.boxes, w, h, info.associateBy { it.id }, engine.camX * sc, engine.camY * sc,
                      engine.cameraMoving, brain.people, brain.vehicles, brain.seen["person"]?.size ?: 0,
-                     brain.scale.valid, brain.scale.n, brain.events.take(3))
+                     brain.scale.valid, brain.scale.n, brain.events.take(3), behaviourMature, behaviourReady)
     }
 
     /**
@@ -246,6 +272,7 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
      * y solo entonces se libera.
      */
     fun close() {
+        saveBehaviour(true)
         ioExec.shutdown()
         detExec.shutdown()
         try { detExec.awaitTermination(3, java.util.concurrent.TimeUnit.SECONDS) }

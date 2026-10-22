@@ -92,7 +92,7 @@ class MainActivity : ComponentActivity() {
             val store = eus.argos.core.TrackStore(java.io.File(filesDir, "memoria"))
             val borrados = store.applyRetention(System.currentTimeMillis() / 1000.0)
             Log.i(TAG, "ARGOS nativo memoria: retención aplicada, $borrados día(s) borrados")
-            val p = Pipeline(model, threads, store)
+            val p = Pipeline(model, threads, store, java.io.File(filesDir, "memoria/comportamiento.txt"))
             val warm = p.warmup()
             // El proveedor que se nombra es el que se usa: aquí no se pide
             // ninguno más que la CPU, así que no hay nada que pueda caerse en
@@ -138,6 +138,12 @@ class MainActivity : ComponentActivity() {
     private fun startCamera() {
         val future = ProcessCameraProvider.getInstance(this)
         future.addListener({
+            // El proveedor de cámara llega cuando quiere. Si para entonces esta
+            // actividad ya se destruyó (el sistema la recreó), atar la cámara a
+            // su ciclo de vida tumba la app: «LifecycleCamera with destroyed
+            // lifecycle», visto en el emulador del CI.
+            if (isFinishing || isDestroyed ||
+                lifecycle.currentState == androidx.lifecycle.Lifecycle.State.DESTROYED) return@addListener
             val provider = future.get()
             // Misma proporción en vista previa y análisis: con FIT_CENTER las
             // dos ven el mismo campo y las cajas caen donde está el objeto.
@@ -194,8 +200,10 @@ class MainActivity : ComponentActivity() {
             else -> "cámara quieta · aprendiendo la escala"
         }
         val ev = f.events.firstOrNull()?.let { "último: ${it.kind} #${it.id} · ${it.detail}" } ?: "sin eventos"
+        val normal = if (f.behaviourReady) "lo normal de la escena: aprendido (${f.behaviourMature} zonas)"
+                     else "lo normal de la escena: aprendiendo (${f.behaviourMature} zonas)"
         val txt = "personas %d · vehículos %d · hoy %d personas distintas\n".format(loc, f.people, f.vehicles, f.peopleSeen) +
-            escena + "\n" + ev + "\n" +
+            escena + "\n" + normal + "\n" + ev + "\n" +
             "%.0f fps · análisis %.1f ms · detector %.0f ms (%d tesela%s)\n".format(
                 loc, p.fps, p.engineMs, p.detMs, p.lastTiles, if (p.lastTiles == 1) "" else "s") +
             "modo " + modo(p) + " · toca para cambiar · mantén para la memoria"
@@ -209,7 +217,8 @@ class MainActivity : ComponentActivity() {
                         f.boxes.size, det))
             Log.i(TAG, "ARGOS nativo escena: " + (if (f.moving) "en mano" else "quieta") +
                        " · escala " + (if (f.scaleValid) "válida" else "aprendiendo") +
-                       " · personas ${f.people} · vistas ${f.peopleSeen} · modo ${modo(p)}")
+                       " · personas ${f.people} · vistas ${f.peopleSeen} · zonas aprendidas ${f.behaviourMature}" +
+                       " · modo ${modo(p)}")
         }
     }
 

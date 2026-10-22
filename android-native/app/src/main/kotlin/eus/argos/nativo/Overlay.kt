@@ -29,6 +29,13 @@ class Overlay(ctx: Context) : View(ctx) {
         style = Paint.Style.STROKE; strokeWidth = 5f; color = Color.rgb(0, 230, 118); isAntiAlias = true
     }
     private val stopped = Paint(det).apply { color = Color.rgb(255, 171, 64) }
+    // Fuera de lo normal de la escena: rojo si es claro (≥ 0,5), naranja si es
+    // inusual (≥ 0,2), los mismos cortes que el panel de la web.
+    private val unusual = Paint(det).apply { color = Color.rgb(255, 120, 0); strokeWidth = 7f }
+    private val alert = Paint(det).apply { color = Color.rgb(255, 40, 40); strokeWidth = 9f }
+    private val reason = Paint().apply {
+        color = Color.rgb(255, 200, 190); textSize = 26f; isAntiAlias = true; setShadowLayer(5f, 0f, 0f, Color.BLACK)
+    }
     private val moving = Paint().apply {
         style = Paint.Style.STROKE; strokeWidth = 3f; color = Color.argb(170, 255, 196, 0)
         pathEffect = android.graphics.DashPathEffect(floatArrayOf(14f, 10f), 0f); isAntiAlias = true
@@ -82,8 +89,15 @@ class Overlay(ctx: Context) : View(ctx) {
             val fromDet = b.klassSrc == "det"
             val x1 = ox + b.x1.toFloat() * s; val y1 = oy + b.y1.toFloat() * s
             val x2 = ox + b.x2.toFloat() * s; val y2 = oy + b.y2.toFloat() * s
-            canvas.drawRect(x1, y1, x2, y2,
-                if (!fromDet) moving else if (inf?.stopped == true) stopped else det)
+            val an = inf?.anomaly?.score ?: 0.0
+            canvas.drawRect(x1, y1, x2, y2, when {
+                an >= 0.5 -> alert
+                an >= 0.2 -> unusual
+                !fromDet -> moving
+                inf?.stopped == true -> stopped
+                else -> det
+            })
+            if (an >= 0.2) inf?.anomaly?.reasons?.firstOrNull()?.let { canvas.drawText(it, x1 + 6, y2 + 58, reason) }
             canvas.drawText(if (fromDet) "${nombre(b.klass)} #${b.id}" else "movimiento", x1 + 6, y1 - 12, text)
             if (inf != null && fromDet) {
                 val linea = StringBuilder()

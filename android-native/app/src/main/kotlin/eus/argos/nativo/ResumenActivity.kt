@@ -50,9 +50,19 @@ class ResumenActivity : ComponentActivity() {
                 .setNegativeButton("Cancelar", null).show()
             true
         }
+        val olvidar = Button(this).apply {
+            text = "Olvidar lo aprendido de la escena"
+            setOnClickListener {
+                AlertDialog.Builder(this@ResumenActivity)
+                    .setMessage("Se olvida qué es normal en esta escena (rumbos, velocidades, clases por zona). " +
+                                "Hazlo si has movido la cámara a otro sitio.")
+                    .setPositiveButton("Olvidar") { _, _ -> File(filesDir, "memoria/comportamiento.txt").delete(); pinta() }
+                    .setNegativeButton("Cancelar", null).show()
+            }
+        }
         setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.rgb(18, 18, 18))
-            addView(cabecera); addView(borrar)
+            addView(cabecera); addView(borrar); addView(olvidar)
             addView(lista, LinearLayout.LayoutParams(-1, 0, 1f))
         })
         pinta()
@@ -69,6 +79,7 @@ class ResumenActivity : ComponentActivity() {
             "eventos: $ev\n" +
             (if (horas.isNotEmpty()) "por hora: $horas\n" else "") +
             (if (s.longestStayS > 0) "estancia más larga: ${s.longestStayS.toInt()} s\n" else "") +
+            normalidad() +
             "\nSolo se guardan recorridos, ninguna imagen. Lo de más de 30 días se borra solo. " +
             "Mantén pulsado un recorrido para borrarlo."
         val zona = ZoneId.systemDefault()
@@ -85,6 +96,15 @@ class ResumenActivity : ComponentActivity() {
             override fun getView(position: Int, convertView: android.view.View?, parent: android.view.ViewGroup) =
                 super.getView(position, convertView, parent).also { (it as TextView).setTextColor(Color.WHITE) }
         }
+    }
+
+    private fun normalidad(): String {
+        val f = File(filesDir, "memoria/comportamiento.txt")
+        val m = f.takeIf { it.exists() }?.let { runCatching { eus.argos.core.BehaviourModel.deserialize(it.readText()) }.getOrNull() }
+            ?: return "lo normal de la escena: sin aprender todavía\n"
+        val mt = m.maturity()
+        return "lo normal de la escena: ${mt.cellsMature} zonas aprendidas, ${mt.directional} con flujo propio" +
+            (if (mt.ready) "" else " (aún aprendiendo)") + "\n"
     }
 
     private fun nombre(k: String) = when (k) {
