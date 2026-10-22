@@ -324,6 +324,8 @@ class VozPiper(config: String, private val infer: (LongArray, FloatArray) -> Flo
     private val escalas: FloatArray
     /** Velocidad: >1 más despacio. */
     var duracion = 1.0f
+    /** El tratamiento que se le da a la salida. */
+    var efecto = EfectoVoz.Tipo.RADIO
 
     init {
         val i = config.indexOf("\"phoneme_id_map\"")
@@ -372,7 +374,7 @@ class VozPiper(config: String, private val infer: (LongArray, FloatArray) -> Flo
         val out = FloatArray(trozos.sumOf { it.size })
         var p = 0
         for (t in trozos) { System.arraycopy(t, 0, out, p, t.size); p += t.size }
-        return out
+        return EfectoVoz.aplica(out, muestreo, efecto)
     }
 
     /** Fuera el silencio de los bordes y los huecos de más de 0,3 s dentro. */
@@ -397,5 +399,77 @@ class VozPiper(config: String, private val infer: (LongArray, FloatArray) -> Flo
             val pico = maxOf(0.01f, a.maxOfOrNull { Math.abs(it) } ?: 0f)
             return ShortArray(a.size) { (a[it] / pico * 0.9f * 32767).toInt().toShort() }
         }
+    }
+}
+
+/**
+ * El tratamiento de la voz: que suene a ARGOS y no a un lector de pantalla.
+ * Una cadena de estudio en pequeño, sin librerías:
+ *  1. puerta de ruido: lo que queda entre palabras por debajo de un umbral se
+ *     apaga (el «denoiser»: el siseo de fondo de la síntesis desaparece);
+ *  2. paso de banda 160 Hz-3,6 kHz: voz de radio, sin graves ni brillo;
+ *  3. compresor 4:1 a −30 dB con recuperación de nivel: todo igual de fuerte y
+ *     cerca, como una voz de transmisión;
+ *  4. saturación suave: un punto de suciedad, sin recortes digitales;
+ *  5. reducción de bits ligera: el grano de un canal comprimido.
+ * `limpia` no toca nada.
+ */
+object EfectoVoz {
+    enum class Tipo(val texto: String) { LIMPIA("limpia"), RADIO("radio"), MAQUINA("máquina") }
+
+    private class Biquad(b0: Double, b1: Double, b2: Double, a0: Double, a1: Double, a2: Double) {
+        private val c0 = b0 / a0; private val c1 = b1 / a0; private val c2 = b2 / a0
+        private val d1 = a1 / a0; private val d2 = a2 / a0
+        private var x1 = 0.0; private var x2 = 0.0; private var y1 = 0.0; private var y2 = 0.0
+        fun paso(x: Double): Double {
+            val y = c0 * x + c1 * x1 + c2 * x2 - d1 * y1 - d2 * y2
+            x2 = x1; x1 = x; y2 = y1; y1 = y
+            return y
+        }
+        companion object {
+            // Fórmulas de R. Bristow-Johnson (Audio EQ Cookbook), Q = 0,707.
+            fun paso(alto: Boolean, f: Double, sr: Int): Biquad {
+                val w = 2 * Math.PI * f / sr; val al = Math.sin(w) / (2 * 0.707); val cw = Math.cos(w)
+                return if (alto) Biquad((1 + cw) / 2, -(1 + cw), (1 + cw) / 2, 1 + al, -2 * cw, 1 - al)
+                       else Biquad((1 - cw) / 2, 1 - cw, (1 - cw) / 2, 1 + al, -2 * cw, 1 - al)
+            }
+        }
+    }
+
+    fun aplica(a: FloatArray, sr: Int, tipo: Tipo): FloatArray {
+        if (tipo == Tipo.LIMPIA || a.isEmpty()) return a
+        val maquina = tipo == Tipo.MAQUINA
+        val pico = (a.maxOfOrNull { Math.abs(it) } ?: 0f).toDouble().coerceAtLeast(1e-4)
+        val out = FloatArray(a.size)
+
+        // 1. Puerta: envolvente rápida; por debajo del 4 % del pico, se cierra
+        //    en unos 15 ms y se abre en 2 ms.
+        val ataque = Math.exp(-1.0 / (0.002 * sr)); val suelta = Math.exp(-1.0 / (0.015 * sr))
+        var env = 0.0; var gan = 0.0
+        val hp1 = Biquad.paso(true, 160.0, sr); val hp2 = Biquad.paso(true, 160.0, sr)
+        val lp1 = Biquad.paso(false, if (maquina) 3000.0 else 3600.0, sr); val lp2 = Biquad.paso(false, if (maquina) 3000.0 else 3600.0, sr)
+        // 3. Compresor: umbral −30 dB del pico, 4:1 (6:1 en «máquina»).
+        val umbral = pico * 0.03; val razon = if (maquina) 6.0 else 4.0
+        val cAt = Math.exp(-1.0 / (0.005 * sr)); val cRe = Math.exp(-1.0 / (0.050 * sr))
+        var cEnv = 0.0
+        val pasos = if (maquina) 48.0 else 96.0       // 5. niveles de cuantización
+        for (i in a.indices) {
+            val x = a[i] / pico
+            val ax = Math.abs(x)
+            env = if (ax > env) ataque * env + (1 - ataque) * ax else suelta * env + (1 - suelta) * ax
+            val objetivo = if (env > 0.04) 1.0 else 0.0
+            gan += (objetivo - gan) * (if (objetivo > gan) 0.2 else 0.002)
+            var y = x * gan
+            y = lp2.paso(lp1.paso(hp2.paso(hp1.paso(y))))
+            val ay = Math.abs(y)
+            cEnv = if (ay > cEnv) cAt * cEnv + (1 - cAt) * ay else cRe * cEnv + (1 - cRe) * ay
+            val u = umbral / pico
+            if (cEnv > u) y *= Math.pow(cEnv / u, 1.0 / razon - 1)
+            y *= if (maquina) 5.0 else 4.0                 // recuperación de nivel
+            y = Math.tanh(y * 1.3) / Math.tanh(1.3)        // 4. saturación suave
+            y = Math.round(y * pasos) / pasos
+            out[i] = y.toFloat()
+        }
+        return out
     }
 }

@@ -3,6 +3,7 @@ package eus.argos.paridad
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
+import eus.argos.core.EfectoVoz
 import eus.argos.core.Fonetica
 import eus.argos.core.Normaliza
 import eus.argos.core.VozPiper
@@ -26,6 +27,7 @@ import java.nio.LongBuffer
  * Con `voz <modelo.onnx> <salida.wav> <texto>` sintetiza y escribe un WAV.
  */
 fun main(args: Array<String>) {
+    if (args.isNotEmpty() && args[0] == "efecto") { efectoWav(File(args[1]), File(args[2]), EfectoVoz.Tipo.valueOf(args[3])); return }
     if (args.isNotEmpty() && args[0] == "voz") {
         // El texto de un fichero si empieza por @: la JVM no siempre lee bien las tildes de la línea de órdenes.
         val t = args.drop(3).joinToString(" ")
@@ -56,6 +58,34 @@ fun main(args: Array<String>) {
         "28,8 km/h" to "veintiocho coma ocho kilómetros por hora", "120 m" to "ciento veinte metros",
         "1.250 eventos" to "mil doscientos cincuenta eventos", "GPS" to "ge pe ese", "100" to "cien",
         "2.000.000" to "dos millones")) pide("«$t» → «${Normaliza.texto(t)}»", Normaliza.texto(t) == e)
+    // El efecto: menos agudos, menos diferencia entre fuerte y flojo, silencio
+    // entre palabras de verdad silencioso, y sin pasarse de escala.
+    run {
+        val sr = 22050
+        val r = java.util.Random(5)
+        // Una «voz» sintética a ráfagas de 500 ms (250 ms fuerte, 250 ms a un
+        // cuarto, como dos sílabas) con siseo entre ellas.
+        val a = FloatArray(sr * 2) { i ->
+            val t = i / sr.toDouble(); val on = ((t * 2).toInt() % 2 == 0)
+            val voz = if (on) (0.6 * Math.sin(2 * Math.PI * 140 * t) + 0.3 * Math.sin(2 * Math.PI * 5600 * t)) * (if ((t * 4).toInt() % 2 == 0) 1.0 else 0.25) else 0.0
+            (voz + r.nextGaussian() * 0.01).toFloat()
+        }
+        val b = EfectoVoz.aplica(a, sr, EfectoVoz.Tipo.RADIO)
+        fun agudos(x: FloatArray): Double { var e = 0.0; var p = 0f; for (v in x) { e += (v - p) * (v - p).toDouble(); p = v }; return e / x.sumOf { it * it.toDouble() }.coerceAtLeast(1e-12) }
+        val silA = a.sliceArray(sr / 2 + 200 until sr - 200).map { Math.abs(it) }.average()
+        val silB = b.sliceArray(sr / 2 + 2000 until sr - 200).map { Math.abs(it) }.average()
+        pide("efecto: agudos %.3f → %.3f".format(agudos(a), agudos(b)), agudos(b) < agudos(a) * 0.5)
+        // Rango dinámico al hablar: ventanas de 10 ms dentro de una ráfaga, la
+        // más fuerte frente a la más floja (p90/p10).
+        fun rango(x: FloatArray): Double {
+            val v = (0 until sr / 2 - 220 step 220).map { k -> Math.sqrt((k until k + 220).sumOf { x[it] * x[it].toDouble() } / 220) }.sorted()
+            return 20 * Math.log10(v[v.size * 9 / 10] / v[v.size / 10].coerceAtLeast(1e-9))
+        }
+        pide("efecto: rango dinámico al hablar %.1f dB → %.1f dB".format(rango(a), rango(b)), rango(b) < rango(a) - 5)
+        pide("efecto: siseo entre palabras %.4f → %.5f".format(silA, silB), silB < silA * 0.1)
+        pide("efecto: sin pasarse de escala", b.all { Math.abs(it) <= 1.0f })
+        pide("efecto «limpia» no toca nada", EfectoVoz.aplica(a, sr, EfectoVoz.Tipo.LIMPIA) === a)
+    }
     println(if (fallos == 0) "VOZ: CUMPLE" else "VOZ: FALLA ($fallos)")
     if (fallos > 0) System.exit(1)
 }
@@ -80,4 +110,17 @@ private fun sintetiza(modelo: File, wav: File, texto: String) {
     bb.put("data".toByteArray()); bb.putInt(pcm.size * 2); pcm.forEach { bb.putShort(it) }
     wav.writeBytes(bb.array())
     println("voz: %.2f s de audio en %d ms · %s".format(pcm.size / voz.muestreo.toDouble(), ms, Fonetica.frase(texto)))
+}
+
+private fun efectoWav(entra: File, sale: File, tipo: EfectoVoz.Tipo) {
+    val b = ByteBuffer.wrap(entra.readBytes()).order(ByteOrder.LITTLE_ENDIAN)
+    val sr = b.getInt(24); val n = (b.capacity() - 44) / 2
+    val a = FloatArray(n) { b.getShort(44 + it * 2) / 32768f }
+    val pcm = VozPiper.pcm16(EfectoVoz.aplica(a, sr, tipo))
+    val o = ByteBuffer.allocate(44 + pcm.size * 2).order(ByteOrder.LITTLE_ENDIAN)
+    o.put("RIFF".toByteArray()); o.putInt(36 + pcm.size * 2); o.put("WAVEfmt ".toByteArray()); o.putInt(16)
+    o.putShort(1); o.putShort(1); o.putInt(sr); o.putInt(sr * 2); o.putShort(2); o.putShort(16)
+    o.put("data".toByteArray()); o.putInt(pcm.size * 2); pcm.forEach { o.putShort(it) }
+    sale.writeBytes(o.array())
+    println("efecto ${tipo.texto}: ${sale.name}")
 }

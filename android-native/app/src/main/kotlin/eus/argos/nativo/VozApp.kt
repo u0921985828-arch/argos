@@ -27,6 +27,10 @@ class VozApp private constructor(private val voz: VozPiper, private val ses: Ort
     private val hilo = Executors.newSingleThreadExecutor { r -> Thread(r, "argos-voz") }
     @Volatile private var pista: AudioTrack? = null
     @Volatile private var turno = 0
+    /** Limpia, radio o máquina; se puede cambiar en marcha. */
+    var efecto: eus.argos.core.EfectoVoz.Tipo
+        get() = voz.efecto
+        set(v) { voz.efecto = v }
 
     /** Habla el texto; lo anterior que estuviera sonando se corta. */
     fun habla(texto: String) {

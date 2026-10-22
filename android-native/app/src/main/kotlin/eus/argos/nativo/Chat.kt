@@ -50,6 +50,9 @@ class Chat(private val act: ComponentActivity, private val ask: () -> Ask?,
     }
     private val mic = ImageButton(act)
     private val estadoVoz = TextView(act).apply { setTextColor(Ui.SUAVE); textSize = 11f }
+    private val prefs = act.getSharedPreferences("argos", android.content.Context.MODE_PRIVATE)
+    /** Ficha para elegir el tratamiento de la voz propia; solo se ve si la hay. */
+    private val fichaEfecto = Ui.ficha(act, "Voz: radio") { cambiarEfecto() }.apply { visibility = android.view.View.GONE }
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var ttsOk = false
@@ -91,6 +94,7 @@ class Chat(private val act: ComponentActivity, private val ask: () -> Ask?,
                 addView(TextView(act).apply { text = "Hablar con ARGOS"; setTextColor(Ui.TEXTO); textSize = 16f; typeface = Typeface.DEFAULT_BOLD })
                 addView(estadoVoz)
             }, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(fichaEfecto)
             addView(TextView(act).apply {
                 text = "✕"; setTextColor(Ui.SUAVE); textSize = 20f
                 setPadding(Ui.dp(act, 14), Ui.dp(act, 4), Ui.dp(act, 14), Ui.dp(act, 4))
@@ -259,8 +263,24 @@ class Chat(private val act: ComponentActivity, private val ask: () -> Ask?,
         Log.i(TAG, "ARGOS chat: escuchando, reconocimiento $reconocimiento, idioma $idioma")
     }
 
-    /** La voz propia terminó de cargar: que el panel lo diga. */
-    fun vozLista() = pintaEstado()
+    /** La voz propia terminó de cargar: se le pone el efecto guardado y el panel lo dice. */
+    fun vozLista() {
+        val v = vozPropia() ?: return pintaEstado()
+        v.efecto = runCatching { eus.argos.core.EfectoVoz.Tipo.valueOf(prefs.getString("efecto", "RADIO")!!) }
+            .getOrDefault(eus.argos.core.EfectoVoz.Tipo.RADIO)
+        act.runOnUiThread { fichaEfecto.visibility = android.view.View.VISIBLE; fichaEfecto.text = "Voz: ${v.efecto.texto}" }
+        pintaEstado()
+    }
+
+    /** Limpia → radio → máquina → limpia, y lo dice con la voz nueva. */
+    private fun cambiarEfecto() {
+        val v = vozPropia() ?: return
+        val tipos = eus.argos.core.EfectoVoz.Tipo.values()
+        v.efecto = tipos[(v.efecto.ordinal + 1) % tipos.size]
+        prefs.edit().putString("efecto", v.efecto.name).apply()
+        fichaEfecto.text = "Voz: ${v.efecto.texto}"
+        v.habla("Así sueno ahora.")
+    }
 
     fun close() {
         recognizer?.destroy(); recognizer = null
