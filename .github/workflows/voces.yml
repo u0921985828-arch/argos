@@ -6,6 +6,13 @@ name: Muestras de voz
 
 on:
   workflow_dispatch:
+    inputs:
+      voces:
+        description: Voces a descargar (rutas bajo es/ en rhasspy/piper-voices)
+        default: "es_ES/davefx/medium"
+      variantes:
+        description: Pares ruido:acabado (ruido «-» = el del modelo; acabado NATURAL, ESTUDIO o CRUDA)
+        default: "-:CRUDA -:NATURAL 0.45:NATURAL 0.3:NATURAL"
 
 permissions:
   contents: write
@@ -27,8 +34,7 @@ jobs:
           set -e
           mkdir -p /tmp/voces out
           base=https://huggingface.co/rhasspy/piper-voices/resolve/main/es
-          for v in es_ES/davefx/medium es_ES/sharvard/medium es_ES/carlfm/x_low es_ES/mls_10246/low es_ES/mls_9972/low \
-                   es_MX/ald/medium es_MX/claude/high; do
+          for v in ${{ inputs.voces }}; do
             loc=$(echo "$v" | cut -d/ -f1); nom=$(echo "$v" | cut -d/ -f2); cal=$(echo "$v" | cut -d/ -f3)
             f="${loc}-${nom}-${cal}"
             curl -fsSL -o "/tmp/voces/$f.onnx" "$base/$v/$f.onnx" || { echo "falta $f"; continue; }
@@ -43,8 +49,12 @@ jobs:
           printf '%s' "Hola, soy ARGOS. Ahora veo 2 personas y 1 vehículo. El último pasó a las 18:07, a 28,8 km/h. No reconozco caras ni identifico a nadie." > /tmp/frase.txt
           for m in /tmp/voces/*.onnx; do
             f=$(basename "$m" .onnx)
-            ./gradlew --no-daemon -q :core:sintetiza -Pmodelo="$m" -Psalida="$GITHUB_WORKSPACE/out/$f.wav" -Ptexto=@/tmp/frase.txt \
-              | tee -a "$GITHUB_WORKSPACE/out/voces.txt" || echo "$f falló" >> "$GITHUB_WORKSPACE/out/voces.txt"
+            for v in ${{ inputs.variantes }}; do
+              ruido=${v%%:*}; ef=${v##*:}
+              nom="$f-ruido${ruido}-${ef}"
+              ./gradlew --no-daemon -q :core:sintetiza -Pmodelo="$m" -Psalida="$GITHUB_WORKSPACE/out/$nom.wav" -Ptexto=@/tmp/frase.txt \
+                -Pruido="$ruido" -Pefecto="$ef" | tee -a "$GITHUB_WORKSPACE/out/voces.txt" || echo "$nom falló" >> "$GITHUB_WORKSPACE/out/voces.txt"
+            done
           done
       - name: Publicar en la rama voces-muestra
         run: |

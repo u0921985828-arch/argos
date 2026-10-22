@@ -326,6 +326,12 @@ class VozPiper(config: String, private val infer: (LongArray, FloatArray) -> Flo
     var duracion = 1.0f
     /** El acabado que se le da a la salida. */
     var efecto = EfectoVoz.Tipo.NATURAL
+    /**
+     * Ruido de la síntesis (noise_scale). El de fábrica, 0,667, da variedad
+     * pero también aspereza y soplido; más bajo, la voz sale más limpia de
+     * origen. null = el del modelo.
+     */
+    var ruido: Float? = null
 
     init {
         val i = config.indexOf("\"phoneme_id_map\"")
@@ -360,21 +366,24 @@ class VozPiper(config: String, private val infer: (LongArray, FloatArray) -> Flo
         return out.toLongArray()
     }
 
-    /** Texto a audio en coma flotante, frase a frase. */
-    fun habla(texto: String): FloatArray {
+    /** Texto a audio en coma flotante, frase a frase, con el acabado elegido. */
+    fun habla(texto: String): FloatArray = EfectoVoz.aplica(hablaSinTratar(texto), muestreo, efecto)
+
+    /** Lo que sale del modelo, sin limpieza ni acabado. */
+    fun hablaSinTratar(texto: String): FloatArray {
         val frases = texto.split(Regex("(?<=[.!?])\\s+")).map { it.trim() }.filter { it.isNotEmpty() }
         val pausa = FloatArray((muestreo * 0.18).toInt())
         val trozos = ArrayList<FloatArray>()
         for (f in frases) {
             val fon = Fonetica.frase(f)
             if (fon.isBlank()) continue
-            trozos.add(recorta(infer(ids(fon), floatArrayOf(escalas[0], escalas[1] * duracion, escalas[2]))))
+            trozos.add(recorta(infer(ids(fon), floatArrayOf(ruido ?: escalas[0], escalas[1] * duracion, escalas[2]))))
             trozos.add(pausa)
         }
         val out = FloatArray(trozos.sumOf { it.size })
         var p = 0
         for (t in trozos) { System.arraycopy(t, 0, out, p, t.size); p += t.size }
-        return EfectoVoz.aplica(out, muestreo, efecto)
+        return out
     }
 
     /** Fuera el silencio de los bordes y los huecos de más de 0,3 s dentro. */
@@ -417,8 +426,9 @@ class VozPiper(config: String, private val infer: (LongArray, FloatArray) -> Flo
  *  3. Compresión suave 3:1 a −20 dB, con ataque de 10 ms y relajación de
  *     60 ms: igual de cerca en cada sílaba, sin bombeo.
  *  4. Limitador final: nada pasa de −1 dB, sin saturar.
- *  5. De-esser (en las dos): baja las eses solo cuando las hay.
- * `NATURAL` (por defecto) es la voz tal cual con el de-esser y nada más.
+ *  5. En las dos, antes que nada: reductor de ruido espectral (`limpiaRuido`)
+ *     y de-esser, que baja las eses solo cuando las hay.
+ * `NATURAL` (por defecto) es la voz tal cual con esas dos limpiezas y nada más.
  */
 object EfectoVoz {
     enum class Tipo(val texto: String) { NATURAL("natural"), ESTUDIO("cálida") }
@@ -490,9 +500,88 @@ object EfectoVoz {
         return out
     }
 
+    /**
+     * Reductor de ruido espectral. La voz sintética lleva un soplido y un
+     * zumbido de fondo constantes, también DEBAJO de la voz, donde una puerta
+     * no llega. Se mira el sonido en ventanas de 23 ms (FFT de 512 con 75 %
+     * de solape), se estima el ruido de cada frecuencia como lo más bajo que
+     * suena en ella (percentil 10 a lo largo de la frase, pasado a media) y se resta en
+     * potencia, con un suelo para que no queden «pitidos musicales» y la
+     * ganancia suavizada en el tiempo.
+     */
+    fun limpiaRuido(a: FloatArray, sr: Int, fuerza: Double = 3.0, suelo: Double = 0.1): FloatArray {
+        val n = 512; val hop = 128
+        if (a.size < n * 2) return a
+        val ventana = DoubleArray(n) { 0.5 - 0.5 * Math.cos(2 * Math.PI * it / n) }
+        val tramas = (a.size - n) / hop + 1
+        val bins = n / 2 + 1
+        val re = Array(tramas) { DoubleArray(bins) }; val im = Array(tramas) { DoubleArray(bins) }
+        val buf = DoubleArray(n); val bi = DoubleArray(n)
+        for (t in 0 until tramas) {
+            for (k in 0 until n) { buf[k] = a[t * hop + k] * ventana[k]; bi[k] = 0.0 }
+            fft(buf, bi, false)
+            for (k in 0 until bins) { re[t][k] = buf[k]; im[t][k] = bi[k] }
+        }
+        // Ruido por frecuencia: percentil 10 de la potencia, pasado a media. La
+        // potencia de un ruido en una frecuencia se reparte como una exponencial,
+        // cuyo percentil 10 es 0,105 veces la media.
+        val ruido = DoubleArray(bins) { k ->
+            val p = DoubleArray(tramas) { t -> re[t][k] * re[t][k] + im[t][k] * im[t][k] }
+            p.sort(); p[(tramas * 0.10).toInt()] / 0.105
+        }
+        val out = DoubleArray(a.size); val peso = DoubleArray(a.size)
+        val previa = DoubleArray(bins) { 1.0 }
+        for (t in 0 until tramas) {
+            for (k in 0 until bins) {
+                val pot = re[t][k] * re[t][k] + im[t][k] * im[t][k]
+                var g = if (pot > 0) Math.sqrt(Math.max(0.0, pot - fuerza * ruido[k]) / pot) else 0.0
+                g = Math.max(suelo, g)
+                g = 0.6 * g + 0.4 * previa[k]      // sin saltos de una trama a otra
+                previa[k] = g
+                buf[k] = re[t][k] * g; bi[k] = im[t][k] * g
+                if (k in 1 until n / 2) { buf[n - k] = buf[k]; bi[n - k] = -bi[k] }
+            }
+            fft(buf, bi, true)
+            for (k in 0 until n) { out[t * hop + k] += buf[k] * ventana[k]; peso[t * hop + k] += ventana[k] * ventana[k] }
+        }
+        return FloatArray(a.size) { i -> if (peso[i] > 1e-6) (out[i] / peso[i]).toFloat() else 0f }
+    }
+
+    /** FFT radix-2 en el sitio; `inversa` divide por n. */
+    private fun fft(re: DoubleArray, im: DoubleArray, inversa: Boolean) {
+        val n = re.size
+        var j = 0
+        for (i in 1 until n) {
+            var bit = n shr 1
+            while (j and bit != 0) { j = j xor bit; bit = bit shr 1 }
+            j = j xor bit
+            if (i < j) { var t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t }
+        }
+        var len = 2
+        while (len <= n) {
+            val ang = 2 * Math.PI / len * (if (inversa) 1 else -1)
+            val wr = Math.cos(ang); val wi = Math.sin(ang)
+            var i = 0
+            while (i < n) {
+                var cr = 1.0; var ci = 0.0
+                for (k in 0 until len / 2) {
+                    val ur = re[i + k]; val ui = im[i + k]
+                    val vr = re[i + k + len / 2] * cr - im[i + k + len / 2] * ci
+                    val vi = re[i + k + len / 2] * ci + im[i + k + len / 2] * cr
+                    re[i + k] = ur + vr; im[i + k] = ui + vi
+                    re[i + k + len / 2] = ur - vr; im[i + k + len / 2] = ui - vi
+                    val nr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = nr
+                }
+                i += len
+            }
+            len = len shl 1
+        }
+        if (inversa) for (k in 0 until n) { re[k] /= n; im[k] /= n }
+    }
+
     fun aplica(a0: FloatArray, sr: Int, tipo: Tipo): FloatArray {
         if (a0.isEmpty()) return a0
-        val a = deEsser(a0, sr)
+        val a = deEsser(limpiaRuido(a0, sr), sr)
         if (tipo == Tipo.NATURAL) return a
         val pico = (a.maxOfOrNull { Math.abs(it) } ?: 0f).toDouble().coerceAtLeast(1e-4)
         val nyq = sr / 2.0

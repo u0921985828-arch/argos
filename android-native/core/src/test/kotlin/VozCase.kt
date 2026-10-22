@@ -30,8 +30,10 @@ fun main(args: Array<String>) {
     if (args.isNotEmpty() && args[0] == "efecto") { efectoWav(File(args[1]), File(args[2]), EfectoVoz.Tipo.valueOf(args[3])); return }
     if (args.isNotEmpty() && args[0] == "voz") {
         // El texto de un fichero si empieza por @: la JVM no siempre lee bien las tildes de la línea de órdenes.
-        val t = args.drop(3).joinToString(" ")
-        sintetiza(File(args[1]), File(args[2]), if (t.startsWith("@")) File(t.drop(1)).readText() else t); return
+        // voz <modelo> <salida.wav> <texto|@fichero> [ruido] [NATURAL|ESTUDIO|CRUDA]
+        val t = args[3]
+        sintetiza(File(args[1]), File(args[2]), if (t.startsWith("@")) File(t.drop(1)).readText() else t,
+                  args.getOrNull(4)?.toFloatOrNull(), args.getOrNull(5) ?: "NATURAL"); return
     }
     var fallos = 0
     fun pide(n: String, ok: Boolean) { println((if (ok) "ok    " else "FALLA ") + n); if (!ok) fallos++ }
@@ -125,14 +127,33 @@ fun main(args: Array<String>) {
         val ese = db(rms(b, q * 3 + 600, q * 4)) - db(rms(a, q * 3 + 600, q * 4))
         pide("de-esser: la «s» %+.1f dB".format(ese), ese < -6)
         pide("de-esser: la vocal %+.2f dB".format(vocal), Math.abs(vocal) < 0.5)
-        pide("«natural» es la voz con el de-esser y nada más",
-             EfectoVoz.aplica(a, sr, EfectoVoz.Tipo.NATURAL).contentEquals(b))
+    }
+    // Reductor de ruido: «vocales» (tonos de 220/440/880 Hz a ráfagas) con un
+    // soplido blanco constante a −24 dB por debajo. El soplido tiene que bajar
+    // 12 dB o más en los silencios, y la voz quedarse igual (±1 dB).
+    run {
+        val sr = 22050
+        val r = java.util.Random(11)
+        val a = FloatArray(sr * 2) { i ->
+            val t = i / sr.toDouble(); val on = ((t * 3).toInt() % 2 == 0)
+            val v = if (on) 0.3 * (Math.sin(2 * Math.PI * 220 * t) + 0.5 * Math.sin(2 * Math.PI * 440 * t) + 0.3 * Math.sin(2 * Math.PI * 880 * t)) else 0.0
+            (v + r.nextGaussian() * 0.02).toFloat()
+        }
+        val b = EfectoVoz.limpiaRuido(a, sr)
+        fun rms(x: FloatArray, i0: Int, i1: Int) = Math.sqrt((i0 until i1).sumOf { x[it] * x[it].toDouble() } / (i1 - i0))
+        fun db(v: Double) = 20 * Math.log10(v.coerceAtLeast(1e-9))
+        val s0 = sr / 3 + 1500; val s1 = 2 * sr / 3 - 1500          // silencio
+        val v0 = 1500; val v1 = sr / 3 - 1500                        // voz
+        val sop = db(rms(b, s0, s1)) - db(rms(a, s0, s1))
+        val voz = db(rms(b, v0, v1)) - db(rms(a, v0, v1))
+        pide("reductor de ruido: soplido %+.1f dB".format(sop), sop < -12)
+        pide("reductor de ruido: voz %+.2f dB".format(voz), Math.abs(voz) < 1.0)
     }
     println(if (fallos == 0) "VOZ: CUMPLE" else "VOZ: FALLA ($fallos)")
     if (fallos > 0) System.exit(1)
 }
 
-private fun sintetiza(modelo: File, wav: File, texto: String) {
+private fun sintetiza(modelo: File, wav: File, texto: String, ruido: Float? = null, efecto: String = "NATURAL") {
     val env = OrtEnvironment.getEnvironment()
     val ses = env.createSession(modelo.absolutePath, OrtSession.SessionOptions())
     val voz = VozPiper(File(modelo.path + ".json").readText()) { ids, esc ->
@@ -143,8 +164,12 @@ private fun sintetiza(modelo: File, wav: File, texto: String) {
                 val fb = (r[0] as OnnxTensor).floatBuffer; FloatArray(fb.remaining()).also { fb.get(it) }
             } } } }
     }
+    voz.ruido = ruido
+    // CRUDA: la salida del modelo sin ningún tratamiento, para comparar.
+    val crudo = efecto == "CRUDA"
+    if (!crudo) voz.efecto = EfectoVoz.Tipo.valueOf(efecto)
     val t0 = System.nanoTime()
-    val pcm = VozPiper.pcm16(voz.habla(texto))
+    val pcm = VozPiper.pcm16(if (crudo) voz.hablaSinTratar(texto) else voz.habla(texto))
     val ms = (System.nanoTime() - t0) / 1_000_000
     val bb = ByteBuffer.allocate(44 + pcm.size * 2).order(ByteOrder.LITTLE_ENDIAN)
     bb.put("RIFF".toByteArray()); bb.putInt(36 + pcm.size * 2); bb.put("WAVEfmt ".toByteArray()); bb.putInt(16)

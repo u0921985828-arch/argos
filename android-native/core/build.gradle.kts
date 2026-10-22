@@ -62,13 +62,15 @@ tasks.register<JavaExec>("voz") {
 }
 
 // Muestra de audio con una voz Piper: -Pmodelo=… -Psalida=… -Ptexto=@fichero
+// [-Pruido=0.4] [-Pefecto=NATURAL|ESTUDIO|CRUDA]
 tasks.register<JavaExec>("sintetiza") {
     group = "verification"
     description = "Sintetiza un WAV con una voz Piper."
     classpath = sourceSets["test"].runtimeClasspath
     mainClass.set("eus.argos.paridad.VozCaseKt")
     args = listOf("voz", (project.findProperty("modelo") ?: "") as String, (project.findProperty("salida") ?: "") as String,
-                  (project.findProperty("texto") ?: "Hola.") as String)
+                  (project.findProperty("texto") ?: "Hola.") as String,
+                  (project.findProperty("ruido") ?: "-") as String, (project.findProperty("efecto") ?: "NATURAL") as String)
 }
 
 // Radio pasiva (opcional, apagada por defecto): firmas BLE de rastreadores,

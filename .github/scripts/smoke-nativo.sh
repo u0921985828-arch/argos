@@ -79,8 +79,10 @@ fi
 # La escena y la memoria: que el cerebro corre y la retención se aplicó.
 # La voz carga después del detector (copia 63 MB y abre el modelo): se le dan
 # hasta 60 s antes de darla por perdida.
+# Se AÑADE al registro: en 20 s el búfer de logcat del emulador da la vuelta y
+# las primeras líneas (memoria, detector) desaparecerían.
 for i in $(seq 1 30); do
-    adb logcat -d -s ARGOS:V AndroidRuntime:E > logcat.txt || true
+    adb logcat -d -s ARGOS:V AndroidRuntime:E >> logcat.txt || true
     grep -q 'ARGOS voz: \(Piper\|no cargó\)' logcat.txt && break
     sleep 2
 done
