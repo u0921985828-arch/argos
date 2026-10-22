@@ -51,6 +51,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // El sistema guarda una captura de la pantalla para la lista de
+        // recientes: sería un fotograma de la cámara escrito en disco, y aquí
+        // no se guarda vídeo ni recortes. Las capturas que hace el usuario
+        // siguen funcionando (FLAG_SECURE las bloquearía también).
+        if (android.os.Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(false)
         preview = PreviewView(this).apply { scaleType = PreviewView.ScaleType.FIT_CENTER }
         capa = Overlay(this)
         hud = TextView(this).apply {

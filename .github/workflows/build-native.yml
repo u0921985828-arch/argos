@@ -30,13 +30,17 @@ on:
       - '.github/workflows/build-native.yml'
       - '.github/scripts/smoke-nativo.sh'
 
+# Mínimo por defecto. Solo escriben los trabajos que tocan la rama `apk-nativo`;
+# el de humo ejecuta una acción de terceros y no necesita más que leer.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   cleanup:
     if: inputs.apk_branch == 'borrar'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Delete the `apk-nativo` branch
         run: |
@@ -52,6 +56,8 @@ jobs:
   build:
     if: inputs.apk_branch != 'borrar'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -127,14 +133,33 @@ jobs:
             :core:zoomAutomatico :core:paridadEscena :core:escenaViva :core:camaraEnMano :core:memoria \
             :core:paridadComportamiento :core:comportamientoVivo :core:chat
 
-      - name: Build debug APK
+      # Release, no depuración: no depurable y sin `run-as` sobre la memoria.
+      # Con el secreto ARGOS_KEYSTORE_B64 se firma con la clave de tienda; sin
+      # él, con la de depuración del ejecutor, que cambia en cada compilación.
+      - name: Build release APK
         working-directory: android-native
-        run: ./gradlew --no-daemon :app:assembleDebug
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/argos.jks"
+            export ARGOS_KEYSTORE="$RUNNER_TEMP/argos.jks"
+          fi
+          ./gradlew --no-daemon :app:assembleRelease
+          rm -f "$RUNNER_TEMP/argos.jks"
+        env:
+          KS_B64: ${{ secrets.ARGOS_KEYSTORE_B64 }}
+          ARGOS_KEYSTORE_PASS: ${{ secrets.ARGOS_KEYSTORE_PASS }}
+          ARGOS_KEY_ALIAS: ${{ secrets.ARGOS_KEY_ALIAS }}
+          ARGOS_KEY_PASS: ${{ secrets.ARGOS_KEY_PASS }}
 
       - name: Verify the APK carries what it needs
         run: |
           set -e
-          APK=android-native/app/build/outputs/apk/debug/app-debug.apk
+          APK=android-native/app/build/outputs/apk/release/app-release.apk
+          # Lo que se entrega no puede ser depurable.
+          AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt | sort -V | tail -1)
+          if "$AAPT" dump badging "$APK" | grep -q application-debuggable; then
+            echo "::error::el APK de entrega es depurable"; exit 1
+          fi
           unzip -l "$APK" > contenido.txt
           for f in assets/yolox_nano.onnx assets/autoprueba.jpg \
                    lib/arm64-v8a/libonnxruntime.so lib/x86_64/libonnxruntime.so; do

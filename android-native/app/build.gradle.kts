@@ -20,9 +20,26 @@ android {
         // para el emulador del CI.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
     }
+    // Lo que se entrega es una compilación de RELEASE: una de depuración deja
+    // que cualquiera con un cable lea la memoria con `run-as` y enganche un
+    // depurador. La firma de tienda sale del entorno (ARGOS_KEYSTORE y
+    // compañía); sin ella se firma con la clave de depuración de la máquina
+    // que compila. Ninguna de las dos es depurable.
+    signingConfigs {
+        val ks = System.getenv("ARGOS_KEYSTORE")
+        if (!ks.isNullOrBlank() && file(ks).exists()) create("tienda") {
+            storeFile = file(ks)
+            storePassword = System.getenv("ARGOS_KEYSTORE_PASS")
+            keyAlias = System.getenv("ARGOS_KEY_ALIAS")
+            keyPassword = System.getenv("ARGOS_KEY_PASS")
+        }
+    }
     buildTypes {
         release {
+            // Sin ofuscar: ONNX Runtime llega a sus clases por JNI y R8 sin
+            // reglas medidas las quitaría. Se activa cuando haya reglas probadas.
             isMinifyEnabled = false
+            signingConfig = signingConfigs.findByName("tienda") ?: signingConfigs.getByName("debug")
         }
     }
     compileOptions {

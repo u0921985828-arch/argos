@@ -12,6 +12,7 @@
     <application
         android:label="ARGOS nativo"
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/sin_copias"
         android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen">
         <activity
             android:name=".MainActivity"
