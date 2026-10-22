@@ -1,0 +1,58 @@
+name: Muestras de voz
+
+# Descarga voces Piper en español, lee su ficha (licencia) y sintetiza la misma
+# frase con cada una usando la fonética de ARGOS. Deja los WAV y las fichas en
+# la rama `voces-muestra` para escucharlas y elegir. No toca el APK.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  muestras:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - name: Gradle wrapper
+        working-directory: android-native
+        run: |
+          [ -f gradlew ] || gradle wrapper --gradle-version 8.9 --no-daemon
+          chmod +x gradlew
+      - name: Descargar voces y fichas
+        run: |
+          set -e
+          mkdir -p /tmp/voces out
+          base=https://huggingface.co/rhasspy/piper-voices/resolve/main/es
+          for v in es_ES/davefx/medium es_ES/sharvard/medium es_ES/carlfm/x_low es_ES/mls_10246/low es_ES/mls_9972/low \
+                   es_MX/ald/medium es_MX/claude/high; do
+            loc=$(echo "$v" | cut -d/ -f1); nom=$(echo "$v" | cut -d/ -f2); cal=$(echo "$v" | cut -d/ -f3)
+            f="${loc}-${nom}-${cal}"
+            curl -fsSL -o "/tmp/voces/$f.onnx" "$base/$v/$f.onnx" || { echo "falta $f"; continue; }
+            curl -fsSL -o "/tmp/voces/$f.onnx.json" "$base/$v/$f.onnx.json"
+            curl -fsSL -o "out/$f.MODEL_CARD.txt" "$base/$v/MODEL_CARD" || echo "sin ficha" > "out/$f.MODEL_CARD.txt"
+            echo "$f $(stat -c %s /tmp/voces/$f.onnx) bytes · sha256 $(sha256sum /tmp/voces/$f.onnx | cut -c1-64)" >> out/voces.txt
+          done
+          cat out/voces.txt
+      - name: Sintetizar la misma frase con cada voz
+        working-directory: android-native
+        run: |
+          printf '%s' "Hola, soy ARGOS. Ahora veo 2 personas y 1 vehículo. El último pasó a las 18:07, a 28,8 km/h. No reconozco caras ni identifico a nadie." > /tmp/frase.txt
+          for m in /tmp/voces/*.onnx; do
+            f=$(basename "$m" .onnx)
+            ./gradlew --no-daemon -q :core:sintetiza -Pmodelo="$m" -Psalida="$GITHUB_WORKSPACE/out/$f.wav" -Ptexto=@/tmp/frase.txt \
+              | tee -a "$GITHUB_WORKSPACE/out/voces.txt" || echo "$f falló" >> "$GITHUB_WORKSPACE/out/voces.txt"
+          done
+      - name: Publicar en la rama voces-muestra
+        run: |
+          set -e
+          cd out
+          git init -q -b voces-muestra
+          git config user.name "github-actions"; git config user.email "github-actions@users.noreply.github.com"
+          git add . && git commit -q -m "Muestras de voz de ${GITHUB_SHA::8}"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" voces-muestra
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

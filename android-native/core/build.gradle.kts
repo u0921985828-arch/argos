@@ -52,6 +52,25 @@ tasks.register<JavaExec>("camaraEnMano") {
     args = listOf("persona", "exigir")
 }
 
+// La voz: fonética del español contra espeak-ng (referencia guardada en
+// src/test/resources) y números, horas y unidades dichos bien.
+tasks.register<JavaExec>("voz") {
+    group = "verification"
+    description = "Fonemas como espeak-ng y cifras dichas bien."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.VozCaseKt")
+}
+
+// Muestra de audio con una voz Piper: -Pmodelo=… -Psalida=… -Ptexto=@fichero
+tasks.register<JavaExec>("sintetiza") {
+    group = "verification"
+    description = "Sintetiza un WAV con una voz Piper."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.VozCaseKt")
+    args = listOf("voz", (project.findProperty("modelo") ?: "") as String, (project.findProperty("salida") ?: "") as String,
+                  (project.findProperty("texto") ?: "Hola.") as String)
+}
+
 // Radio pasiva (opcional, apagada por defecto): firmas BLE de rastreadores,
 // Remote ID de drones sin la posición del piloto, aviso de rastreador que se
 // queda, interferencia y suplantación GNSS. Sin aparato: bytes construidos.
