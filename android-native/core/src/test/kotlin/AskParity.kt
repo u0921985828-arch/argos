@@ -48,16 +48,45 @@ fun main(args: Array<String>) {
         override fun live() = Ask.Live(2, 0, 3, listOf("objeto 9: va contra el flujo habitual"), false, true, emptyList())
     }, ZoneOffset.UTC) { now }
     val casos = listOf(
-        "cuánta gente pasó en la última hora" to "1 personas en la última hora",
+        "cuánta gente pasó en la última hora" to "1 persona en la última hora",
         "cuántas personas hoy" to "2 personas hoy",
         "lo más rápido de hoy" to "Objeto 4 (vehículos), 28,8 km/h",
-        "algo raro" to "1 cosa(s) fuera de lo normal ahora",
-        "qué ves" to "Ahora: 2 persona(s)",
+        "algo raro" to "1 cosa fuera de lo normal ahora",
+        "qué ves" to "Ahora: 2 personas y 1 movimiento sin clase",
         "objeto 4" to "Objeto 4: vehículo,",
-        "hola" to "No entiendo esa pregunta",
+        // Lo que se le dijo en el teléfono y no entendió.
+        "hola qué tal" to "Hola. Ahora veo 2 personas.",
+        "cuáles son las preguntas que tienes para responder" to "Puedo contarte",
+        "qué puedes hacer" to "Puedo contarte",
+        "quién eres" to "Soy ARGOS",
+        "me estás grabando" to "No grabo vídeo",
+        "hay alguien" to "Ahora: 2 personas",
+        "hay alguien hoy" to "Hoy: 2 personas, 1 vehículo, 1 movimiento sin clase",
+        "gracias" to "De nada",
+        "blablá" to "No te he entendido",
+        "hay drones" to "La radio está apagada",
     )
     for ((q, esperado) in casos) {
         val r = ask.ask(q)
+        val ok = r.startsWith(esperado)
+        if (!ok) fallos++
+        println("  «$q» -> $r${if (ok) "" else "   [esperaba: $esperado…]"}")
+    }
+    // Con la radio encendida.
+    val conRadio = Ask(object : Ask.Source {
+        override fun rows(desdeS: Double?, hastaS: Double?, nowS: Double) = store.rowsBetween(desdeS, hastaS, nowS)
+        override fun live() = null
+        override fun radio() = Ask.RadioLive(7, mapOf("rastreador Find My lejos de su dueño" to 1),
+            listOf("multirrotor 1581F5FKD223S00AB123 a 120 m"), "normal",
+            listOf("rastreador Find My lejos de su dueño cerca desde hace 12 min"))
+    }, ZoneOffset.UTC) { now }
+    for ((q, esperado) in listOf(
+        "hay drones?" to "Oigo 1 dron: multirrotor 1581F5FKD223S00AB123 a 120 m.",
+        "me están siguiendo con un airtag" to "Oigo 1 rastreador Find My lejos de su dueño. Aviso:",
+        "cuántos aparatos bluetooth hay" to "Oigo 7 aparatos Bluetooth",
+        "hay interferencias en el gps" to "GNSS: normal.",
+    )) {
+        val r = conRadio.ask(q)
         val ok = r.startsWith(esperado)
         if (!ok) fallos++
         println("  «$q» -> $r${if (ok) "" else "   [esperaba: $esperado…]"}")

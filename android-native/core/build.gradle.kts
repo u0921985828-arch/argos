@@ -52,6 +52,25 @@ tasks.register<JavaExec>("camaraEnMano") {
     args = listOf("persona", "exigir")
 }
 
+// Radio pasiva (opcional, apagada por defecto): firmas BLE de rastreadores,
+// Remote ID de drones sin la posición del piloto, aviso de rastreador que se
+// queda, interferencia y suplantación GNSS. Sin aparato: bytes construidos.
+tasks.register<JavaExec>("radio") {
+    group = "verification"
+    description = "Firmas, Remote ID, rastreadores persistentes y GNSS, sin aparato."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.RadioCaseKt")
+}
+
+// Física plausible: sin escala con una perspectiva imposible, sin velocidad de
+// un salto de caja, «corriendo» solo tras un segundo por encima del umbral.
+tasks.register<JavaExec>("fisica") {
+    group = "verification"
+    description = "Velocidades imposibles no se miden ni disparan eventos."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.FisicaCaseKt")
+}
+
 // Ataques a la compensación de cámara: giro de muñeca, deriva subpíxel, objeto
 // grande con la cámara fija, pared lisa, rayas, escena oscura. Mundo sintético,
 // no necesita ficheros.

@@ -27,9 +27,15 @@ class Ask(private val src: Source, private val zone: ZoneId = ZoneId.systemDefau
     class Live(val people: Int, val vehicles: Int, val tracks: Int, val unusual: List<String>,
                val moving: Boolean, val scaleValid: Boolean, val lastEvents: List<String>)
 
+    /** La radio pasiva, si está encendida. Nada de esto identifica a nadie. */
+    class RadioLive(val aparatos: Int, val rastreadores: Map<String, Int>, val drones: List<String>,
+                    val gnss: String, val avisos: List<String>)
+
     interface Source {
         fun rows(desdeS: Double?, hastaS: Double?, nowS: Double): List<TrackStore.Row>
         fun live(): Live?
+        /** null = el módulo de radio está apagado. */
+        fun radio(): RadioLive? = null
     }
 
     enum class Intent { OBJETO, AHORA, ANOMALIAS, RAPIDO, CONTAR, RESUMEN, AYUDA }
@@ -114,6 +120,10 @@ class Ask(private val src: Source, private val zone: ZoneId = ZoneId.systemDefau
                           if (intent == Intent.RESUMEN && v != null && cls == null) "objetos" else nombre, null)
         }
 
+        private fun singular(c: String?) = when (c) {
+            "person" -> "persona"; "vehicle" -> "vehículo"; "bike" -> "bici o moto"; else -> "objeto"
+        }
+
         private fun nombre(c: String) = when (c) {
             "person" -> "personas"; "vehicle" -> "vehículos"; "bike" -> "bicis"; else -> c
         }
@@ -126,9 +136,77 @@ class Ask(private val src: Source, private val zone: ZoneId = ZoneId.systemDefau
         val q = raw.trim()
         val now = clock()
         if (q.isEmpty()) return "Pregúntame algo. Por ejemplo " + AYUDA.take(3).joinToString(", ") { "«$it»" } + "."
-        return try { answer(parse(q, now, zone), now) }
+        return try { charla(norm(q), now) ?: answer(parse(q, now, zone), now) }
         catch (e: Exception) { "No he podido consultar la memoria: ${e.message}" }
     }
+
+    /**
+     * Lo que no es una consulta: saludar, preguntar qué sabe hacer, quién es,
+     * qué guarda. Va ANTES de la gramática de consultas y no la toca, así que
+     * la paridad con ask.js sigue valiendo para todo lo que pregunta datos.
+     * Las respuestas son fijas o salen de la escena viva; nada se inventa.
+     */
+    private fun charla(n: String, now: Long): String? {
+        fun hay(re: String) = Regex(re).containsMatchIn(n)
+        val ventana = ventana(n, now, zone)
+        return when {
+            hay("\\b(que (puedes|sabes) (hacer|responder|contestar)|que (te )?puedo preguntar|que preguntas|" +
+                "cuales son las preguntas|preguntas (que )?(tienes|puedes|sabes)|ayuda|como funcionas|para que sirves|" +
+                "que haces|instrucciones|comandos|opciones|ejemplos)\\b") -> capacidades()
+            hay("\\b(quien eres|que eres|como te llamas|tu nombre|eres una? (ia|inteligencia|robot|persona))\\b") ->
+                "Soy ARGOS. Miro esta cámara, cuento y sigo lo que se mueve, aprendo lo normal de la escena y aviso de " +
+                "lo raro. No reconozco caras ni identifico a nadie, y no guardo vídeo: solo recorridos durante 30 días."
+            hay("\\b(grabas|guardas|privacidad|me (estas )?grabando|subes|envias|nube|internet)\\b") ->
+                "No grabo vídeo ni fotos. Guardo solo recorridos (clase, hora, velocidad y unos puntos del camino) " +
+                "durante 30 días, en este teléfono. Nada sale de él. Puedes borrarlo en la memoria (mantén pulsada la pantalla)."
+            hay("\\b(drones?|remote id|aeronaves?)\\b") -> conRadio { r ->
+                if (r.drones.isEmpty()) "No oigo ningún dron con Remote ID ahora mismo."
+                else "Oigo ${cuantos(r.drones.size, "dron", "drones")}: ${r.drones.joinToString("; ")}."
+            }
+            hay("\\b(rastreador(es)?|localizador(es)?|airtags?|tiles?|smarttags?|(me )?(estan|esta) siguiendo|me siguen)\\b") -> conRadio { r ->
+                if (r.rastreadores.isEmpty()) "No oigo ningún rastreador cerca. Ojo: uno apagado o sin batería no se oye."
+                else "Oigo " + y(r.rastreadores.entries.map { "${it.value} ${it.key}" }) + "." +
+                    (r.avisos.firstOrNull { it.contains("desde hace") }?.let { " Aviso: $it." } ?: "")
+            }
+            hay("\\b(bluetooth|aparatos? cerca|dispositivos?( cerca)?|radio)\\b") -> conRadio { r ->
+                "Oigo ${cuantos(r.aparatos, "aparato Bluetooth", "aparatos Bluetooth")} en el último minuto" +
+                    (if (r.rastreadores.isNotEmpty()) ", de ellos ${cuantos(r.rastreadores.values.sum(), "rastreador", "rastreadores")}" else "") +
+                    (if (r.drones.isNotEmpty()) " y ${cuantos(r.drones.size, "dron", "drones")}" else "") + "."
+            }
+            hay("\\b(gps|gnss|satelites?|inhibidor(es)?|interferencias?|jammer|suplantacion|spoofing)\\b") -> conRadio { r -> "GNSS: ${r.gnss}." }
+            hay("\\b(gracias|muchas gracias|genial|perfecto|vale)\\b") && n.length < 30 -> "De nada. Aquí sigo mirando."
+            hay("\\bque hora es\\b") -> "Son las ${hora(now)}."
+            hay("^\\s*(hola|buenas|buenos dias|buenas tardes|buenas noches|hey|ey|saludos|que tal|como estas|como vas|que pasa)\\b") -> {
+                val l = src.live()
+                val estado = when {
+                    l == null -> "Estoy arrancando la cámara."
+                    l.people + l.vehicles == 0 -> "Ahora mismo no veo a nadie."
+                    else -> "Ahora veo " + y(listOfNotNull(l.people.takeIf { it > 0 }?.let { cuantos(it, "persona", "personas") },
+                        l.vehicles.takeIf { it > 0 }?.let { cuantos(it, "vehículo", "vehículos") })) + "."
+                }
+                "Hola. $estado Pregúntame «qué ves», «cuánta gente pasó hoy» o «algo raro», o di «ayuda»."
+            }
+            // Presencia en el momento, dicha de mil maneras.
+            ventana == null && hay("\\b(hay (alguien|gente|personas?|nadie|algo|coches?)|ves (a )?(alguien|algo|gente)|" +
+                "que (esta|estas) (pasando|viendo)|que pasa ahora|quien hay|alguien ahi)\\b") -> answer(
+                Parsed(Intent.AHORA, null, null, "objetos", null), now)
+            else -> null
+        }
+    }
+
+    private fun conRadio(f: (RadioLive) -> String): String =
+        src.radio()?.let(f) ?: "La radio está apagada. Actívala en el panel (botón «Radio») para oír rastreadores, " +
+            "drones con Remote ID e interferencias de GPS. Solo escucha; no emite nada."
+
+    private fun capacidades() =
+        "Puedo contarte: lo que veo ahora («qué ves», «hay alguien»); cuánta gente o cuántos vehículos pasaron " +
+        "(«cuánta gente pasó en la última hora», «vehículos esta semana»); qué pasó en un rato («qué pasó entre las 3 y las 4», " +
+        "«resumen de hoy»); lo raro («algo raro hoy»); lo más rápido («lo más rápido de hoy»); y un objeto concreto («objeto 47»). " +
+        "Con la radio encendida, también rastreadores, drones e interferencias de GPS («hay drones», «algún rastreador»). " +
+        "Y qué guardo y qué no («qué guardas»)."
+
+    private fun cuantos(n: Int, uno: String, varios: String) = if (n == 1) "1 $uno" else "$n $varios"
+    private fun y(partes: List<String>) = if (partes.size == 1) partes[0] else partes.dropLast(1).joinToString(", ") + " y " + partes.last()
 
     private fun rows(w: Window?, cls: String?, now: Long): List<TrackStore.Row> =
         src.rows(w?.desde?.let { it / 1000.0 }, w?.hasta?.let { it / 1000.0 }, now / 1000.0)
@@ -137,10 +215,14 @@ class Ask(private val src: Source, private val zone: ZoneId = ZoneId.systemDefau
             .filter { cls == null || (it.fromDet && it.cls == cls) }
 
     private fun answer(p: Parsed, now: Long): String = when (p.intent) {
-        Intent.AYUDA -> "No entiendo esa pregunta. Puedo responder a cosas como " +
-            AYUDA.take(3).joinToString(", ") { "«$it»" } + "."
+        Intent.AYUDA -> "No te he entendido. Prueba con " +
+            AYUDA.take(3).joinToString(", ") { "«$it»" } + ", o di «ayuda» para ver todo lo que sé."
         Intent.AHORA -> src.live()?.let { l ->
-            "Ahora: ${l.people} persona(s) y ${l.vehicles} vehículo(s) con clase del detector, ${l.tracks} pista(s) en total" +
+            listOfNotNull(
+                l.people.takeIf { it > 0 }?.let { cuantos(it, "persona", "personas") },
+                l.vehicles.takeIf { it > 0 }?.let { cuantos(it, "vehículo", "vehículos") },
+                (l.tracks - l.people - l.vehicles).takeIf { it > 0 }?.let { cuantos(it, "movimiento sin clase", "movimientos sin clase") },
+            ).let { if (it.isEmpty()) "Ahora no veo a nadie" else "Ahora: " + y(it) } +
                 (if (l.moving) "; la cámara se está moviendo." else ".") +
                 (if (l.unusual.isNotEmpty()) " Fuera de lo normal: ${l.unusual.first()}." else "")
         } ?: "La cámara no está analizando ahora mismo."
@@ -162,7 +244,7 @@ class Ask(private val src: Source, private val zone: ZoneId = ZoneId.systemDefau
             else {
                 val rs = rows(w, p.cls, now)
                 if (rs.isEmpty()) "${when (p.cls) { "person" -> "Ninguna persona"; "vehicle" -> "Ningún vehículo"; "bike" -> "Ninguna bici ni moto"; else -> "Ningún objeto" }} ${w.etiqueta}."
-                else "${rs.size} ${p.clsNombre} ${w.etiqueta}. El primero a las ${hora((rs.last().start * 1000).toLong())}, " +
+                else "${cuantos(rs.size, singular(p.cls), p.clsNombre)} ${w.etiqueta}. El primero a las ${hora((rs.last().start * 1000).toLong())}, " +
                     "el último a las ${hora((rs.first().start * 1000).toLong())}."
             }
         }
@@ -176,20 +258,21 @@ class Ask(private val src: Source, private val zone: ZoneId = ZoneId.systemDefau
                 else {
                     val por = rs.groupingBy { if (it.fromDet) it.cls else "movimiento" }.eachCount()
                         .entries.sortedByDescending { it.value }
-                        .joinToString(", ") { "${it.value} ${if (it.key == "movimiento") "movimientos sin clase" else nombre(it.key)}" }
-                    w.etiqueta.replaceFirstChar { it.uppercase() } + ": " + por + (if (evs > 0) ", y $evs evento(s)." else ".")
+                        .joinToString(", ") { if (it.key == "movimiento") cuantos(it.value, "movimiento sin clase", "movimientos sin clase")
+                                              else cuantos(it.value, singular(it.key), nombre(it.key)) }
+                    w.etiqueta.replaceFirstChar { it.uppercase() } + ": " + por + (if (evs > 0) ", y ${cuantos(evs, "evento", "eventos")}." else ".")
                 }
             }
         }
         Intent.ANOMALIAS -> {
             val l = src.live()
-            if (l != null && l.unusual.isNotEmpty()) "${l.unusual.size} cosa(s) fuera de lo normal ahora. La más fuerte: ${l.unusual.first()}."
+            if (l != null && l.unusual.isNotEmpty()) "${cuantos(l.unusual.size, "cosa", "cosas")} fuera de lo normal ahora. La más fuerte: ${l.unusual.first()}."
             else {
                 val w = p.window ?: Window(null, null, "en toda la memoria")
                 val evs = rows(w, null, now).flatMap { it.events }
                 val raros = evs.filter { it == "inusual" || it == "anómalo" }
                 if (evs.isEmpty()) "Nada marcado como anómalo ${w.etiqueta}."
-                else "${evs.size} evento(s) ${w.etiqueta}" + (if (raros.isNotEmpty()) ", ${raros.size} fuera de lo normal" else "") + ": " +
+                else "${cuantos(evs.size, "evento", "eventos")} ${w.etiqueta}" + (if (raros.isNotEmpty()) ", ${raros.size} fuera de lo normal" else "") + ": " +
                     evs.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.joinToString(", ") { "${it.value}× ${it.key}" } + "."
             }
         }

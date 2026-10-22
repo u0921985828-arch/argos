@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
 import android.speech.RecognitionListener
@@ -13,7 +14,6 @@ import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.view.Gravity
 import android.view.inputmethod.EditorInfo
-import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
@@ -28,64 +28,141 @@ import java.util.Locale
  * El chat con ARGOS: se escribe o se habla, y responde por escrito y, si se
  * le habló, en voz alta.
  *
- * Todo en el teléfono. La voz pasa por el reconocedor de Android EN EL
- * APARATO cuando existe (Android 12+ con el paquete de idioma); si no, por el
- * del sistema pidiéndole que trabaje sin red, y entonces se dice en el panel,
- * porque ese sí puede usar la red del fabricante. Las respuestas salen de
- * `Ask`, que es una gramática sobre la memoria y la escena: no inventa.
+ * Todo en el teléfono. La voz pasa primero por el reconocedor de Android EN EL
+ * APARATO. Si ese falla de una forma que solo indica que no está listo
+ * —código 11, «servidor desconectado», visto en el teléfono; o idioma sin
+ * descargar— se reintenta solo con el del sistema, sin hacer repetir la frase
+ * a nadie, y se queda con ese el resto de la sesión. El panel dice cuál usa.
+ * Las respuestas salen de `Ask`, una gramática sobre la memoria y la escena:
+ * no inventa.
  */
 class Chat(private val act: ComponentActivity, private val ask: () -> Ask?,
-           private val pedirMicro: () -> Unit) {
+           private val pedirMicro: () -> Unit, private val cerrar: () -> Unit) {
     val view: LinearLayout
-    private val log = TextView(act).apply { setTextColor(Color.WHITE); textSize = 15f; setPadding(20, 16, 20, 16) }
-    private val scroll = ScrollView(act).apply { addView(log) }
+    private val burbujas = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; setPadding(0, Ui.dp(act, 4), 0, Ui.dp(act, 4)) }
+    private val scroll = ScrollView(act).apply { addView(burbujas) }
     private val input = EditText(act).apply {
-        hint = "Pregunta a ARGOS…"; setTextColor(Color.WHITE); setHintTextColor(Color.GRAY)
+        hint = "Pregunta a ARGOS…"; setTextColor(Ui.TEXTO); setHintTextColor(Ui.SUAVE); textSize = 15f
         imeOptions = EditorInfo.IME_ACTION_SEND; isSingleLine = true
+        background = Ui.fondo(Color.argb(160, 40, 44, 52), Ui.dp(act, 20).toFloat())
+        setPadding(Ui.dp(act, 14), Ui.dp(act, 9), Ui.dp(act, 14), Ui.dp(act, 9))
     }
+    private val mic = ImageButton(act)
+    private val estadoVoz = TextView(act).apply { setTextColor(Ui.SUAVE); textSize = 11f }
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var ttsOk = false
+    private var escuchando = false
+    /** El reconocedor del aparato falló por no estar listo: el resto de la sesión, el del sistema. */
+    private var usarSistema = false
+    private val idioma: String = Locale.getDefault().let { if (it.language == "es") it.toLanguageTag() else "es-ES" }
+    var voz = "voz del sistema"; private set
+
     /** Qué reconocedor hay, dicho tal cual. Un diagnóstico que miente cuesta más que no tenerlo. */
-    val reconocimiento: String
+    val reconocimiento: String get() = when {
+        !SpeechRecognizer.isRecognitionAvailable(act) && !enAparato() -> "no disponible"
+        enAparato() && !usarSistema -> "en el aparato"
+        else -> "del sistema, pedido sin red"
+    }
+
+    private fun enAparato() = Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(act)
 
     init {
-        reconocimiento = when {
-            Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(act) -> "en el aparato"
-            SpeechRecognizer.isRecognitionAvailable(act) -> "del sistema, pedido sin red (puede usar la del fabricante)"
-            else -> "no disponible"
-        }
-        val mic = ImageButton(act).apply {
+        mic.apply {
             setImageResource(android.R.drawable.ic_btn_speak_now)
             contentDescription = "Hablar"
-            setOnClickListener { escuchar() }
+            background = Ui.fondo(Color.argb(200, 46, 125, 50), Ui.dp(act, 24).toFloat())
+            setOnClickListener { if (escuchando) parar() else escuchar() }
             isEnabled = reconocimiento != "no disponible"
         }
-        val enviar = Button(act).apply { text = "Enviar"; setOnClickListener { enviarTexto() } }
+        val enviar = ImageButton(act).apply {
+            setImageResource(android.R.drawable.ic_menu_send)
+            contentDescription = "Enviar"
+            background = Ui.fondo(Color.argb(160, 40, 44, 52), Ui.dp(act, 24).toFloat())
+            setOnClickListener { enviarTexto() }
+        }
         input.setOnEditorActionListener { _, id, _ -> if (id == EditorInfo.IME_ACTION_SEND) { enviarTexto(); true } else false }
+        val cab = LinearLayout(act).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(Ui.dp(act, 16), Ui.dp(act, 10), Ui.dp(act, 8), Ui.dp(act, 4))
+            addView(LinearLayout(act).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(TextView(act).apply { text = "Hablar con ARGOS"; setTextColor(Ui.TEXTO); textSize = 16f; typeface = Typeface.DEFAULT_BOLD })
+                addView(estadoVoz)
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(TextView(act).apply {
+                text = "✕"; setTextColor(Ui.SUAVE); textSize = 20f
+                setPadding(Ui.dp(act, 14), Ui.dp(act, 4), Ui.dp(act, 14), Ui.dp(act, 4))
+                setOnClickListener { cerrar() }
+            })
+        }
+        val fila = LinearLayout(act).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(Ui.dp(act, 10), Ui.dp(act, 6), Ui.dp(act, 10), Ui.dp(act, 10))
+            val tam = Ui.dp(act, 46)
+            addView(input, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = Ui.dp(act, 8) })
+            addView(mic, LinearLayout.LayoutParams(tam, tam).apply { rightMargin = Ui.dp(act, 6) })
+            addView(enviar, LinearLayout.LayoutParams(tam, tam))
+        }
         view = LinearLayout(act).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.argb(225, 10, 12, 16))
-            addView(TextView(act).apply {
-                text = "ARGOS · voz $reconocimiento · nada sale del teléfono"
-                setTextColor(Color.rgb(160, 200, 160)); textSize = 12f; setPadding(20, 12, 20, 0)
-            })
-            addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-            addView(LinearLayout(act).apply {
-                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-                addView(input, LinearLayout.LayoutParams(0, -2, 1f)); addView(mic); addView(enviar)
-            })
+            background = Ui.fondo(Ui.FONDO, Ui.dp(act, 22).toFloat())
+            addView(cab)
+            addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f).apply { leftMargin = Ui.dp(act, 10); rightMargin = Ui.dp(act, 10) })
+            addView(fila)
         }
-        di("argos", "Hola. Pregúntame, por ejemplo, «qué ves», «cuánta gente pasó en la última hora» o «algo raro hoy».")
+        di("argos", "Hola. Pregúntame «qué ves», «cuánta gente pasó hoy» o «algo raro», o di «ayuda» para ver todo lo que sé.")
         tts = TextToSpeech(act) { st ->
-            ttsOk = st == TextToSpeech.SUCCESS &&
-                (tts?.setLanguage(Locale("es", "ES")) ?: TextToSpeech.LANG_NOT_SUPPORTED) >= TextToSpeech.LANG_AVAILABLE
+            ttsOk = st == TextToSpeech.SUCCESS && elegirVoz()
+            pintaEstado()
         }
+        pintaEstado()
+    }
+
+    /**
+     * La mejor voz española que hay EN EL TELÉFONO: sin red, instalada, de la
+     * variante del usuario si la hay, y de más calidad. La que da el sistema
+     * por defecto suele ser la más básica.
+     */
+    private fun elegirVoz(): Boolean {
+        val t = tts ?: return false
+        if (t.setLanguage(Locale.forLanguageTag(idioma)) < TextToSpeech.LANG_AVAILABLE &&
+            t.setLanguage(Locale("es", "ES")) < TextToSpeech.LANG_AVAILABLE) return false
+        val pais = Locale.forLanguageTag(idioma).country
+        val mejor = runCatching { t.voices }.getOrNull().orEmpty()
+            .filter { it.locale.language == "es" && !it.isNetworkConnectionRequired &&
+                      !it.features.orEmpty().contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) }
+            .sortedWith(compareByDescending<android.speech.tts.Voice> { it.locale.country == pais }
+                .thenByDescending { it.quality }.thenBy { it.latency })
+            .firstOrNull()
+        if (mejor != null) {
+            t.voice = mejor
+            voz = "voz ${mejor.locale.toLanguageTag()}" + (if (mejor.quality >= android.speech.tts.Voice.QUALITY_HIGH) " de alta calidad" else "")
+        }
+        t.setSpeechRate(1.02f)
+        return true
+    }
+
+    private fun pintaEstado() = act.runOnUiThread {
+        estadoVoz.text = (if (escuchando) "escuchando… " else "") + "reconocimiento $reconocimiento · " +
+            (if (ttsOk) voz else "sin voz") + " · nada sale del teléfono"
+        mic.background = Ui.fondo(if (escuchando) Color.argb(230, 198, 40, 40) else Color.argb(200, 46, 125, 50), Ui.dp(act, 24).toFloat())
     }
 
     private fun di(quien: String, texto: String) {
         act.runOnUiThread {
-            log.append((if (log.text.isEmpty()) "" else "\n\n") + (if (quien == "tú") "Tú: " else "ARGOS: ") + texto)
+            val yo = quien == "tú"
+            val b = TextView(act).apply {
+                text = texto; textSize = 15f; setTextColor(Ui.TEXTO)
+                setPadding(Ui.dp(act, 12), Ui.dp(act, 8), Ui.dp(act, 12), Ui.dp(act, 8))
+                background = Ui.fondo(if (yo) Color.argb(220, 21, 101, 192) else Color.argb(220, 38, 42, 50), Ui.dp(act, 16).toFloat())
+            }
+            burbujas.addView(b, LinearLayout.LayoutParams(-2, -2).apply {
+                gravity = if (yo) Gravity.END else Gravity.START
+                topMargin = Ui.dp(act, 6)
+                if (yo) leftMargin = Ui.dp(act, 48) else rightMargin = Ui.dp(act, 48)
+            })
+            while (burbujas.childCount > 80) burbujas.removeViewAt(0)
             scroll.post { scroll.fullScroll(ScrollView.FOCUS_DOWN) }
         }
     }
@@ -107,41 +184,71 @@ class Chat(private val act: ComponentActivity, private val ask: () -> Ask?,
         return r
     }
 
-    fun escuchar() {
+    private fun parar() {
+        recognizer?.stopListening()
+        escuchando = false; pintaEstado()
+    }
+
+    fun escuchar() = escuchar(reintento = false)
+
+    private fun escuchar(reintento: Boolean) {
         if (ContextCompat.checkSelfPermission(act, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             pedirMicro(); return
         }
+        tts?.stop()
         recognizer?.destroy()
-        val r = if (Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(act))
-            SpeechRecognizer.createOnDeviceSpeechRecognizer(act) else SpeechRecognizer.createSpeechRecognizer(act)
+        val delAparato = enAparato() && !usarSistema
+        val r = if (delAparato && Build.VERSION.SDK_INT >= 31) SpeechRecognizer.createOnDeviceSpeechRecognizer(act)
+                else SpeechRecognizer.createSpeechRecognizer(act)
         recognizer = r
         r.setRecognitionListener(object : RecognitionListener {
             override fun onResults(b: Bundle?) {
+                escuchando = false; pintaEstado()
+                act.runOnUiThread { input.hint = "Pregunta a ARGOS…" }
                 val t = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
-                if (t.isNullOrBlank()) di("argos", "No te he entendido.") else preguntar(t, true)
+                if (t.isNullOrBlank()) di("argos", "No te he entendido. Pulsa el micro y vuelve a probar.") else preguntar(t, true)
             }
             override fun onError(error: Int) {
+                escuchando = false
+                act.runOnUiThread { input.hint = "Pregunta a ARGOS…" }
+                // 11 = servidor desconectado, 12 = idioma no admitido, 13 = idioma
+                // sin descargar, 5 = cliente: el reconocedor del aparato no está
+                // listo. No es culpa de quien habla: se pasa al del sistema.
+                if (delAparato && !reintento && error in setOf(5, 11, 12, 13)) {
+                    Log.i(TAG, "ARGOS chat: reconocedor del aparato falló ($error), paso al del sistema")
+                    usarSistema = true
+                    act.runOnUiThread { escuchar(reintento = true) }
+                    return
+                }
+                pintaEstado()
                 di("argos", when (error) {
                     SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No te he oído bien. Pulsa el micro y habla."
                     SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Sin permiso de micrófono no puedo oírte."
                     SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT ->
-                        "El reconocedor de este teléfono necesita red. Descarga el paquete de voz en español para usarlo sin conexión."
-                    else -> "El reconocimiento de voz falló (código $error)."
+                        "El reconocedor de este teléfono necesita red. En Ajustes → Sistema → Idiomas → Reconocimiento de voz, descarga el español para usarlo sin conexión."
+                    12, 13 -> "Falta el paquete de voz en español. Descárgalo en Ajustes → Sistema → Idiomas → Reconocimiento de voz."
+                    else -> "El reconocimiento de voz falló (código $error). Puedes escribir la pregunta."
                 })
             }
-            override fun onReadyForSpeech(p: Bundle?) { di("argos", "Te escucho…") }
+            override fun onReadyForSpeech(p: Bundle?) { escuchando = true; pintaEstado() }
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(v: Float) {}
             override fun onBufferReceived(b: ByteArray?) {}
-            override fun onEndOfSpeech() {}
-            override fun onPartialResults(b: Bundle?) {}
+            override fun onEndOfSpeech() { escuchando = false; pintaEstado() }
+            override fun onPartialResults(b: Bundle?) {
+                b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let { p ->
+                    act.runOnUiThread { input.hint = "$p…" }
+                }
+            }
             override fun onEvent(t: Int, b: Bundle?) {}
         })
+        input.hint = "Pregunta a ARGOS…"
         r.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-ES")
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, idioma)
+            .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true))
-        Log.i(TAG, "ARGOS chat: escuchando, reconocimiento $reconocimiento")
+        Log.i(TAG, "ARGOS chat: escuchando, reconocimiento $reconocimiento, idioma $idioma")
     }
 
     fun close() {

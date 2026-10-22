@@ -306,3 +306,65 @@ los ficheros: 0 secretos. Arreglado, guiándose por OWASP MASVS:
 - CI con permisos mínimos por trabajo.
 Pendiente: R8/ofuscación (necesita reglas medidas para ONNX Runtime) y fijar
 las acciones del CI por SHA.
+
+# FASE 5 — lo que se vio en el teléfono, y la radio pasiva
+
+## Punto de partida (captura del teléfono de Eddie, 22-10)
+- Voz: «El reconocimiento de voz falló (código 11)» dos veces de tres.
+  11 = ERROR_SERVER_DISCONNECTED del reconocedor del aparato, que no estaba
+  listo.
+- «último: corriendo #30 · 41.5 m/s» con el móvil apuntando a los pies.
+- «hola qué tal» y «cuáles son las preguntas que tienes para responder» → «No
+  entiendo esa pregunta».
+- El chat tapaba media pantalla y el panel era una lista de texto.
+
+## Hecho y medido
+- **Física plausible** (`:core:fisica`, Kotlin y brain.js iguales):
+  - La escala solo vale si la altura de cámara que implica (estatura / a) está
+    entre 2 y 150 m (invariante 7). Un móvil a 1,4 m mirando abajo ya no
+    aprende una escala.
+  - Un paso que ningún objeto de su clase puede dar (persona 10 m/s, bici 20,
+    resto 70; ×1,5) es la caja saltando: se toma como nuevo punto de partida
+    sin derivar velocidad. Un salto de 400 px da 1,2 m/s medidos, no 8,8.
+  - «Corriendo» exige superar el umbral durante 1 s seguido. Un corredor real
+    a 4 m/s salta a los 1,17 s.
+- **Chat**: entiende saludos, «qué puedes hacer» y sus variantes, «quién
+  eres», «qué guardas», «gracias», «qué hora es» y la presencia dicha de mil
+  maneras («hay alguien», «ves a alguien»). Sin «(s)»: singulares y plurales
+  bien dichos. La paridad con ask.js sigue en 23/23, porque la charla va antes
+  de la gramática de consultas y no la toca.
+- **Voz**: si el reconocedor del aparato da 5/11/12/13, se reintenta solo con
+  el del sistema y la sesión se queda con ese. Respuestas habladas con la
+  mejor voz española INSTALADA (sin red, la variante del usuario, la de más
+  calidad).
+- **Interfaz**: barra superior con estado de un vistazo (vigilando / cámara en
+  mano / aviso de radio) y fichas (Zoom, Radio, Memoria); tarjeta inferior con
+  cifras grandes (personas, vehículos, sesión), escena, último evento y radio;
+  los datos técnicos, a un toque. Chat como hoja inferior con burbujas y el
+  micro que se pone rojo mientras escucha.
+- **Radio pasiva** (`:core:radio`, 29 comprobaciones, Fieldwatch como
+  referencia con licencia MIT en `android-native/NOTICE`):
+  - Firmas: Find My (separado de su dueño o no), Tile, SmartTag, red
+    Encontrar de Google, estándar DULT. AirPods y Eddystone NO son
+    rastreadores.
+  - Remote ID: número de serie, tipo, posición, altura, velocidad y rumbo del
+    dron. La posición y el identificador del PILOTO no se decodifican (caso
+    reservado: paquete 0xF con la posición del piloto dentro).
+  - Aviso de rastreador que se queda 10 min seguidos; uno intermitente no
+    acumula.
+  - GNSS: interferencia (−10 dB y la mitad de los satélites fuertes, 5 s) y
+    suplantación (≥ 6 satélites casi iguales, 10 s). Avisa de cambios, no de
+    lo que ya había al empezar; la lluvia (−3 dB) y un satélite tapado no
+    avisan.
+  - Privacidad: la dirección se resume con una sal aleatoria de la sesión y
+    se descarta; nada se escribe en disco; al apagar se olvida todo, sal
+    incluida; no se cruza con las pistas de la cámara.
+  - En la app viene APAGADA. Se enciende desde la ficha «Radio», tras un
+    diálogo que dice qué hace y qué pide (Bluetooth y ubicación, que Android
+    exige para escanear y ver satélites; la posición se descarta).
+
+## Pendiente
+- ElevenLabs: pedido. Necesita internet y la clave del usuario, y el texto de
+  las respuestas saldría del teléfono. Pendiente de decisión.
+- Radio: sin medir en un aparato real (el emulador del CI no tiene BLE ni
+  satélites). La distancia a un dron necesitaría la posición del teléfono.

@@ -4,6 +4,16 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Solo para hablar con ARGOS; se pide la primera vez que se pulsa el micro. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Radio pasiva, APAGADA por defecto: se piden solo al encenderla a mano.
+         Android exige ubicación para escanear Bluetooth y para ver los
+         satélites; ARGOS no guarda ni usa la posición. -->
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <queries>
         <intent><action android:name="android.speech.RecognitionService" /></intent>
         <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>

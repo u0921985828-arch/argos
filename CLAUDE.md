@@ -316,7 +316,16 @@ escena y la escala en coordenadas de imagen. Los ataques que lo prueban
 `:core:casosCamara`. Una trampa que costó una tarde: medir la textura
 comparando vecinos con paso 3 hace invisible una textura de periodo 6.
 
+**Radio pasiva (nativa, opcional y apagada por defecto).** `core/Radio.kt`:
+rastreadores BLE, Remote ID de drones y vigilancia GNSS. La dirección de un
+aparato se resume con una sal de sesión y no se guarda ni se cruza con la
+cámara; del dron no se lee la posición ni el identificador del piloto.
+
+**Física plausible.** Una escala con altura de cámara fuera de 2-150 m no vale;
+un paso imposible para la clase no da velocidad; «corriendo» pide 1 s seguido.
+
 **Abierto:**
+- Radio sin medir en un aparato real (el emulador no tiene BLE ni satélites)
 - Deriva subpíxel lenta (0,1 px/f) — pasos enteros; 30/150 frames con falsos
 - Aceleración por hardware — WebGPU está en el código, sin medir por falta de GPU
 - Búsqueda semántica (CLIP) — pesos no accesibles para validar

@@ -33,6 +33,18 @@ class MainActivity : ComponentActivity() {
     // `ViewGroupOverlay` de la propia vista y el compilador elige esa.
     private lateinit var capa: Overlay
     private lateinit var hud: TextView
+    private lateinit var nPersonas: TextView
+    private lateinit var nVehiculos: TextView
+    private lateinit var nSesion: TextView
+    private lateinit var lEscena: TextView
+    private lateinit var lEvento: TextView
+    private lateinit var lRadio: TextView
+    private lateinit var fichaRadio: TextView
+    private lateinit var fichaZoom: TextView
+    private lateinit var estado: TextView
+    private var detalles = false
+    private lateinit var radio: RadioVigia
+    private val prefs by lazy { getSharedPreferences("argos", MODE_PRIVATE) }
     private val analysisExec = Executors.newSingleThreadExecutor { r -> Thread(r, "argos-rapido") }
     private var lastLog = 0L
     @Volatile private var destroyed = false
@@ -49,6 +61,10 @@ class MainActivity : ComponentActivity() {
         if (ok) startCamera() else hud.text = "Sin permiso de cámara no hay nada que analizar."
     }
 
+    private val askRadio = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
+        encenderRadio()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // El sistema guarda una captura de la pantalla para la lista de
@@ -58,42 +74,101 @@ class MainActivity : ComponentActivity() {
         if (android.os.Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(false)
         preview = PreviewView(this).apply { scaleType = PreviewView.ScaleType.FIT_CENTER }
         capa = Overlay(this)
-        hud = TextView(this).apply {
-            setTextColor(Color.WHITE); setBackgroundColor(Color.argb(150, 0, 0, 0))
-            textSize = 13f; setPadding(18, 12, 18, 12); text = "Cargando el detector…"
+        radio = RadioVigia(this)
+        val d = { v: Int -> Ui.dp(this, v) }
+        val barraEstado = resources.getIdentifier("status_bar_height", "dimen", "android").let {
+            if (it > 0) resources.getDimensionPixelSize(it) else d(24)
         }
-        chat = Chat(this, { ask }, { askMicro.launch(Manifest.permission.RECORD_AUDIO) })
-        chat.view.visibility = android.view.View.GONE
-        val botonChat = android.widget.Button(this).apply {
-            text = "Hablar con ARGOS"
-            setOnClickListener {
-                chat.view.visibility = if (chat.view.visibility == android.view.View.VISIBLE) android.view.View.GONE
-                                       else android.view.View.VISIBLE
-            }
+
+        // Arriba: nombre, estado de un vistazo y las fichas de acción.
+        estado = TextView(this).apply { text = "● cargando"; setTextColor(Ui.SUAVE); textSize = 12f }
+        fichaZoom = Ui.ficha(this, "Zoom: auto") { cambiarZoom() }
+        fichaRadio = Ui.ficha(this, "Radio: no") { alternarRadio() }
+        val barra = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(d(14), barraEstado + d(6), d(10), d(10))
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(Color.argb(200, 0, 0, 0), Color.TRANSPARENT))
+            addView(android.widget.LinearLayout(this@MainActivity).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                addView(android.widget.LinearLayout(this@MainActivity).apply {
+                    orientation = android.widget.LinearLayout.VERTICAL
+                    addView(TextView(this@MainActivity).apply {
+                        text = "ARGOS"; setTextColor(Ui.TEXTO); textSize = 20f
+                        typeface = android.graphics.Typeface.create("sans-serif-black", android.graphics.Typeface.NORMAL)
+                        letterSpacing = 0.12f
+                    })
+                    addView(estado)
+                }, android.widget.LinearLayout.LayoutParams(0, -2, 1f))
+                addView(Ui.ficha(this@MainActivity, "Memoria") {
+                    startActivity(android.content.Intent(this@MainActivity, ResumenActivity::class.java))
+                })
+            })
+            addView(android.widget.LinearLayout(this@MainActivity).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                setPadding(0, d(8), 0, 0)
+                addView(fichaZoom, android.widget.LinearLayout.LayoutParams(-2, -2).apply { rightMargin = d(8) })
+                addView(fichaRadio)
+            })
+        }
+
+        // Abajo: la tarjeta con lo que importa. Un toque enseña los detalles técnicos.
+        val (cP, vP) = Ui.cifra(this, "personas", Ui.VERDE)
+        val (cV, vV) = Ui.cifra(this, "vehículos", Ui.AZUL)
+        val (cS, vS) = Ui.cifra(this, "en esta sesión")
+        nPersonas = vP; nVehiculos = vV; nSesion = vS
+        lEscena = Ui.linea(this); lEvento = Ui.linea(this, 13f, Ui.AMBAR)
+        lRadio = Ui.linea(this, 12f, Ui.AZUL).apply { visibility = android.view.View.GONE }
+        hud = Ui.linea(this, 11f, Ui.SUAVE).apply { text = "Cargando el detector…" }
+        val tarjeta = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(d(16), d(12), d(16), d(12))
+            background = Ui.fondo(Ui.TARJETA, d(20).toFloat(), Ui.BORDE, this@MainActivity)
+            addView(android.widget.LinearLayout(this@MainActivity).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                addView(cP, android.widget.LinearLayout.LayoutParams(0, -2, 1f))
+                addView(cV, android.widget.LinearLayout.LayoutParams(0, -2, 1f))
+                addView(cS, android.widget.LinearLayout.LayoutParams(0, -2, 1f))
+            })
+            addView(lEscena); addView(lEvento); addView(lRadio); addView(hud)
+            setOnClickListener { detalles = !detalles }
+        }
+
+        lateinit var chatCaja: FrameLayout
+        val botonChat = android.widget.ImageButton(this).apply {
+            setImageResource(android.R.drawable.ic_btn_speak_now)
+            contentDescription = "Hablar con ARGOS"
+            background = Ui.fondo(Color.argb(235, 21, 101, 192), d(30).toFloat())
+            elevation = d(6).toFloat()
+        }
+        chat = Chat(this, { ask }, { askMicro.launch(Manifest.permission.RECORD_AUDIO) },
+                    { chatCaja.visibility = android.view.View.GONE; botonChat.visibility = android.view.View.VISIBLE })
+        chatCaja = FrameLayout(this).apply {
+            visibility = android.view.View.GONE
+            addView(chat.view, FrameLayout.LayoutParams(-1, -1))
+        }
+        botonChat.setOnClickListener {
+            chatCaja.visibility = android.view.View.VISIBLE; botonChat.visibility = android.view.View.GONE
         }
         setContentView(FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
-            // Un toque recorre los modos del detector: automático → cuadro
-            // entero → teselas ×2 → automático. Una pulsación larga abre la
-            // memoria del día.
-            setOnClickListener {
-                val p = pipeline ?: return@setOnClickListener
-                when {
-                    p.autoZoomOn -> { p.autoZoomOn = false; p.zoom = 0.0 }
-                    p.zoom == 0.0 -> p.zoom = 2.0
-                    else -> { p.autoZoomOn = true }
-                }
-                Log.i(TAG, "ARGOS nativo modo: " + modo(p))
-            }
-            setOnLongClickListener {
-                startActivity(android.content.Intent(this@MainActivity, ResumenActivity::class.java)); true
-            }
             addView(preview, FrameLayout.LayoutParams(-1, -1))
             addView(capa, FrameLayout.LayoutParams(-1, -1))
-            addView(hud, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
-            addView(chat.view, FrameLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * 0.55).toInt(), Gravity.TOP))
-            addView(botonChat, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END))
+            addView(barra, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
+            addView(tarjeta, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { setMargins(d(10), 0, d(10), d(14)) })
+            addView(botonChat, FrameLayout.LayoutParams(d(60), d(60), Gravity.BOTTOM or Gravity.END).apply {
+                setMargins(0, 0, d(20), d(200))
+            })
+            addView(chatCaja, FrameLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * 0.6).toInt(), Gravity.BOTTOM).apply {
+                setMargins(d(6), 0, d(6), d(6))
+            })
         })
+
+        // La radio vuelve como se dejó, pero solo si sigue teniendo permisos:
+        // nunca se pide nada sin que se pulse.
+        if (prefs.getBoolean("radio", false) && radio.permisos().all {
+                ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) encenderRadio()
 
         // El detector se carga fuera del hilo de la interfaz: leer 3,6 MB de
         // modelo y pagar la primera inferencia bloquearía la pantalla.
@@ -129,8 +204,9 @@ class MainActivity : ComponentActivity() {
             // Si la actividad murió mientras cargaba, nadie cerraría esta sesión.
             if (destroyed) { p.close(); return }
             pipeline = p
-            // El chat: una gramática sobre la memoria y la escena viva.
+            // El chat: una gramática sobre la memoria, la escena viva y la radio.
             ask = eus.argos.core.Ask(object : eus.argos.core.Ask.Source {
+                override fun radio() = this@MainActivity.radio.vivo()
                 override fun rows(desdeS: Double?, hastaS: Double?, nowS: Double) = store.rowsBetween(desdeS, hastaS, nowS)
                 override fun live(): eus.argos.core.Ask.Live? {
                     val f = pipeline?.last ?: return null
@@ -221,6 +297,48 @@ class MainActivity : ComponentActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
+    private fun cambiarZoom() {
+        val p = pipeline ?: return
+        when {
+            p.autoZoomOn -> { p.autoZoomOn = false; p.zoom = 0.0 }
+            p.zoom == 0.0 -> p.zoom = 2.0
+            else -> { p.autoZoomOn = true }
+        }
+        fichaZoom.text = "Zoom: " + when { p.autoZoomOn -> "auto"; p.zoom == 0.0 -> "cuadro entero"; else -> "teselas ×2" }
+        Log.i(TAG, "ARGOS nativo modo: " + modo(p))
+    }
+
+    /**
+     * La radio se enciende solo a mano y después de decir qué hace y qué pide.
+     * Android exige permiso de ubicación para escanear Bluetooth y para ver los
+     * satélites; se dice tal cual.
+     */
+    private fun alternarRadio() {
+        if (radio.activa) {
+            radio.para(); prefs.edit().putBoolean("radio", false).apply()
+            fichaRadio.text = "Radio: no"; lRadio.visibility = android.view.View.GONE
+            return
+        }
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Radio pasiva")
+            .setMessage("ARGOS escuchará el Bluetooth y los satélites de GPS de este teléfono para avisarte de " +
+                "rastreadores que se quedan cerca (AirTag, Tile, SmartTag…), drones con Remote ID e interferencias o " +
+                "suplantación del GPS.\n\nSolo escucha: no emite ni se conecta a nada. No guarda direcciones ni tu " +
+                "posición, nada se escribe en el teléfono y al apagarla se olvida todo. No se cruza con las personas de " +
+                "la cámara.\n\nAndroid pide permiso de ubicación para escanear Bluetooth y ver los satélites.")
+            .setPositiveButton("Encender") { _, _ -> askRadio.launch(radio.permisos()) }
+            .setNegativeButton("Ahora no", null)
+            .show()
+    }
+
+    private fun encenderRadio() {
+        val problema = radio.empieza()
+        prefs.edit().putBoolean("radio", true).apply()
+        fichaRadio.text = "Radio: sí"
+        lRadio.visibility = android.view.View.VISIBLE
+        if (problema != null) lRadio.text = "radio · $problema"
+    }
+
     private fun modo(p: Pipeline) = when {
         p.autoZoomOn -> "automático (" + (if (p.autoZoom.mode == 0.0) "cuadro entero" else "teselas ×2") + ")"
         p.zoom == 0.0 -> "cuadro entero"
@@ -232,19 +350,27 @@ class MainActivity : ComponentActivity() {
         val det = f.boxes.count { it.klassSrc == "det" }
         val loc = java.util.Locale("es")
         val escena = when {
-            f.moving -> "cámara en mano: compensando el movimiento"
-            f.scaleValid -> "cámara quieta · escala aprendida de ${f.scaleN} trayectorias"
+            f.moving -> "cámara en mano · compensando el movimiento"
+            f.scaleValid -> "cámara quieta · escala aprendida de ${f.scaleN} recorridos"
             else -> "cámara quieta · aprendiendo la escala"
+        } + " · " + (if (f.behaviourReady) "lo normal: aprendido" else "lo normal: aprendiendo (${f.behaviourMature} zonas)")
+        val ev = f.events.firstOrNull()?.let { "último: ${it.kind} · objeto ${it.id} · ${it.detail}" } ?: "sin eventos"
+        val tecnico = "%.0f fps · análisis %.1f ms · detector %.0f ms (%d tesela%s) · zoom %s".format(
+            loc, p.fps, p.engineMs, p.detMs, p.lastTiles, if (p.lastTiles == 1) "" else "s", modo(p))
+        val lineaRadio = radio.linea()
+        val aviso = radio.hayAviso()
+        runOnUiThread {
+            nPersonas.text = f.people.toString(); nVehiculos.text = f.vehicles.toString(); nSesion.text = f.peopleSeen.toString()
+            lEscena.text = escena; lEvento.text = ev
+            if (radio.activa && lineaRadio.isNotEmpty()) { lRadio.text = lineaRadio; lRadio.setTextColor(if (aviso) Ui.ROJO else Ui.AZUL) }
+            hud.text = if (detalles) tecnico else "toca la tarjeta para ver detalles técnicos"
+            estado.text = when {
+                aviso -> "● aviso de radio"
+                f.moving -> "● cámara en mano"
+                else -> "● vigilando"
+            }
+            estado.setTextColor(when { aviso -> Ui.ROJO; f.moving -> Ui.AMBAR; else -> Ui.VERDE })
         }
-        val ev = f.events.firstOrNull()?.let { "último: ${it.kind} #${it.id} · ${it.detail}" } ?: "sin eventos"
-        val normal = if (f.behaviourReady) "lo normal de la escena: aprendido (${f.behaviourMature} zonas)"
-                     else "lo normal de la escena: aprendiendo (${f.behaviourMature} zonas)"
-        val txt = "personas %d · vehículos %d · %d en esta sesión\n".format(loc, f.people, f.vehicles, f.peopleSeen) +
-            escena + "\n" + normal + "\n" + ev + "\n" +
-            "%.0f fps · análisis %.1f ms · detector %.0f ms (%d tesela%s)\n".format(
-                loc, p.fps, p.engineMs, p.detMs, p.lastTiles, if (p.lastTiles == 1) "" else "s") +
-            "modo " + modo(p) + " · toca para cambiar · mantén para la memoria"
-        runOnUiThread { hud.text = txt }
         // Una pregunta de prueba al chat cuando ya hay escena, para que el
         // registro diga que responde y no solo que existe.
         if (!chatProbado && p.frames > 60) {
@@ -269,6 +395,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         destroyed = true
         chat.close()
+        radio.para()
         super.onDestroy()
         // Primero el reloj rápido (deja de mandar trabajo al detector), luego
         // el detector, que espera a su inferencia en curso antes de liberar.

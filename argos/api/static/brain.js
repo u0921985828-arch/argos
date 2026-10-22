@@ -258,7 +258,10 @@ class SceneScale {
       && sigma > 0
       && ySpan >= (this.minYSpan ?? 120)      // recorrido vertical suficiente
       && a > 0                                // más abajo => más grande
-      && sigma < 0.45 * Math.max(1, meanH);   // dispersión razonable
+      && sigma < 0.45 * Math.max(1, meanH)    // dispersión razonable
+      // Altura de cámara implícita = estatura / a, entre 2 y 150 m
+      // (invariante 7). Fuera de ahí no es una cámara mirando un suelo.
+      && a > this.assumedStature / 150 && a < this.assumedStature / 2;
 
     if (!ok && this.valid) {
       // Se conserva el ajuste anterior, que sí era bueno.
@@ -329,6 +332,11 @@ function median(arr) {
  * aceleración a propósito --- la aceleración necesita mucha más memoria para
  * ser algo más que ruido.
  */
+/** Lo más rápido que puede ir un objeto de cada clase, con margen. */
+function velocidadMaxima(cls) {
+  return cls === "person" ? 10 : cls === "bike" ? 20 : 70;
+}
+
 class Physics {
   constructor() {
     this.vx = 0; this.vy = 0;
@@ -347,7 +355,7 @@ class Physics {
     this._t = null;
   }
 
-  update(cx, by, tSec, scale) {
+  update(cx, by, tSec, scale, maxMs = Infinity) {
     if (this._t === null) {
       this._x0 = cx; this._y0 = by;
       this._px = cx; this._py = by; this._t = tSec;
@@ -355,6 +363,13 @@ class Physics {
     }
     const dt = Math.max(1e-3, tSec - this._t);
     const dx = cx - this._px, dy = by - this._py;
+    // Un paso imposible para su clase es la caja saltando, no un movimiento:
+    // la posición nueva pasa a ser el punto de partida, sin velocidad.
+    const mpp0 = scale ? scale.metersPerPixel(by, cx) : NaN;
+    if (Number.isFinite(mpp0) && Math.hypot(dx, dy) * mpp0 / dt > maxMs * 1.5) {
+      this._px = cx; this._py = by; this._t = tSec;
+      return;
+    }
     const step = Math.hypot(dx, dy);
     this.pathPx += step;
 
@@ -511,7 +526,10 @@ class Brain {
       const by = t.box.y2 * sy;
       const hpx = (t.box.y2 - t.box.y1) * sy;
       p.setStopThreshold(hpx);
-      p.update(cx, by, tSec, this.scale);
+      p.update(cx, by, tSec, this.scale, velocidadMaxima(t.klass));
+      // Lo que ningún objeto de esa clase puede hacer no se mide: es un salto
+      // de la caja o una escala mala (41,5 m/s «corriendo» en un teléfono).
+      if (p.speedMs > velocidadMaxima(t.klass)) p.speedMs = NaN;
 
       // Estatura solo sobre personas que ha dicho el modelo: medir la altura
       // de una mancha vertical y llamarla estatura contamina la escala métrica
@@ -672,9 +690,13 @@ class Brain {
     };
 
     if (p.stoppedS > this.cfg.eventStopS) push("detenido", {stopped_s: +p.stoppedS.toFixed(1)});
+    // Corriendo = por encima del umbral durante un segundo seguido.
     if (Number.isFinite(p.speedMs) && p.speedMs > this.cfg.eventRunMs
         && track.klass === "person" && track.klassSrc === "det") {
-      push("corriendo", {speed_m_s: +p.speedMs.toFixed(1)});
+      if (track._runSince === undefined) track._runSince = tSec;
+      if (tSec - track._runSince >= 1.0) push("corriendo", {speed_m_s: +p.speedMs.toFixed(1)});
+    } else {
+      track._runSince = undefined;
     }
     if (p.dwellS > this.cfg.loiterS && p.straightness < this.cfg.loiterStraightness) {
       push("merodeo", {dwell_s: Math.round(p.dwellS), straightness: +p.straightness.toFixed(2)});

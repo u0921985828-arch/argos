@@ -172,8 +172,14 @@ class SceneScale(
         val meanH = base.sumOf { it.h } / max(1, base.size)
         val sig = max(1e-3, sqrt(res.sumOf { (it - mu) * (it - mu) } / max(1, res.size)))
 
+        // La altura de cámara que implica el ajuste es un control de calidad
+        // (invariante 7): h = (estatura / altura) · (y − horizonte), así que
+        // altura = estatura / a. Fuera de 2-150 m la perspectiva no es de una
+        // cámara mirando un suelo: es un móvil apuntando a los pies de alguien,
+        // y de ahí salió una «carrera» de 41,5 m/s en el teléfono.
         val ok = res.size >= minSamples && sig > 0 && span >= minYSpan && aa > 0 &&
-            sig < 0.45 * max(1.0, meanH)
+            sig < 0.45 * max(1.0, meanH) &&
+            aa > assumedStature / 150.0 && aa < assumedStature / 2.0
         if (!ok && valid) { rejected++; return this }
         ySpan = span
         valid = ok
@@ -188,6 +194,9 @@ class SceneScale(
         for ((c, ratios) in byClass) if (ratios.size >= 5) classScale[c] = medianOf(ratios.toDoubleArray())
         return this
     }
+
+    /** Altura de la cámara sobre el suelo que implica el ajuste, en metros. */
+    val cameraHeightM: Double get() = if (valid && a > 0) assumedStature / a else Double.NaN
 
     fun reset() { valid = false; a = 0.0; b = 0.0; sigma = 0.0; n = 0; cx = 0.0; usesX = false; classScale.clear() }
 
@@ -234,11 +243,17 @@ class Physics {
      *   velocidad en m/s dependiera de cuánto se hubiera movido el móvil antes
      *   (medido: 0,80 a 1,36 m/s para 1,20 m/s reales, o NaN).
      */
-    fun update(cx: Double, by: Double, anchorCx: Double, anchorBy: Double, tSec: Double, scale: SceneScale?) {
+    fun update(cx: Double, by: Double, anchorCx: Double, anchorBy: Double, tSec: Double, scale: SceneScale?,
+               maxMs: Double = Double.POSITIVE_INFINITY) {
         val tp = t
         if (tp == null) { x0 = cx; y0 = by; px = cx; py = by; t = tSec; return }
         val dt = max(1e-3, tSec - tp)
         val dx = cx - px; val dy = by - py
+        val mpp = scale?.metersPerPixel(anchorBy, anchorCx) ?: Double.NaN
+        // Un paso que ningún objeto de su clase puede dar es la caja saltando
+        // (otra persona, un trozo, la cámara), no un movimiento: se toma la
+        // posición nueva como punto de partida sin derivar de ella velocidad.
+        if (mpp.isFinite() && hypot(dx, dy) * mpp / dt > maxMs * 1.5) { px = cx; py = by; t = tSec; return }
         pathPx += hypot(dx, dy)
         val k = min(1.0, dt * 6)
         val nvx = dx / dt; val nvy = dy / dt
@@ -250,7 +265,6 @@ class Physics {
         ay += (((vy - pvy) / dt) - ay) * ka
         speedPx = hypot(vx, vy)
         heading = (atan2(vy, vx) * 180 / Math.PI + 360) % 360
-        val mpp = scale?.metersPerPixel(anchorBy, anchorCx) ?: Double.NaN
         speedMs = if (mpp.isFinite()) speedPx * mpp else Double.NaN
         dispPx = hypot(cx - x0, by - y0)
         straightness = if (pathPx > 1) dispPx / pathPx else 1.0
@@ -394,7 +408,11 @@ class SceneBrain(
             val hpx = (t.y2 - t.y1) * sy
             p.setStopThreshold(hpx)
             // Velocidad en coordenadas de escena; escala anclada en las de imagen.
-            p.update(cxImg + camX, byImg + camY, cxImg, byImg, tSec, if (still) scale else null)
+            p.update(cxImg + camX, byImg + camY, cxImg, byImg, tSec, if (still) scale else null,
+                     velocidadMaxima(t.klass))
+            // Lo que ningún objeto de esa clase puede hacer no se mide: es un
+            // salto de la caja o una escala mala, no una velocidad.
+            if (p.speedMs > velocidadMaxima(t.klass)) p.speedMs = Double.NaN
             if (still) {
                 obs.getOrPut(t.id) { ArrayList() }.let {
                     it.add(doubleArrayOf(cxImg, byImg, hpx)); if (it.size > 240) it.removeAt(0)
@@ -449,7 +467,7 @@ class SceneBrain(
             if (pa.n >= 3) finished.add(Trajectory(id, pa.cls, pa.det, pa.start, pa.end, pa.vmax, pa.pts, pa.evs))
         }
         for (id in physics.keys.toList()) if (id !in live) {
-            physics.remove(id); stature.remove(id); lastEvent.remove(id)
+            physics.remove(id); stature.remove(id); lastEvent.remove(id); runSince.remove(id)
             obs.remove(id)?.let { o -> if (o.size >= 4) addTrajectory(o, tracks, id) }
         }
         if (still && tSec - lastFit >= refitEveryS) {
@@ -461,6 +479,7 @@ class SceneBrain(
         return out
     }
 
+    private val runSince = HashMap<Int, Double>()
     private var lastCls = HashMap<Int, String>()
     private fun clsOf(tracks: List<Track>, id: Int): String =
         tracks.firstOrNull { it.id == id }?.klass?.also { lastCls[id] = it } ?: lastCls[id] ?: "object"
@@ -512,8 +531,12 @@ class SceneBrain(
         }
         // "detenido" = parado DE VERDAD y durante un rato, no "visto hace rato".
         if (p.stoppedS > eventStopS) push("detenido", "%.1f s".format(java.util.Locale.ROOT, p.stoppedS))
-        if (p.speedMs.isFinite() && p.speedMs > eventRunMs && t.klass == "person" && t.klassSrc == "det")
-            push("corriendo", "%.1f m/s".format(java.util.Locale.ROOT, p.speedMs))
+        // Corriendo = por encima del umbral durante un segundo seguido. Un
+        // frame suelto es una caja que salta.
+        if (p.speedMs.isFinite() && p.speedMs > eventRunMs && t.klass == "person" && t.klassSrc == "det") {
+            val desde = runSince.getOrPut(t.id) { tSec }
+            if (tSec - desde >= 1.0) push("corriendo", "%.1f m/s".format(java.util.Locale.ROOT, p.speedMs))
+        } else runSince.remove(t.id)
         if (p.dwellS > loiterS && p.straightness < loiterStraightness)
             push("merodeo", "${p.dwellS.toInt()} s")
         if (scale.valid) {
@@ -521,4 +544,14 @@ class SceneBrain(
             if (abs(z) > 6 && p.stopped) push("decorado", "z %.1f".format(java.util.Locale.ROOT, z))
         }
     }
+}
+
+/**
+ * Lo más rápido que puede ir un objeto de cada clase, con margen. Una persona
+ * esprintando ronda 10 m/s; por encima, lo que se mide es otra cosa.
+ */
+fun velocidadMaxima(cls: String): Double = when (cls) {
+    "person" -> 10.0
+    "bike" -> 20.0
+    else -> 70.0
 }

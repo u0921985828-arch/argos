@@ -87,7 +87,7 @@ if ! grep -q 'ARGOS nativo escena:' logcat.txt; then
 fi
 grep 'ARGOS nativo escena:' logcat.txt | tail -1
 # El chat: responde a una pregunta sobre la escena viva, en el aparato.
-if ! grep -q 'ARGOS chat: .*«qué ves» -> Ahora:' logcat.txt; then
+if ! grep -q 'ARGOS chat: .*«qué ves» -> Ahora' logcat.txt; then
     echo "::error::el chat no respondió a «qué ves»"
     grep 'ARGOS chat' logcat.txt || true
     exit 1
