@@ -66,7 +66,7 @@ fun main(args: Array<String>) {
     //  - el siseo entre palabras baja más de 20 dB;
     //  - el retumbe de 40 Hz baja más de 6 dB;
     //  - los graves de la voz (150 Hz) suben frente a la presencia (3,2 kHz);
-    //  - las sibilancias (7,5 kHz) bajan frente a la presencia más de 3 dB;
+    //  - las sibilancias (7,5 kHz) bajan frente a los graves más de 3 dB;
     //  - el rango dinámico al hablar baja;
     //  - nada pasa de escala, y «natural» no toca la señal.
     run {
@@ -96,8 +96,8 @@ fun main(args: Array<String>) {
         pide("acabado: retumbe de 40 Hz %.1f dB".format(ret), ret < -6)
         val graves = (db(amp(b, 150.0, i0, i1)) - db(amp(b, 3200.0, i0, i1))) - (db(amp(a, 150.0, i0, i1)) - db(amp(a, 3200.0, i0, i1)))
         pide("acabado: graves frente a presencia %+.1f dB".format(graves), graves > 1)
-        val sib = (db(amp(b, 7500.0, i0, i1)) - db(amp(b, 3200.0, i0, i1))) - (db(amp(a, 7500.0, i0, i1)) - db(amp(a, 3200.0, i0, i1)))
-        pide("acabado: sibilancias frente a presencia %+.1f dB".format(sib), sib < -3)
+        val sib = (db(amp(b, 7500.0, i0, i1)) - db(amp(b, 150.0, i0, i1))) - (db(amp(a, 7500.0, i0, i1)) - db(amp(a, 150.0, i0, i1)))
+        pide("acabado: sibilancias frente a graves %+.1f dB".format(sib), sib < -3)
         fun rango(x: FloatArray): Double {
             fun rms(i0: Int, i1: Int) = Math.sqrt((i0 until i1).sumOf { x[it] * x[it].toDouble() } / (i1 - i0))
             val f = rms(sr * 6 / 100, sr / 4); val d = rms(sr / 4 + sr * 6 / 100, sr / 2)
@@ -127,6 +127,20 @@ fun main(args: Array<String>) {
         val ese = db(rms(b, q * 3 + 600, q * 4)) - db(rms(a, q * 3 + 600, q * 4))
         pide("de-esser: la «s» %+.1f dB".format(ese), ese < -6)
         pide("de-esser: la vocal %+.2f dB".format(vocal), Math.abs(vocal) < 0.5)
+    }
+    // Doma de aspereza: una vocal con mucha energía en 3 kHz baja en esa banda;
+    // una vocal grave (300 Hz) queda igual.
+    run {
+        val sr = 22050
+        val a = FloatArray(sr) { i -> val t = i / sr.toDouble()
+            (if (t < 0.5) 0.5 * Math.sin(2 * Math.PI * 300 * t) else 0.15 * Math.sin(2 * Math.PI * 300 * t) + 0.5 * Math.sin(2 * Math.PI * 3200 * t)).toFloat() }
+        val b = EfectoVoz.domaAspereza(a, sr)
+        fun rms(x: FloatArray, i0: Int, i1: Int) = Math.sqrt((i0 until i1).sumOf { x[it] * x[it].toDouble() } / (i1 - i0))
+        fun db(v: Double) = 20 * Math.log10(v.coerceAtLeast(1e-9))
+        val grave = db(rms(b, 2000, sr / 2 - 200)) - db(rms(a, 2000, sr / 2 - 200))
+        val aspera = db(rms(b, sr / 2 + 4000, sr - 200)) - db(rms(a, sr / 2 + 4000, sr - 200))
+        pide("aspereza: vocal grave %+.2f dB".format(grave), Math.abs(grave) < 0.5)
+        pide("aspereza: vocal áspera %+.1f dB".format(aspera), aspera < -2)
     }
     // Reductor de ruido: «vocales» (tonos de 220/440/880 Hz a ráfagas) con un
     // soplido blanco constante a −24 dB por debajo. El soplido tiene que bajar

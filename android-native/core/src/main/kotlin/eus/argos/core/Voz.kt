@@ -403,10 +403,14 @@ class VozPiper(config: String, private val infer: (LongArray, FloatArray) -> Flo
     }
 
     companion object {
-        /** A PCM de 16 bits, normalizado a un pico de 0,9. */
+        /**
+         * A PCM de 16 bits con margen: pico a −3 dBFS. A −1 dBFS el procesado
+         * del propio teléfono (realce de volumen, ecualizador del altavoz) la
+         * empujaba a recortar y sonaba saturada.
+         */
         fun pcm16(a: FloatArray): ShortArray {
             val pico = maxOf(0.01f, a.maxOfOrNull { Math.abs(it) } ?: 0f)
-            return ShortArray(a.size) { (a[it] / pico * 0.9f * 32767).toInt().toShort() }
+            return ShortArray(a.size) { (a[it] / pico * 0.708f * 32767).toInt().toShort() }
         }
     }
 }
@@ -426,8 +430,9 @@ class VozPiper(config: String, private val infer: (LongArray, FloatArray) -> Flo
  *  3. Compresión suave 3:1 a −20 dB, con ataque de 10 ms y relajación de
  *     60 ms: igual de cerca en cada sílaba, sin bombeo.
  *  4. Limitador final: nada pasa de −1 dB, sin saturar.
- *  5. En las dos, antes que nada: reductor de ruido espectral (`limpiaRuido`)
- *     y de-esser, que baja las eses solo cuando las hay.
+ *  5. En las dos, antes que nada: reductor de ruido espectral (`limpiaRuido`),
+ *     de-esser (baja las eses solo cuando las hay) y doma de aspereza en
+ *     2,2-4,5 kHz (`domaAspereza`).
  * `NATURAL` (por defecto) es la voz tal cual con esas dos limpiezas y nada más.
  */
 object EfectoVoz {
@@ -579,9 +584,39 @@ object EfectoVoz {
         if (inversa) for (k in 0 until n) { re[k] /= n; im[k] /= n }
     }
 
+    /**
+     * Doma de aspereza: lo mismo que el de-esser pero en 2,2-4,5 kHz, la zona
+     * donde el vocoder de la síntesis «raspa» en las sílabas fuertes y suena a
+     * saturación (sin serlo: en la muestra no hay ni una muestra recortada).
+     * Cuando esa banda pasa del 35 % de la energía se baja, hasta −6 dB.
+     */
+    fun domaAspereza(a: FloatArray, sr: Int): FloatArray {
+        if (a.isEmpty() || sr < 12000) return a
+        val lpA1 = Biquad.pasoBajo(2200.0, sr); val lpA2 = Biquad.pasoBajo(2200.0, sr)
+        val hpA1 = Biquad.pasoAlto(2200.0, sr); val hpA2 = Biquad.pasoAlto(2200.0, sr)
+        val lpB1 = Biquad.pasoBajo(4500.0, sr); val lpB2 = Biquad.pasoBajo(4500.0, sr)
+        val hpB1 = Biquad.pasoAlto(4500.0, sr); val hpB2 = Biquad.pasoAlto(4500.0, sr)
+        val at = Math.exp(-1.0 / (0.002 * sr)); val re = Math.exp(-1.0 / (0.060 * sr))
+        var eB = 0.0; var eT = 0.0; var g = 1.0
+        val out = FloatArray(a.size)
+        for (i in a.indices) {
+            val x = a[i].toDouble()
+            val bajo = lpA2.paso(lpA1.paso(x)); val resto = hpA2.paso(hpA1.paso(x))
+            val medio = lpB2.paso(lpB1.paso(resto)); val alto = hpB2.paso(hpB1.paso(resto))
+            val pm = medio * medio; val pt = x * x
+            eB = if (pm > eB) at * eB + (1 - at) * pm else re * eB + (1 - re) * pm
+            eT = if (pt > eT) at * eT + (1 - at) * pt else re * eT + (1 - re) * pt
+            val parte = if (eT > 1e-9) eB / eT else 0.0
+            val objetivo = if (parte > 0.35) Math.max(0.5, 0.35 / parte) else 1.0
+            g += (objetivo - g) * (if (objetivo < g) 0.05 else 0.002)
+            out[i] = (bajo + medio * g + alto).toFloat()
+        }
+        return out
+    }
+
     fun aplica(a0: FloatArray, sr: Int, tipo: Tipo): FloatArray {
         if (a0.isEmpty()) return a0
-        val a = deEsser(limpiaRuido(a0, sr), sr)
+        val a = domaAspereza(deEsser(limpiaRuido(a0, sr), sr), sr)
         if (tipo == Tipo.NATURAL) return a
         val pico = (a.maxOfOrNull { Math.abs(it) } ?: 0f).toDouble().coerceAtLeast(1e-4)
         val nyq = sr / 2.0
