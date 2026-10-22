@@ -168,24 +168,35 @@ jobs:
       - name: Verify the APK carries what it needs
         run: |
           set -e
-          APK=android-native/app/build/outputs/apk/release/app-release.apk
-          # Lo que se entrega no puede ser depurable.
+          # Un APK por arquitectura. Cada uno: no depurable, con modelo, voz y
+          # ficha, con SU biblioteca nativa y sin las de las otras.
           AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt | sort -V | tail -1)
-          if "$AAPT" dump badging "$APK" | grep -q application-debuggable; then
-            echo "::error::el APK de entrega es depurable"; exit 1
-          fi
-          unzip -l "$APK" > contenido.txt
-          for f in assets/yolox_nano.onnx assets/autoprueba.jpg assets/voz.onnx assets/voz.onnx.json assets/voz-ficha.txt \
-                   lib/arm64-v8a/libonnxruntime.so lib/x86_64/libonnxruntime.so; do
-            grep -q "$f" contenido.txt || { echo "::error::falta $f en el APK"; exit 1; }
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            APK=android-native/app/build/outputs/apk/release/app-$abi-release.apk
+            if "$AAPT" dump badging "$APK" | grep -q application-debuggable; then
+              echo "::error::el APK $abi es depurable"; exit 1
+            fi
+            unzip -l "$APK" > contenido.txt
+            for f in assets/yolox_nano.onnx assets/autoprueba.jpg assets/voz.onnx assets/voz.onnx.json \
+                     assets/voz-ficha.txt lib/$abi/libonnxruntime.so; do
+              grep -q "$f" contenido.txt || { echo "::error::falta $f en el APK $abi"; exit 1; }
+            done
+            if grep "lib/" contenido.txt | grep -v "lib/$abi/" | grep -q "\.so"; then
+              echo "::error::el APK $abi lleva bibliotecas de otra arquitectura"; exit 1
+            fi
+            ls -l "$APK"
           done
-          ls -l "$APK"
-          cp "$APK" ARGOS-nativo.apk
+          cp android-native/app/build/outputs/apk/release/app-arm64-v8a-release.apk ARGOS-nativo.apk
+          cp android-native/app/build/outputs/apk/release/app-armeabi-v7a-release.apk ARGOS-nativo-armv7.apk
+          cp android-native/app/build/outputs/apk/release/app-x86_64-release.apk ARGOS-nativo-x86_64.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: apk-nativo
-          path: ARGOS-nativo.apk
+          path: |
+            ARGOS-nativo.apk
+            ARGOS-nativo-armv7.apk
+            ARGOS-nativo-x86_64.apk
           if-no-files-found: error
 
       - name: Publish APK to the `apk-nativo` branch
@@ -193,15 +204,18 @@ jobs:
         run: |
           set -e
           work=$(mktemp -d)
-          # Con la voz el APK pasa de 100 MB, el límite de un fichero en git: va
-          # en trozos de 90 MB que se juntan con `cat`.
-          split -b 90m ARGOS-nativo.apk "$work/ARGOS-nativo.apk.parte-"
-          sha256sum ARGOS-nativo.apk > "$work/ARGOS-nativo.apk.sha256"
+          # Los de teléfono (arm64 y armv7). Por si alguno pasa de los 100 MB
+          # que admite un fichero en git, van en trozos de 90 MB que se juntan
+          # con `cat`; con uno solo, es un único trozo.
+          for f in ARGOS-nativo.apk ARGOS-nativo-armv7.apk; do
+            split -b 90m "$f" "$work/$f.parte-"
+            sha256sum "$f" > "$work/$f.sha256"
+          done
           cd "$work"
           git init -q -b apk-nativo
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          git add ARGOS-nativo.apk.parte-* ARGOS-nativo.apk.sha256
+          git add *.parte-* *.sha256
           git commit -q -m "APK nativo de ${GITHUB_SHA::8}"
           git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" apk-nativo
         env:
@@ -230,7 +244,7 @@ jobs:
           target: google_apis
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back emulated
-          script: bash .github/scripts/smoke-nativo.sh ARGOS-nativo.apk
+          script: bash .github/scripts/smoke-nativo.sh ARGOS-nativo-x86_64.apk
 
       - uses: actions/upload-artifact@v4
         if: always()

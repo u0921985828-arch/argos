@@ -15,10 +15,6 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1-nativo"
-        // ONNX Runtime trae sus .so para cuatro arquitecturas y el APK pesaba
-        // 83 MB. x86 de 32 bits no lo usa ningún teléfono; x86_64 se queda
-        // para el emulador del CI.
-        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
     }
     // Lo que se entrega es una compilación de RELEASE: una de depuración deja
     // que cualquiera con un cable lea la memoria con `run-as` y enganche un
@@ -32,6 +28,18 @@ android {
             storePassword = System.getenv("ARGOS_KEYSTORE_PASS")
             keyAlias = System.getenv("ARGOS_KEY_ALIAS")
             keyPassword = System.getenv("ARGOS_KEY_PASS")
+        }
+    }
+    // Un APK por arquitectura: cada uno lleva solo las bibliotecas nativas de
+    // ONNX Runtime de su procesador, no las tres (x86 de 32 bits no lo usa
+    // ningún teléfono y ni se genera). El de arm64 es el de casi
+    // cualquier teléfono actual; el de x86_64 es para el emulador del CI.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = false
         }
     }
     buildTypes {
