@@ -1,0 +1,17 @@
+name: Sondas de cámaras públicas
+
+# Qué organismos dan vídeo sin clave: se lanza a mano o al cambiar la sonda.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/scripts/sondas-camaras.py
+      - .github/workflows/sondas.yml
+
+jobs:
+  sondas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 .github/scripts/sondas-camaras.py
