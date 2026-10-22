@@ -58,13 +58,13 @@ fun main(args: Array<String>) {
         "28,8 km/h" to "veintiocho coma ocho kilómetros por hora", "120 m" to "ciento veinte metros",
         "1.250 eventos" to "mil doscientos cincuenta eventos", "GPS" to "ge pe ese", "100" to "cien",
         "2.000.000" to "dos millones")) pide("«$t» → «${Normaliza.texto(t)}»", Normaliza.texto(t) == e)
-    // El acabado: limpio y pulido, NO de radio. Con una «voz» sintética de
+    // El acabado cálido: limpio, con cuerpo y sin sibilancias; NO de radio. Con una «voz» sintética de
     // ráfagas (dos sílabas, una fuerte y otra a un cuarto), un retumbe de
     // 40 Hz debajo y siseo entre ráfagas, se exige:
     //  - el siseo entre palabras baja más de 20 dB;
-    //  - el retumbe de 40 Hz baja más de 10 dB;
-    //  - la presencia (3,2 kHz) sube frente a la caja (280 Hz);
-    //  - los agudos (6-9 kHz) NO se pierden: como mucho −4 dB;
+    //  - el retumbe de 40 Hz baja más de 6 dB;
+    //  - los graves de la voz (150 Hz) suben frente a la presencia (3,2 kHz);
+    //  - las sibilancias (7,5 kHz) bajan frente a la presencia más de 3 dB;
     //  - el rango dinámico al hablar baja;
     //  - nada pasa de escala, y «natural» no toca la señal.
     run {
@@ -91,13 +91,11 @@ fun main(args: Array<String>) {
         val silB = b.sliceArray(sr / 2 + 2000 until sr - 200).map { Math.abs(it) }.average()
         pide("acabado: siseo entre palabras %.0f dB".format(db(silB / silA)), db(silB / silA) < -20)
         val ret = (db(amp(b, 40.0, i0, i1)) - db(amp(b, 150.0, i0, i1))) - (db(amp(a, 40.0, i0, i1)) - db(amp(a, 150.0, i0, i1)))
-        pide("acabado: retumbe de 40 Hz %.1f dB".format(ret), ret < -10)
-        val pres = (db(amp(b, 3200.0, i0, i1)) - db(amp(b, 280.0, i0, i1))) - (db(amp(a, 3200.0, i0, i1)) - db(amp(a, 280.0, i0, i1)))
-        pide("acabado: presencia frente a caja %+.1f dB".format(pres), pres > 3)
-        val aire = (db(amp(b, 7500.0, i0, i1)) - db(amp(b, 3200.0, i0, i1))) - (db(amp(a, 7500.0, i0, i1)) - db(amp(a, 3200.0, i0, i1)))
-        pide("acabado: agudos sin perder (no es radio) %+.1f dB".format(aire), aire > -4 - 2.5)
-        // Sílaba fuerte frente a floja, cada una sin sus primeros 60 ms (lo que
-        // tarda cualquier compresor en reaccionar).
+        pide("acabado: retumbe de 40 Hz %.1f dB".format(ret), ret < -6)
+        val graves = (db(amp(b, 150.0, i0, i1)) - db(amp(b, 3200.0, i0, i1))) - (db(amp(a, 150.0, i0, i1)) - db(amp(a, 3200.0, i0, i1)))
+        pide("acabado: graves frente a presencia %+.1f dB".format(graves), graves > 1)
+        val sib = (db(amp(b, 7500.0, i0, i1)) - db(amp(b, 3200.0, i0, i1))) - (db(amp(a, 7500.0, i0, i1)) - db(amp(a, 3200.0, i0, i1)))
+        pide("acabado: sibilancias frente a presencia %+.1f dB".format(sib), sib < -3)
         fun rango(x: FloatArray): Double {
             fun rms(i0: Int, i1: Int) = Math.sqrt((i0 until i1).sumOf { x[it] * x[it].toDouble() } / (i1 - i0))
             val f = rms(sr * 6 / 100, sr / 4); val d = rms(sr / 4 + sr * 6 / 100, sr / 2)

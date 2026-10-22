@@ -52,7 +52,7 @@ class Chat(private val act: ComponentActivity, private val ask: () -> Ask?,
     private val estadoVoz = TextView(act).apply { setTextColor(Ui.SUAVE); textSize = 11f }
     private val prefs = act.getSharedPreferences("argos", android.content.Context.MODE_PRIVATE)
     /** Ficha para elegir el tratamiento de la voz propia; solo se ve si la hay. */
-    private val fichaEfecto = Ui.ficha(act, "Voz: estudio") { cambiarEfecto() }.apply { visibility = android.view.View.GONE }
+    private val fichaEfecto = Ui.ficha(act, "Voz: natural") { cambiarEfecto() }.apply { visibility = android.view.View.GONE }
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var ttsOk = false
@@ -266,13 +266,13 @@ class Chat(private val act: ComponentActivity, private val ask: () -> Ask?,
     /** La voz propia terminó de cargar: se le pone el efecto guardado y el panel lo dice. */
     fun vozLista() {
         val v = vozPropia() ?: return pintaEstado()
-        v.efecto = runCatching { eus.argos.core.EfectoVoz.Tipo.valueOf(prefs.getString("efecto", "ESTUDIO")!!) }
-            .getOrDefault(eus.argos.core.EfectoVoz.Tipo.ESTUDIO)
+        v.efecto = runCatching { eus.argos.core.EfectoVoz.Tipo.valueOf(prefs.getString("efecto", "NATURAL")!!) }
+            .getOrDefault(eus.argos.core.EfectoVoz.Tipo.NATURAL)
         act.runOnUiThread { fichaEfecto.visibility = android.view.View.VISIBLE; fichaEfecto.text = "Voz: ${v.efecto.texto}" }
         pintaEstado()
     }
 
-    /** Natural ↔ estudio, y lo dice con el acabado nuevo. */
+    /** Natural ↔ cálida, y lo dice con el acabado nuevo. */
     private fun cambiarEfecto() {
         val v = vozPropia() ?: return
         val tipos = eus.argos.core.EfectoVoz.Tipo.values()

@@ -325,7 +325,7 @@ class VozPiper(config: String, private val infer: (LongArray, FloatArray) -> Flo
     /** Velocidad: >1 más despacio. */
     var duracion = 1.0f
     /** El acabado que se le da a la salida. */
-    var efecto = EfectoVoz.Tipo.ESTUDIO
+    var efecto = EfectoVoz.Tipo.NATURAL
 
     init {
         val i = config.indexOf("\"phoneme_id_map\"")
@@ -407,19 +407,20 @@ class VozPiper(config: String, private val infer: (LongArray, FloatArray) -> Flo
  * para un anuncio o un pódcast, sin que suene a radio ni a robot.
  *  1. Limpieza: un expansor hacia abajo baja suavemente lo que queda entre
  *     palabras por debajo del umbral (el siseo y el soplido de la síntesis),
- *     sin cortes bruscos. Un paso alto a 80 Hz quita el retumbe.
- *  2. Ecualización:
- *     - −3 dB en 280 Hz, la «caja» que embota la voz;
- *     - +2,5 dB en 3,2 kHz, la presencia que la pone delante;
- *     - −2 dB en 6,5 kHz, el brillo metálico típico de la síntesis;
- *     - +1,5 dB de estante por encima de 9 kHz, aire si la voz lo tiene.
+ *     sin cortes bruscos. Un paso alto de 24 dB/octava a 60 Hz quita el
+ *     retumbe sin tocar los graves de la voz.
+ *  2. Ecualización cálida (la que se eligió de oído frente a una con más
+ *     presencia, que sonaba brillante y sibilante):
+ *     - +2 dB de estante por debajo de 200 Hz: cuerpo y graves;
+ *     - −4 dB en 7 kHz y −2,5 dB de estante por encima de 8 kHz: menos
+ *       sibilancias y menos brillo metálico de la síntesis.
  *  3. Compresión suave 3:1 a −20 dB, con ataque de 10 ms y relajación de
  *     60 ms: igual de cerca en cada sílaba, sin bombeo.
  *  4. Limitador final: nada pasa de −1 dB, sin saturar.
- * `NATURAL` no toca nada.
+ * `NATURAL` no toca nada y es la que sale por defecto.
  */
 object EfectoVoz {
-    enum class Tipo(val texto: String) { NATURAL("natural"), ESTUDIO("estudio") }
+    enum class Tipo(val texto: String) { NATURAL("natural"), ESTUDIO("cálida") }
 
     private class Biquad(b0: Double, b1: Double, b2: Double, a0: Double, a1: Double, a2: Double) {
         private val c0 = b0 / a0; private val c1 = b1 / a0; private val c2 = b2 / a0
@@ -440,6 +441,12 @@ object EfectoVoz {
                 val a = Math.pow(10.0, db / 40); val w = 2 * Math.PI * f / sr; val al = Math.sin(w) / (2 * q); val cw = Math.cos(w)
                 return Biquad(1 + al * a, -2 * cw, 1 - al * a, 1 + al / a, -2 * cw, 1 - al / a)
             }
+            fun estanteBajo(f: Double, db: Double, sr: Int): Biquad {
+                val a = Math.pow(10.0, db / 40); val w = 2 * Math.PI * f / sr; val cw = Math.cos(w)
+                val al = Math.sin(w) / 2 * Math.sqrt(2.0); val r = 2 * Math.sqrt(a) * al
+                return Biquad(a * ((a + 1) - (a - 1) * cw + r), 2 * a * ((a - 1) - (a + 1) * cw), a * ((a + 1) - (a - 1) * cw - r),
+                              (a + 1) + (a - 1) * cw + r, -2 * ((a - 1) + (a + 1) * cw), (a + 1) + (a - 1) * cw - r)
+            }
             fun estanteAlto(f: Double, db: Double, sr: Int): Biquad {
                 val a = Math.pow(10.0, db / 40); val w = 2 * Math.PI * f / sr; val cw = Math.cos(w)
                 val al = Math.sin(w) / 2 * Math.sqrt(2.0); val r = 2 * Math.sqrt(a) * al
@@ -454,11 +461,10 @@ object EfectoVoz {
         val pico = (a.maxOfOrNull { Math.abs(it) } ?: 0f).toDouble().coerceAtLeast(1e-4)
         val nyq = sr / 2.0
         val filtros = listOfNotNull(
-            Biquad.pasoAlto(80.0, sr),
-            Biquad.campana(280.0, 1.0, -3.0, sr),
-            Biquad.campana(3200.0, 0.9, 2.5, sr),
-            if (6500.0 < nyq * 0.9) Biquad.campana(6500.0, 2.0, -2.0, sr) else null,
-            if (9000.0 < nyq * 0.9) Biquad.estanteAlto(9000.0, 1.5, sr) else null)
+            Biquad.pasoAlto(60.0, sr), Biquad.pasoAlto(60.0, sr),
+            Biquad.estanteBajo(200.0, 2.0, sr),
+            if (7000.0 < nyq * 0.9) Biquad.campana(7000.0, 1.2, -4.0, sr) else null,
+            if (8000.0 < nyq * 0.9) Biquad.estanteAlto(8000.0, -2.5, sr) else null)
         val out = FloatArray(a.size)
         // Expansor: envolvente de 1 ms / 30 ms; por debajo del 6 % del pico la
         // ganancia baja con pendiente 1:4 (lo de −40 dB acaba a −76): el siseo
