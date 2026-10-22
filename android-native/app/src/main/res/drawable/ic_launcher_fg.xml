@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Primer plano del icono adaptable: el logo reducido al 80 % para que las
+     marcas de alrededor caigan dentro de la zona segura (66 dp) de cualquier
+     máscara del lanzador. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:scaleX="0.8" android:scaleY="0.8" android:pivotX="54" android:pivotY="54">
+        <path android:pathData="M22,54 Q54,24 86,54 Q54,84 22,54 Z"
+            android:strokeColor="#00E676" android:strokeWidth="3.2" android:strokeLineJoin="round" />
+        <path android:pathData="M40.5,54 a13.5,13.5 0 1,0 27,0 a13.5,13.5 0 1,0 -27,0"
+            android:strokeColor="#00E676" android:strokeWidth="3.2" />
+        <path android:pathData="M48,54 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0" android:fillColor="#ECEFF4" />
+        <path android:pathData="M55.7,50.5 a1.8,1.8 0 1,0 3.6,0 a1.8,1.8 0 1,0 -3.6,0" android:fillColor="#0C0E12" />
+        <path android:pathData="M54,16 L54,22 M54,86 L54,92 M27,27 L31,31 M81,27 L77,31 M27,81 L31,77 M81,81 L77,77"
+            android:strokeColor="#8C00E676" android:strokeWidth="2.4" android:strokeLineCap="round" />
+    </group>
+</vector>

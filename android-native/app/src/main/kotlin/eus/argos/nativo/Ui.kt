@@ -52,4 +52,47 @@ object Ui {
     fun linea(ctx: Context, tam: Float = 13f, color: Int = TEXTO) = TextView(ctx).apply {
         setTextColor(color); textSize = tam; setPadding(0, dp(ctx, 2), 0, dp(ctx, 2))
     }
+
+    /** Título arriba y valor debajo, en dos tamaños. */
+    fun textoFila(titulo: String, valor: String): CharSequence {
+        val sb = android.text.SpannableStringBuilder(titulo).append("\n").append(valor)
+        sb.setSpan(android.text.style.StyleSpan(Typeface.BOLD), 0, titulo.length, 0)
+        sb.setSpan(android.text.style.ForegroundColorSpan(SUAVE), titulo.length + 1, sb.length, 0)
+        sb.setSpan(android.text.style.RelativeSizeSpan(0.85f), titulo.length + 1, sb.length, 0)
+        return sb
+    }
+
+    /** Fila de ajustes: toda la fila se pulsa, con altura de dedo (56 dp). */
+    fun fila(ctx: Context, titulo: String, valor: String, alPulsar: () -> Unit) = TextView(ctx).apply {
+        text = textoFila(titulo, valor); setTextColor(TEXTO); textSize = 16f
+        minHeight = dp(ctx, 56); gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(ctx, 14), dp(ctx, 8), dp(ctx, 14), dp(ctx, 8))
+        background = fondo(Color.argb(110, 40, 44, 52), dp(ctx, 14).toFloat())
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(ctx, 8) }
+        isClickable = true; setOnClickListener { alPulsar() }
+    }
+
+    /** Botón redondo con icono. */
+    fun boton(ctx: Context, icono: Int, descripcion: String, tamDp: Int, color: Int, alPulsar: () -> Unit) =
+        android.widget.ImageButton(ctx).apply {
+            setImageResource(icono); contentDescription = descripcion
+            background = fondo(color, dp(ctx, tamDp / 2).toFloat())
+            scaleType = android.widget.ImageView.ScaleType.CENTER
+            layoutParams = LinearLayout.LayoutParams(dp(ctx, tamDp), dp(ctx, tamDp))
+            setOnClickListener { alPulsar() }
+        }
+
+    /** Acción de la botonera: icono grande (el principal, más aún) y rótulo debajo. */
+    fun accion(ctx: Context, icono: Int, rotulo: String, principal: Boolean, alPulsar: () -> Unit): LinearLayout {
+        val tam = if (principal) 64 else 52
+        val color = if (principal) Color.argb(240, 0, 168, 90) else Color.argb(170, 34, 38, 46)
+        return LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+            addView(boton(ctx, icono, rotulo, tam, color, alPulsar).apply { elevation = dp(ctx, 4).toFloat() })
+            addView(TextView(ctx).apply {
+                text = rotulo; setTextColor(TEXTO); textSize = 12f; gravity = Gravity.CENTER
+                setShadowLayer(4f, 0f, 0f, Color.BLACK)
+            }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(ctx, 4) })
+        }
+    }
 }

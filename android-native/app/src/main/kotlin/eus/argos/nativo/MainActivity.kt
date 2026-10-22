@@ -66,7 +66,6 @@ class MainActivity : ComponentActivity() {
         override fun onAccuracyChanged(s: android.hardware.Sensor?, a: Int) {}
     }
     private lateinit var estado: TextView
-    private var detalles = false
     private lateinit var radio: RadioVigia
     private val prefs by lazy { getSharedPreferences("argos", MODE_PRIVATE) }
     private val analysisExec = Executors.newSingleThreadExecutor { r -> Thread(r, "argos-rapido") }
@@ -102,96 +101,123 @@ class MainActivity : ComponentActivity() {
         radio = RadioVigia(this)
         val d = { v: Int -> Ui.dp(this, v) }
 
-        // Arriba: nombre, estado de un vistazo y las fichas de acción.
-        estado = TextView(this).apply { text = "● cargando"; setTextColor(Ui.SUAVE); textSize = 12f }
-        fichaZoom = Ui.ficha(this, "Zoom: auto") { cambiarZoom() }
-        fichaRadio = Ui.ficha(this, "Radio: no") { alternarRadio() }
+        // Arriba, solo lo que se mira: logo, nombre y estado. Todo lo que se
+        // TOCA va abajo, al alcance del pulgar.
+        estado = TextView(this).apply {
+            text = "● cargando"; setTextColor(Ui.SUAVE); textSize = 13f
+            setPadding(d(10), d(4), d(10), d(4))
+            background = Ui.fondo(Color.argb(140, 20, 24, 30), d(12).toFloat())
+        }
+        fichaZoom = Ui.fila(this, "Zoom", "auto") { cambiarZoom() }
+        fichaRadio = Ui.fila(this, "Radio pasiva", "apagada") { alternarRadio() }
         estabilizar = prefs.getBoolean("estabilizar", true)
-        fichaEstable = Ui.ficha(this, if (estabilizar) "Estable: sí" else "Estable: no") {
+        fichaEstable = Ui.fila(this, "Estabilizar", if (estabilizar) "sí" else "no") {
             estabilizar = !estabilizar
             prefs.edit().putBoolean("estabilizar", estabilizar).apply()
-            fichaEstable.text = if (estabilizar) (if (ois) "Estable: sí · óptico" else "Estable: sí") else "Estable: no"
+            fichaEstable.text = Ui.textoFila("Estabilizar", if (estabilizar) (if (ois) "sí · óptico" else "sí") else "no")
             if (!estabilizar) { escena.scaleX = 1f; escena.scaleY = 1f; escena.translationX = 0f; escena.translationY = 0f; escena.rotation = 0f }
             estabilizador.reinicia(); giro.reinicia()
         }
         val barra = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(d(14), d(10), d(10), d(10))
+            orientation = android.widget.LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(d(16), d(10), d(16), d(14))
             background = android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(Color.argb(200, 0, 0, 0), Color.TRANSPARENT))
-            addView(android.widget.LinearLayout(this@MainActivity).apply {
-                orientation = android.widget.LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-                addView(android.widget.LinearLayout(this@MainActivity).apply {
-                    orientation = android.widget.LinearLayout.VERTICAL
-                    addView(TextView(this@MainActivity).apply {
-                        text = "ARGOS"; setTextColor(Ui.TEXTO); textSize = 20f
-                        typeface = android.graphics.Typeface.create("sans-serif-black", android.graphics.Typeface.NORMAL)
-                        letterSpacing = 0.12f
-                    })
-                    addView(estado)
-                }, android.widget.LinearLayout.LayoutParams(0, -2, 1f))
-                addView(Ui.ficha(this@MainActivity, "Memoria") {
-                    startActivity(android.content.Intent(this@MainActivity, ResumenActivity::class.java))
-                })
-            })
-            addView(android.widget.LinearLayout(this@MainActivity).apply {
-                orientation = android.widget.LinearLayout.HORIZONTAL
-                setPadding(0, d(8), 0, 0)
-                addView(fichaZoom, android.widget.LinearLayout.LayoutParams(-2, -2).apply { rightMargin = d(8) })
-                addView(fichaEstable, android.widget.LinearLayout.LayoutParams(-2, -2).apply { rightMargin = d(8) })
-                addView(fichaRadio)
-            })
+                intArrayOf(Color.argb(190, 0, 0, 0), Color.TRANSPARENT))
+            addView(android.widget.ImageView(this@MainActivity).apply { setImageResource(R.drawable.ic_argos) },
+                    android.widget.LinearLayout.LayoutParams(d(34), d(34)).apply { rightMargin = d(8) })
+            addView(TextView(this@MainActivity).apply {
+                text = "ARGOS"; setTextColor(Ui.TEXTO); textSize = 20f
+                typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.BOLD)
+                letterSpacing = 0.14f
+            }, android.widget.LinearLayout.LayoutParams(0, -2, 1f))
+            addView(estado)
         }
 
-        // Abajo: la tarjeta con lo que importa. Un toque enseña los detalles técnicos.
+        // La tarjeta: tres cifras grandes y una línea de lo último que pasó.
         val (cP, vP) = Ui.cifra(this, "personas", Ui.VERDE)
         val (cV, vV) = Ui.cifra(this, "vehículos", Ui.AZUL)
-        val (cS, vS) = Ui.cifra(this, "en esta sesión")
+        val (cS, vS) = Ui.cifra(this, "hoy en sesión")
         nPersonas = vP; nVehiculos = vV; nSesion = vS
-        lEscena = Ui.linea(this); lEvento = Ui.linea(this, 13f, Ui.AMBAR)
-        lRadio = Ui.linea(this, 12f, Ui.AZUL).apply { visibility = android.view.View.GONE }
-        hud = Ui.linea(this, 11f, Ui.SUAVE).apply { text = "Cargando el detector…" }
+        lEscena = Ui.linea(this, 12f, Ui.SUAVE)
+        lEvento = Ui.linea(this, 14f, Ui.AMBAR).apply { maxLines = 2 }
+        lRadio = Ui.linea(this, 13f, Ui.AZUL).apply { visibility = android.view.View.GONE; maxLines = 2 }
+        hud = Ui.linea(this, 12f, Ui.SUAVE).apply { text = "Cargando el detector…" }
         val tarjeta = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(d(16), d(12), d(16), d(12))
-            background = Ui.fondo(Ui.TARJETA, d(20).toFloat(), Ui.BORDE, this@MainActivity)
+            setPadding(d(18), d(14), d(18), d(14))
+            background = Ui.fondo(Ui.TARJETA, d(22).toFloat(), Ui.BORDE, this@MainActivity)
             addView(android.widget.LinearLayout(this@MainActivity).apply {
                 orientation = android.widget.LinearLayout.HORIZONTAL
                 addView(cP, android.widget.LinearLayout.LayoutParams(0, -2, 1f))
                 addView(cV, android.widget.LinearLayout.LayoutParams(0, -2, 1f))
                 addView(cS, android.widget.LinearLayout.LayoutParams(0, -2, 1f))
             })
-            addView(lEscena); addView(lEvento); addView(lRadio); addView(hud)
-            setOnClickListener { detalles = !detalles }
+            addView(lEvento, android.widget.LinearLayout.LayoutParams(-1, -2).apply { topMargin = d(8) })
+            addView(lRadio)
         }
 
+        // Paneles que suben desde abajo: el chat y los ajustes.
         lateinit var chatCaja: FrameLayout
-        val botonChat = android.widget.ImageButton(this).apply {
-            setImageResource(android.R.drawable.ic_btn_speak_now)
-            contentDescription = "Hablar con ARGOS"
-            background = Ui.fondo(Color.argb(235, 21, 101, 192), d(30).toFloat())
-            elevation = d(6).toFloat()
+        lateinit var ajustesCaja: android.widget.LinearLayout
+        lateinit var botonera: android.widget.LinearLayout
+        fun panel(abrir: android.view.View?) {
+            chatCaja.visibility = if (abrir === chatCaja) android.view.View.VISIBLE else android.view.View.GONE
+            ajustesCaja.visibility = if (abrir === ajustesCaja) android.view.View.VISIBLE else android.view.View.GONE
+            val libre = abrir == null
+            tarjeta.visibility = if (libre) android.view.View.VISIBLE else android.view.View.GONE
+            botonera.visibility = if (libre) android.view.View.VISIBLE else android.view.View.GONE
         }
-        chat = Chat(this, { ask }, { askMicro.launch(Manifest.permission.RECORD_AUDIO) },
-                    { chatCaja.visibility = android.view.View.GONE; botonChat.visibility = android.view.View.VISIBLE },
-                    { voz })
+        chat = Chat(this, { ask }, { askMicro.launch(Manifest.permission.RECORD_AUDIO) }, { panel(null) }, { voz })
         chatCaja = FrameLayout(this).apply {
             visibility = android.view.View.GONE
             addView(chat.view, FrameLayout.LayoutParams(-1, -1))
         }
-        botonChat.setOnClickListener {
-            chatCaja.visibility = android.view.View.VISIBLE; botonChat.visibility = android.view.View.GONE
+        ajustesCaja = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            visibility = android.view.View.GONE
+            setPadding(d(18), d(14), d(18), d(18))
+            background = Ui.fondo(Ui.FONDO, d(24).toFloat())
+            addView(android.widget.LinearLayout(this@MainActivity).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                addView(TextView(this@MainActivity).apply {
+                    text = "Ajustes"; setTextColor(Ui.TEXTO); textSize = 18f
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD
+                }, android.widget.LinearLayout.LayoutParams(0, -2, 1f))
+                addView(Ui.boton(this@MainActivity, R.drawable.ic_cerrar, "Cerrar", 44, Color.TRANSPARENT) { panel(null) })
+            })
+            addView(fichaEstable); addView(fichaZoom); addView(fichaRadio)
+            addView(lEscena, android.widget.LinearLayout.LayoutParams(-1, -2).apply { topMargin = d(12) })
+            addView(hud)
+        }
+        botonera = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
+            addView(Ui.accion(this@MainActivity, R.drawable.ic_memoria, "Memoria", false) {
+                startActivity(android.content.Intent(this@MainActivity, ResumenActivity::class.java))
+            }, android.widget.LinearLayout.LayoutParams(0, -2, 1f))
+            addView(Ui.accion(this@MainActivity, R.drawable.ic_mic, "Hablar", true) { panel(chatCaja) },
+                    android.widget.LinearLayout.LayoutParams(0, -2, 1f))
+            addView(Ui.accion(this@MainActivity, R.drawable.ic_ajustes, "Ajustes", false) { panel(ajustesCaja) },
+                    android.widget.LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        val abajo = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(d(12), 0, d(12), d(12))
+            addView(tarjeta)
+            addView(botonera, android.widget.LinearLayout.LayoutParams(-1, -2).apply { topMargin = d(10) })
         }
         setContentView(FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
-            // El tema es de pantalla completa: arriba solo hace falta librar el
-            // recorte de la cámara frontal, no una barra de estado que no se ve.
+            // Pantalla completa: arriba se libra el recorte de la cámara frontal
+            // y abajo la barra de gestos, para que nada quede debajo.
             setOnApplyWindowInsetsListener { _, ins ->
                 @Suppress("DEPRECATION")
                 val arriba = maxOf(ins.systemWindowInsetTop,
                     if (android.os.Build.VERSION.SDK_INT >= 28) ins.displayCutout?.safeInsetTop ?: 0 else 0)
-                barra.setPadding(d(14), arriba + d(6), d(10), d(10))
+                @Suppress("DEPRECATION")
+                val bajo = ins.systemWindowInsetBottom
+                barra.setPadding(d(16), arriba + d(8), d(16), d(14))
+                abajo.setPadding(d(12), 0, d(12), d(12) + bajo)
                 ins
             }
             escena = FrameLayout(this@MainActivity).apply {
@@ -200,13 +226,11 @@ class MainActivity : ComponentActivity() {
             }
             addView(escena, FrameLayout.LayoutParams(-1, -1))
             addView(barra, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
-            addView(tarjeta, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { setMargins(d(10), 0, d(10), d(14)) })
-            addView(botonChat, FrameLayout.LayoutParams(d(60), d(60), Gravity.BOTTOM or Gravity.END).apply {
-                setMargins(0, 0, d(20), d(200))
-            })
-            addView(chatCaja, FrameLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * 0.6).toInt(), Gravity.BOTTOM).apply {
+            addView(abajo, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
+            addView(chatCaja, FrameLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * 0.62).toInt(), Gravity.BOTTOM).apply {
                 setMargins(d(6), 0, d(6), d(6))
             })
+            addView(ajustesCaja, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { setMargins(d(6), 0, d(6), d(6)) })
         })
 
         // La radio vuelve como se dejó, pero solo si sigue teniendo permisos:
@@ -316,7 +340,7 @@ class MainActivity : ComponentActivity() {
             // verdad, así que la vista previa y el análisis siguen alineados
             // (la electrónica recorta y los desalinearía).
             ois = oisDisponible(provider)
-            runOnUiThread { fichaEstable.text = if (estabilizar) (if (ois) "Estable: sí · óptico" else "Estable: sí") else "Estable: no" }
+            runOnUiThread { fichaEstable.text = Ui.textoFila("Estabilizar", if (estabilizar) (if (ois) "sí · óptico" else "sí") else "no") }
             val prevB = Preview.Builder().setResolutionSelector(selector)
             if (ois) pideOis(prevB)
             val prev = prevB.build().also { it.setSurfaceProvider(preview.surfaceProvider) }
@@ -421,7 +445,7 @@ class MainActivity : ComponentActivity() {
             p.zoom == 0.0 -> p.zoom = 2.0
             else -> { p.autoZoomOn = true }
         }
-        fichaZoom.text = "Zoom: " + when { p.autoZoomOn -> "auto"; p.zoom == 0.0 -> "cuadro entero"; else -> "teselas ×2" }
+        fichaZoom.text = Ui.textoFila("Zoom", when { p.autoZoomOn -> "auto"; p.zoom == 0.0 -> "cuadro entero"; else -> "teselas ×2" })
         Log.i(TAG, "ARGOS nativo modo: " + modo(p))
     }
 
@@ -433,7 +457,7 @@ class MainActivity : ComponentActivity() {
     private fun alternarRadio() {
         if (radio.activa) {
             radio.para(); prefs.edit().putBoolean("radio", false).apply()
-            fichaRadio.text = "Radio: no"; lRadio.visibility = android.view.View.GONE
+            fichaRadio.text = Ui.textoFila("Radio pasiva", "apagada"); lRadio.visibility = android.view.View.GONE
             return
         }
         android.app.AlertDialog.Builder(this)
@@ -456,12 +480,12 @@ class MainActivity : ComponentActivity() {
         if (!radio.bleEnMarcha && !radio.gnssEnMarcha) {
             radio.para()
             prefs.edit().putBoolean("radio", false).apply()
-            fichaRadio.text = "Radio: no"
+            fichaRadio.text = Ui.textoFila("Radio pasiva", "apagada")
             lRadio.text = "radio apagada · ${problema ?: "no arrancó"}"
             return
         }
         prefs.edit().putBoolean("radio", true).apply()
-        fichaRadio.text = "Radio: sí"
+        fichaRadio.text = Ui.textoFila("Radio pasiva", "encendida")
         if (problema != null) lRadio.text = "radio · $problema"
     }
 
@@ -489,7 +513,7 @@ class MainActivity : ComponentActivity() {
             nPersonas.text = f.people.toString(); nVehiculos.text = f.vehicles.toString(); nSesion.text = f.peopleSeen.toString()
             lEscena.text = escena; lEvento.text = ev
             if (radio.activa && lineaRadio.isNotEmpty()) { lRadio.text = lineaRadio; lRadio.setTextColor(if (aviso) Ui.ROJO else Ui.AZUL) }
-            hud.text = if (detalles) tecnico else "toca la tarjeta para ver detalles técnicos"
+            hud.text = tecnico
             estado.text = when {
                 aviso -> "● aviso de radio"
                 f.moving -> "● cámara en mano"

@@ -20,7 +20,9 @@
     </queries>
     <!-- Sin INTERNET a propósito: todo el análisis corre en el aparato. -->
     <application
-        android:label="ARGOS nativo"
+        android:label="ARGOS"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/sin_copias"
         android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen">

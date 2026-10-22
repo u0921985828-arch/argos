@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 7: sin iconos adaptables, el logo sobre su fondo redondo. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item><shape android:shape="oval"><solid android:color="@color/fondo_icono" /></shape></item>
+    <item android:drawable="@drawable/ic_launcher_fg" />
+</layer-list>
