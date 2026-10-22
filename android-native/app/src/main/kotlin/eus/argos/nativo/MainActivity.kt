@@ -730,7 +730,7 @@ class MainActivity : ComponentActivity() {
     /** `primero`: lo que se acaba de buscar pasa delante de la muestra. */
     private fun mide(cams: List<eus.argos.core.CamaraPublica>, primero: Boolean) {
         for (c in (if (primero) cams.asReversed() else cams)) {
-            if (c.id in retrasos || c.id in caidas || !pendientes.add(c.id)) continue
+            if (retrasos.containsKey(c.id) || c.id in caidas || !pendientes.add(c.id)) continue
             if (primero) porMedir.addFirst(c) else porMedir.addLast(c)
         }
         if (medidores.compareAndSet(false, true)) repeat(6) { k ->
@@ -808,7 +808,7 @@ class MainActivity : ComponentActivity() {
                 (retrasos[c.id]?.let { " · " + eus.argos.core.Retraso.texto(it, c.directo) } ?: "")
         })
         a.notifyDataSetChanged()
-        val medidas = filtradas.count { it.id in retrasos }
+        val medidas = filtradas.count { retrasos.containsKey(it.id) }
         val enMedida = !porMedir.isEmpty() || midiendo.get() > 0
         estadoFuentes?.text = when {
             todas.isEmpty() && cargandoCatalogo -> "Buscando cámaras públicas…"
@@ -895,7 +895,7 @@ class MainActivity : ComponentActivity() {
                     medirBusqueda?.let { removeCallbacks(it) }
                     medirBusqueda = Runnable {
                         if (filtro.isNotBlank()) mide(eus.argos.core.Catalogo.busca(catalogo.orEmpty(), filtro)
-                            .filter { it.id !in retrasos && it.id !in caidas }.take(40), true)
+                            .filter { !retrasos.containsKey(it.id) && it.id !in caidas }.take(40), true)
                     }.also { postDelayed(it, 600) }
                 }
                 override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
