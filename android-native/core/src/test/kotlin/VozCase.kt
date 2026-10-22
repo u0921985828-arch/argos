@@ -178,7 +178,7 @@ private fun sintetiza(modelo: File, wav: File, texto: String, ruido: Float? = nu
                 val fb = (r[0] as OnnxTensor).floatBuffer; FloatArray(fb.remaining()).also { fb.get(it) }
             } } } }
     }
-    voz.ruido = ruido
+    if (ruido != null) voz.ruido = ruido
     // CRUDA: la salida del modelo sin ningún tratamiento, para comparar.
     val crudo = efecto == "CRUDA"
     if (!crudo) voz.efecto = EfectoVoz.Tipo.valueOf(efecto)

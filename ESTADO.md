@@ -369,7 +369,21 @@ las acciones del CI por SHA.
 - Radio: sin medir en un aparato real (el emulador del CI no tiene BLE ni
   satélites). La distancia a un dron necesitaría la posición del teléfono.
 
-## Voz propia (Piper), en curso
+## Voz propia (Piper): davefx, elegida de oído
+- Cadena final, elegida entre 7 muestras (la 6):
+  - ruido de síntesis 0,45;
+  - reductor de ruido espectral (−15 dB de soplido);
+  - de-esser (la «s» −6,5 dB, las vocales igual);
+  - doma de aspereza en 2,2-4,5 kHz;
+  - pico a −3 dBFS.
+- Caminos cerrados, no reintentar:
+  - efecto «radio» o «máquina»: era lo contrario de lo pedido;
+  - EQ con realce de presencia: brillante y sibilante; gustó más la voz
+    natural.
+- La «saturación» que se oía de la mitad al final NO era recorte: está ya en
+  la salida cruda del modelo, en sílabas que cargan 2-4 kHz.
+
+### Historia de la voz
 - `core/Voz.kt`: fonética del español en Kotlin (sin espeak-ng nativo).
   Medido contra espeak-ng 1.51: 98 % de palabras sueltas iguales, 90 % dentro
   de frase. La referencia está en `core/src/test/resources/voz-espeak.tsv`.

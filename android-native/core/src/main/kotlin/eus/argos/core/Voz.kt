@@ -329,9 +329,10 @@ class VozPiper(config: String, private val infer: (LongArray, FloatArray) -> Flo
     /**
      * Ruido de la síntesis (noise_scale). El de fábrica, 0,667, da variedad
      * pero también aspereza y soplido; más bajo, la voz sale más limpia de
-     * origen. null = el del modelo.
+     * origen. 0,45 es el elegido de oído (muestra 6 frente a la cruda y
+     * otras cinco). null = el del modelo.
      */
-    var ruido: Float? = null
+    var ruido: Float? = 0.45f
 
     init {
         val i = config.indexOf("\"phoneme_id_map\"")
