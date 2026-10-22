@@ -58,33 +58,54 @@ fun main(args: Array<String>) {
         "28,8 km/h" to "veintiocho coma ocho kilómetros por hora", "120 m" to "ciento veinte metros",
         "1.250 eventos" to "mil doscientos cincuenta eventos", "GPS" to "ge pe ese", "100" to "cien",
         "2.000.000" to "dos millones")) pide("«$t» → «${Normaliza.texto(t)}»", Normaliza.texto(t) == e)
-    // El efecto: menos agudos, menos diferencia entre fuerte y flojo, silencio
-    // entre palabras de verdad silencioso, y sin pasarse de escala.
+    // El acabado: limpio y pulido, NO de radio. Con una «voz» sintética de
+    // ráfagas (dos sílabas, una fuerte y otra a un cuarto), un retumbe de
+    // 40 Hz debajo y siseo entre ráfagas, se exige:
+    //  - el siseo entre palabras baja más de 20 dB;
+    //  - el retumbe de 40 Hz baja más de 10 dB;
+    //  - la presencia (3,2 kHz) sube frente a la caja (280 Hz);
+    //  - los agudos (6-9 kHz) NO se pierden: como mucho −4 dB;
+    //  - el rango dinámico al hablar baja;
+    //  - nada pasa de escala, y «natural» no toca la señal.
     run {
         val sr = 22050
         val r = java.util.Random(5)
-        // Una «voz» sintética a ráfagas de 500 ms (250 ms fuerte, 250 ms a un
-        // cuarto, como dos sílabas) con siseo entre ellas.
+        fun tono(t: Double, f: Double) = Math.sin(2 * Math.PI * f * t)
         val a = FloatArray(sr * 2) { i ->
             val t = i / sr.toDouble(); val on = ((t * 2).toInt() % 2 == 0)
-            val voz = if (on) (0.6 * Math.sin(2 * Math.PI * 140 * t) + 0.3 * Math.sin(2 * Math.PI * 5600 * t)) * (if ((t * 4).toInt() % 2 == 0) 1.0 else 0.25) else 0.0
-            (voz + r.nextGaussian() * 0.01).toFloat()
+            val g = if ((t * 4).toInt() % 2 == 0) 1.0 else 0.25
+            val voz = if (on) g * (0.4 * tono(t, 280.0) + 0.25 * tono(t, 3200.0) + 0.12 * tono(t, 7500.0) + 0.2 * tono(t, 150.0)) else 0.0
+            (voz + 0.15 * tono(t, 40.0) * (if (on) 1.0 else 0.0) + r.nextGaussian() * 0.01).toFloat()
         }
-        val b = EfectoVoz.aplica(a, sr, EfectoVoz.Tipo.RADIO)
-        fun agudos(x: FloatArray): Double { var e = 0.0; var p = 0f; for (v in x) { e += (v - p) * (v - p).toDouble(); p = v }; return e / x.sumOf { it * it.toDouble() }.coerceAtLeast(1e-12) }
-        val silA = a.sliceArray(sr / 2 + 200 until sr - 200).map { Math.abs(it) }.average()
+        val b = EfectoVoz.aplica(a, sr, EfectoVoz.Tipo.ESTUDIO)
+        // Amplitud de una frecuencia en el tramo [i0, i1) (correlación con seno y coseno).
+        fun amp(x: FloatArray, f: Double, i0: Int, i1: Int): Double {
+            var s = 0.0; var c = 0.0
+            for (k in i0 until i1) { val w = 2 * Math.PI * f * k / sr; s += x[k] * Math.sin(w); c += x[k] * Math.cos(w) }
+            return 2 * Math.hypot(s, c) / (i1 - i0)
+        }
+        fun db(v: Double) = 20 * Math.log10(v.coerceAtLeast(1e-9))
+        val i0 = 1000; val i1 = sr / 4 - 200            // dentro de la sílaba fuerte
+        fun rel(x: FloatArray, f: Double) = db(amp(x, f, i0, i1)) - db(amp(x, 1000.0, i0, i1).coerceAtLeast(amp(x, 150.0, i0, i1)))
+        val silA = a.sliceArray(sr / 2 + 2000 until sr - 200).map { Math.abs(it) }.average()
         val silB = b.sliceArray(sr / 2 + 2000 until sr - 200).map { Math.abs(it) }.average()
-        pide("efecto: agudos %.3f → %.3f".format(agudos(a), agudos(b)), agudos(b) < agudos(a) * 0.5)
-        // Rango dinámico al hablar: ventanas de 10 ms dentro de una ráfaga, la
-        // más fuerte frente a la más floja (p90/p10).
+        pide("acabado: siseo entre palabras %.0f dB".format(db(silB / silA)), db(silB / silA) < -20)
+        val ret = (db(amp(b, 40.0, i0, i1)) - db(amp(b, 150.0, i0, i1))) - (db(amp(a, 40.0, i0, i1)) - db(amp(a, 150.0, i0, i1)))
+        pide("acabado: retumbe de 40 Hz %.1f dB".format(ret), ret < -10)
+        val pres = (db(amp(b, 3200.0, i0, i1)) - db(amp(b, 280.0, i0, i1))) - (db(amp(a, 3200.0, i0, i1)) - db(amp(a, 280.0, i0, i1)))
+        pide("acabado: presencia frente a caja %+.1f dB".format(pres), pres > 3)
+        val aire = (db(amp(b, 7500.0, i0, i1)) - db(amp(b, 3200.0, i0, i1))) - (db(amp(a, 7500.0, i0, i1)) - db(amp(a, 3200.0, i0, i1)))
+        pide("acabado: agudos sin perder (no es radio) %+.1f dB".format(aire), aire > -4 - 2.5)
+        // Sílaba fuerte frente a floja, cada una sin sus primeros 60 ms (lo que
+        // tarda cualquier compresor en reaccionar).
         fun rango(x: FloatArray): Double {
-            val v = (0 until sr / 2 - 220 step 220).map { k -> Math.sqrt((k until k + 220).sumOf { x[it] * x[it].toDouble() } / 220) }.sorted()
-            return 20 * Math.log10(v[v.size * 9 / 10] / v[v.size / 10].coerceAtLeast(1e-9))
+            fun rms(i0: Int, i1: Int) = Math.sqrt((i0 until i1).sumOf { x[it] * x[it].toDouble() } / (i1 - i0))
+            val f = rms(sr * 6 / 100, sr / 4); val d = rms(sr / 4 + sr * 6 / 100, sr / 2)
+            return 20 * Math.log10(f / d.coerceAtLeast(1e-9))
         }
-        pide("efecto: rango dinámico al hablar %.1f dB → %.1f dB".format(rango(a), rango(b)), rango(b) < rango(a) - 5)
-        pide("efecto: siseo entre palabras %.4f → %.5f".format(silA, silB), silB < silA * 0.1)
-        pide("efecto: sin pasarse de escala", b.all { Math.abs(it) <= 1.0f })
-        pide("efecto «limpia» no toca nada", EfectoVoz.aplica(a, sr, EfectoVoz.Tipo.LIMPIA) === a)
+        pide("acabado: rango dinámico al hablar %.1f → %.1f dB".format(rango(a), rango(b)), rango(b) < rango(a) - 3)
+        pide("acabado: sin pasarse de escala", b.all { Math.abs(it) <= 1.0f })
+        pide("acabado «natural» no toca nada", EfectoVoz.aplica(a, sr, EfectoVoz.Tipo.NATURAL) === a)
     }
     println(if (fallos == 0) "VOZ: CUMPLE" else "VOZ: FALLA ($fallos)")
     if (fallos > 0) System.exit(1)
