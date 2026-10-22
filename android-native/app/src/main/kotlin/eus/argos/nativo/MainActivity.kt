@@ -45,6 +45,15 @@ class MainActivity : ComponentActivity() {
     /** Vista previa y capa juntas: el estabilizado las mueve a la vez y las cajas siguen en su sitio. */
     private lateinit var escena: FrameLayout
     private val estabilizador = eus.argos.core.Estabilizador()
+    // Fuente del vídeo: la cámara del móvil o una por red (pública o IP).
+    private lateinit var fuenteRed: FuenteRed
+    private lateinit var textura: android.view.TextureView
+    private lateinit var fichaFuente: TextView
+    private var proveedor: ProcessCameraProvider? = null
+    @Volatile private var fuenteMovil = true
+    private val ocupadoRed = java.util.concurrent.atomic.AtomicBoolean(false)
+    private var bufRed: ByteBuffer = ByteBuffer.allocate(0)
+    @Volatile private var catalogo: List<eus.argos.core.CamaraPublica>? = null
     private val giro = eus.argos.core.EstabilizaGiro()
     @Volatile private var estabilizar = true
     @Volatile private var ois = false
@@ -61,7 +70,7 @@ class MainActivity : ComponentActivity() {
             // values[2]: giro alrededor del eje que sale de la pantalla, el de
             // la cámara trasera. Positivo = antihorario visto de frente.
             giroGrados = giro.paso(e.values[2].toDouble(), dt).toFloat()
-            if (estabilizar) aplicaVista()
+            if (estabilizar && fuenteMovil) aplicaVista()
         }
         override fun onAccuracyChanged(s: android.hardware.Sensor?, a: Int) {}
     }
@@ -160,10 +169,12 @@ class MainActivity : ComponentActivity() {
         // Paneles que suben desde abajo: el chat y los ajustes.
         lateinit var chatCaja: FrameLayout
         lateinit var ajustesCaja: android.widget.LinearLayout
+        lateinit var fuentesCaja: android.widget.LinearLayout
         lateinit var botonera: android.widget.LinearLayout
         fun panel(abrir: android.view.View?) {
             chatCaja.visibility = if (abrir === chatCaja) android.view.View.VISIBLE else android.view.View.GONE
             ajustesCaja.visibility = if (abrir === ajustesCaja) android.view.View.VISIBLE else android.view.View.GONE
+            fuentesCaja.visibility = if (abrir === fuentesCaja) android.view.View.VISIBLE else android.view.View.GONE
             val libre = abrir == null
             tarjeta.visibility = if (libre) android.view.View.VISIBLE else android.view.View.GONE
             botonera.visibility = if (libre) android.view.View.VISIBLE else android.view.View.GONE
@@ -173,6 +184,20 @@ class MainActivity : ComponentActivity() {
             visibility = android.view.View.GONE
             addView(chat.view, FrameLayout.LayoutParams(-1, -1))
         }
+        textura = android.view.TextureView(this).apply { visibility = android.view.View.GONE }
+        fuenteRed = FuenteRed(this, textura, { b -> frameRed(b) }) { texto, w, h ->
+            runOnUiThread {
+                lEvento.text = texto
+                if (w > 0 && h > 0 && escena.width > 0) {
+                    // Encajada y centrada, como la vista previa: así la capa de
+                    // cajas, que encaja el frame igual, cae encima.
+                    val s = minOf(escena.width.toFloat() / w, escena.height.toFloat() / h)
+                    textura.layoutParams = FrameLayout.LayoutParams((w * s).toInt(), (h * s).toInt(), Gravity.CENTER)
+                }
+            }
+        }
+        fichaFuente = Ui.fila(this, "Fuente", "cámara del móvil") { panel(fuentesCaja); cargaCatalogo() }
+        fuentesCaja = construyeFuentes { panel(null) }.apply { visibility = android.view.View.GONE }
         ajustesCaja = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             visibility = android.view.View.GONE
@@ -186,7 +211,7 @@ class MainActivity : ComponentActivity() {
                 }, android.widget.LinearLayout.LayoutParams(0, -2, 1f))
                 addView(Ui.boton(this@MainActivity, R.drawable.ic_cerrar, "Cerrar", 44, Color.TRANSPARENT) { panel(null) })
             })
-            addView(fichaEstable); addView(fichaZoom); addView(fichaRadio)
+            addView(fichaFuente); addView(fichaEstable); addView(fichaZoom); addView(fichaRadio)
             addView(lEscena, android.widget.LinearLayout.LayoutParams(-1, -2).apply { topMargin = d(12) })
             addView(hud)
         }
@@ -222,6 +247,7 @@ class MainActivity : ComponentActivity() {
             }
             escena = FrameLayout(this@MainActivity).apply {
                 addView(preview, FrameLayout.LayoutParams(-1, -1))
+                addView(textura, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
                 addView(capa, FrameLayout.LayoutParams(-1, -1))
             }
             addView(escena, FrameLayout.LayoutParams(-1, -1))
@@ -231,6 +257,9 @@ class MainActivity : ComponentActivity() {
                 setMargins(d(6), 0, d(6), d(6))
             })
             addView(ajustesCaja, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { setMargins(d(6), 0, d(6), d(6)) })
+            addView(fuentesCaja, FrameLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * 0.7).toInt(), Gravity.BOTTOM).apply {
+                setMargins(d(6), 0, d(6), d(6))
+            })
         })
 
         // La radio vuelve como se dejó, pero solo si sigue teniendo permisos:
@@ -329,6 +358,8 @@ class MainActivity : ComponentActivity() {
             if (isFinishing || isDestroyed ||
                 lifecycle.currentState == androidx.lifecycle.Lifecycle.State.DESTROYED) return@addListener
             val provider = future.get()
+            proveedor = provider
+            if (!fuenteMovil) return@addListener
             // Misma proporción en vista previa y análisis: con FIT_CENTER las
             // dos ven el mismo campo y las cajas caen donde está el objeto.
             val selector = ResolutionSelector.Builder()
@@ -400,7 +431,7 @@ class MainActivity : ComponentActivity() {
      * bordes. Un paneo se deja pasar.
      */
     private fun estabiliza(f: Pipeline.Frame) {
-        if (!estabilizar || f.w == 0) return
+        if (!estabilizar || !fuenteMovil || f.w == 0) return
         val (dx, dy) = estabilizador.paso(f.camX, f.camY, f.w)
         runOnUiThread {
             if (escena.width == 0) return@runOnUiThread
@@ -544,6 +575,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         destroyed = true
+        fuenteRed.cierra()
         chat.close()
         voz?.close()
         radio.para()
@@ -555,5 +587,154 @@ class MainActivity : ComponentActivity() {
         catch (_: InterruptedException) { }
         pipeline?.close()
         pipeline = null
+    }
+
+    /* ------------------------------ Fuentes ------------------------------ */
+
+    /** Un frame de la cámara por red, al mismo análisis que la del móvil. Si el anterior no ha terminado, se salta. */
+    private fun frameRed(b: android.graphics.Bitmap) {
+        if (fuenteMovil || !ocupadoRed.compareAndSet(false, true)) return
+        if (bufRed.capacity() < b.byteCount) bufRed = ByteBuffer.allocate(b.byteCount)
+        bufRed.clear(); b.copyPixelsToBuffer(bufRed); bufRed.rewind()
+        val w = b.width; val h = b.height; val stride = b.rowBytes; val buf = bufRed
+        try {
+            analysisExec.execute {
+                try {
+                    val p = pipeline
+                    if (p != null && !fuenteMovil) { val f = p.onFrame(buf, stride, w, h); capa.show(f); report(p, f) }
+                } catch (e: Throwable) {
+                    Log.e(TAG, "ARGOS red: frame falló: ${e.message}", e)
+                } finally { ocupadoRed.set(false) }
+            }
+        } catch (_: Exception) { ocupadoRed.set(false) }
+    }
+
+    private fun quitaEstabilizado() {
+        escena.scaleX = 1f; escena.scaleY = 1f; escena.translationX = 0f; escena.translationY = 0f; escena.rotation = 0f
+    }
+
+    private fun usarMovil() {
+        fuenteRed.cierra()
+        fuenteMovil = true
+        textura.visibility = android.view.View.GONE
+        preview.visibility = android.view.View.VISIBLE
+        pipeline?.nuevaEscena(true)
+        estabilizador.reinicia(); giro.reinicia()
+        fichaFuente.text = Ui.textoFila("Fuente", "cámara del móvil")
+        lEvento.text = "cámara del móvil"
+        startCamera()
+    }
+
+    private fun usarRed(url: String, nombre: String, bucle: Boolean) {
+        fuenteMovil = false
+        proveedor?.unbindAll()
+        preview.visibility = android.view.View.GONE
+        textura.visibility = android.view.View.VISIBLE
+        quitaEstabilizado()
+        pipeline?.nuevaEscena(false)
+        fichaFuente.text = Ui.textoFila("Fuente", nombre)
+        fuenteRed.abre(url, nombre, bucle)
+    }
+
+    /** La lista de cámaras públicas, bajada una vez de los propios organismos. */
+    private var listaFuentes: android.widget.ArrayAdapter<String>? = null
+    private var filtradas: List<eus.argos.core.CamaraPublica> = emptyList()
+    private var filtro = ""
+
+    private fun cargaCatalogo() {
+        if (catalogo != null) return
+        catalogo = emptyList()
+        pintaLista("Buscando cámaras públicas…")
+        Thread({
+            val todas = ArrayList<eus.argos.core.CamaraPublica>()
+            fun baja(url: String): String? = runCatching {
+                val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                c.connectTimeout = 8000; c.readTimeout = 15000
+                c.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }.also { c.disconnect() }
+            }.getOrNull()
+            for (d in eus.argos.core.Catalogo.DISTRITOS)
+                baja(eus.argos.core.Catalogo.urlCaltrans(d))?.let { todas += eus.argos.core.Catalogo.caltrans(it) }
+            baja(eus.argos.core.Catalogo.URL_TFL)?.let { todas += eus.argos.core.Catalogo.tfl(it) }
+            Log.i(TAG, "ARGOS red: catálogo de cámaras públicas, ${todas.size} con vídeo")
+            catalogo = todas.sortedWith(compareBy({ it.proveedor }, { it.nombre }))
+            runOnUiThread { pintaLista(if (todas.isEmpty()) "No se pudo bajar la lista. ¿Hay conexión?" else null) }
+        }, "argos-catalogo").start()
+    }
+
+    private fun pintaLista(aviso: String?) {
+        val a = listaFuentes ?: return
+        val todas = catalogo.orEmpty()
+        val f = eus.argos.core.Ask.norm(filtro)
+        filtradas = if (f.isBlank()) todas else todas.filter { eus.argos.core.Ask.norm(it.nombre + " " + it.proveedor).contains(f) }
+        a.clear()
+        if (aviso != null) a.add(aviso)
+        else a.addAll(filtradas.take(400).map { (if (it.directo) "● " else "○ ") + it.proveedor + " · " + it.nombre })
+        a.notifyDataSetChanged()
+    }
+
+    private fun construyeFuentes(cerrar: () -> Unit): android.widget.LinearLayout {
+        val d = { v: Int -> Ui.dp(this, v) }
+        val lista = android.widget.ListView(this).apply { divider = null }
+        val adapt = object : android.widget.ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, ArrayList()) {
+            override fun getView(pos: Int, conv: android.view.View?, parent: android.view.ViewGroup): android.view.View =
+                (super.getView(pos, conv, parent) as TextView).apply { setTextColor(Ui.TEXTO); textSize = 15f; minHeight = d(48) }
+        }
+        listaFuentes = adapt
+        lista.adapter = adapt
+        lista.setOnItemClickListener { _, _, pos, _ ->
+            val c = filtradas.getOrNull(pos) ?: return@setOnItemClickListener
+            usarRed(c.video, c.nombre, !c.directo); cerrar()
+        }
+        val buscar = android.widget.EditText(this).apply {
+            hint = "Buscar (ciudad, carretera…)"; setTextColor(Ui.TEXTO); setHintTextColor(Ui.SUAVE); isSingleLine = true
+            background = Ui.fondo(Color.argb(140, 40, 44, 52), d(14).toFloat())
+            setPadding(d(14), d(10), d(14), d(10))
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun afterTextChanged(e: android.text.Editable?) { filtro = e?.toString().orEmpty(); pintaLista(null) }
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            })
+        }
+        return android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(d(18), d(14), d(18), d(14))
+            background = Ui.fondo(Ui.FONDO, d(24).toFloat())
+            addView(android.widget.LinearLayout(this@MainActivity).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                addView(TextView(this@MainActivity).apply {
+                    text = "Fuente de vídeo"; setTextColor(Ui.TEXTO); textSize = 18f; typeface = android.graphics.Typeface.DEFAULT_BOLD
+                }, android.widget.LinearLayout.LayoutParams(0, -2, 1f))
+                addView(Ui.boton(this@MainActivity, R.drawable.ic_cerrar, "Cerrar", 44, Color.TRANSPARENT) { cerrar() })
+            })
+            addView(Ui.fila(this@MainActivity, "Cámara del móvil", "la de este teléfono") { usarMovil(); cerrar() })
+            addView(Ui.fila(this@MainActivity, "Cámara IP propia", "dirección RTSP de tu cámara") { pideRtsp(cerrar) })
+            addView(TextView(this@MainActivity).apply {
+                text = "Cámaras públicas de tráfico   ● directo   ○ clips"
+                setTextColor(Ui.SUAVE); textSize = 13f; setPadding(d(4), d(14), 0, d(6))
+            })
+            addView(buscar)
+            addView(lista, android.widget.LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = d(6) })
+        }
+    }
+
+    /** Cámara IP: la dirección RTSP con usuario y clave; se recuerda en este teléfono. */
+    private fun pideRtsp(cerrar: () -> Unit) {
+        val campo = android.widget.EditText(this).apply {
+            hint = "rtsp://usuario:clave@192.168.1.50:554/stream1"
+            setText(prefs.getString("rtsp", "")); isSingleLine = true
+        }
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Cámara IP")
+            .setMessage("La dirección RTSP de tu cámara. Suele venir en su manual o en su app (Hikvision, Dahua, Reolink, Tapo…). El móvil tiene que estar en su misma wifi, o conectado por VPN.")
+            .setView(campo)
+            .setPositiveButton("Conectar") { _, _ ->
+                val url = campo.text.toString().trim()
+                if (url.startsWith("rtsp://", ignoreCase = true) || url.startsWith("http", ignoreCase = true)) {
+                    prefs.edit().putString("rtsp", url).apply()
+                    usarRed(url, "cámara IP", false); cerrar()
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 }

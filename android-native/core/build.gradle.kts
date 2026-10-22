@@ -52,6 +52,17 @@ tasks.register<JavaExec>("camaraEnMano") {
     args = listOf("persona", "exigir")
 }
 
+// Catálogo de cámaras públicas: formatos de Caltrans y TfL. Con -Pvivo=<dir>
+// lee además las respuestas reales que el CI baja de los organismos.
+tasks.register<JavaExec>("catalogo") {
+    group = "verification"
+    description = "Las listas de cámaras públicas se leen y dan cámaras con vídeo."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.CatalogoCaseKt")
+    val vivo = project.findProperty("vivo") as String?
+    args = if (vivo != null) listOf("vivo", vivo) else emptyList()
+}
+
 // Estabilizado en pantalla: quita el balanceo de la mano, deja pasar un paneo.
 tasks.register<JavaExec>("estabiliza") {
     group = "verification"

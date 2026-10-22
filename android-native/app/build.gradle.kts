@@ -82,6 +82,12 @@ dependencies {
     // de verdad. En el WebView la inferencia va en uno solo porque Android no
     // concede el aislamiento entre orígenes (medido); aquí esa pared no existe.
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.22.0")
+    // Cámaras por red: HLS (públicas de Caltrans), MP4 (TfL) y RTSP (cámaras
+    // IP propias), decodificadas por el chip del teléfono.
+    val media3 = "1.4.1"
+    implementation("androidx.media3:media3-exoplayer:$media3")
+    implementation("androidx.media3:media3-exoplayer-hls:$media3")
+    implementation("androidx.media3:media3-exoplayer-rtsp:$media3")
 }
 
 // El modelo y la imagen de autoprueba se copian del repositorio al compilar,

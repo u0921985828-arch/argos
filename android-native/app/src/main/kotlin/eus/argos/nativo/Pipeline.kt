@@ -53,9 +53,19 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
 
     // Con el móvil en la mano todo se mueve: el núcleo estima el desplazamiento
     // de la imagen y mantiene el fondo y las pistas alineados con la escena.
-    val engine = Engine().apply { egoMotion = true }
+    var engine = Engine().apply { egoMotion = true }; private set
     /** Escala métrica, velocidades, estaturas, eventos y recuentos (brain.js). */
-    val brain = SceneBrain()
+    var brain = SceneBrain(); private set
+    /**
+     * Cambio de fuente (otra cámara): lo pide la interfaz y lo hace el hilo
+     * del análisis al empezar el siguiente frame, para no cambiar el núcleo a
+     * mitad de uno. `movil` = la cámara del teléfono, que se mueve; una cámara
+     * fija remota no, así que no se compensa movimiento.
+     */
+    @Volatile private var nuevaEscena: Boolean? = null
+    fun nuevaEscena(movil: Boolean) { nuevaEscena = movil }
+    /** Lo normal de la escena solo se guarda para la cámara del móvil; las remotas son otras escenas. */
+    @Volatile var guardarComportamiento = true
     // Hora real del instante 0 de la sesión, para guardar con fecha y hora.
     private val t0Epoch = System.currentTimeMillis() / 1000.0 - SystemClock.elapsedRealtime() / 1000.0
     private val ioExec = Executors.newSingleThreadExecutor { r -> Thread(r, "argos-memoria") }
@@ -73,6 +83,7 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
     }
 
     private fun saveBehaviour(sync: Boolean) {
+        if (!guardarComportamiento) return
         val f = behaviourFile ?: return
         val txt = brain.behaviour?.serialize() ?: return
         val job = Runnable { runCatching { f.parentFile?.mkdirs(); f.writeText(txt) } }
@@ -170,6 +181,20 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
      * `rowStride`, que casi nunca es anchura × 4.
      */
     fun onFrame(buf: ByteBuffer, rowStride: Int, w: Int, h: Int): Frame {
+        nuevaEscena?.let { movil ->
+            nuevaEscena = null
+            saveBehaviour(false)            // lo aprendido de la escena que se deja
+            // Lo que estaba vivo se guarda en la memoria antes de cambiar.
+            val vivos = brain.flushLive()
+            store?.let { s -> try { ioExec.execute { vivos.forEach { s.save(it, t0Epoch) } } } catch (_: Exception) {} }
+            engine = Engine().apply { egoMotion = movil }
+            brain = SceneBrain()
+            guardarComportamiento = movil
+            if (movil) behaviourFile?.takeIf { it.exists() }?.let { f ->
+                runCatching { eus.argos.core.BehaviourModel.deserialize(f.readText()) }.getOrNull()?.let { brain.behaviour = it }
+            }
+            fresh.set(false)
+        }
         val t0 = System.nanoTime()
         val need = rowStride * h
         if (src.size < need) src = ByteArray(need)
