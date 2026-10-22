@@ -41,3 +41,51 @@ tasks.register<JavaExec>("casoReservado") {
     classpath = sourceSets["test"].runtimeClasspath
     mainClass.set("eus.argos.paridad.StrideCaseKt")
 }
+
+// Cámara en mano: paneo con temblor sin objetos (cero pistas falsas) y con una
+// persona andando (sigue vista).
+tasks.register<JavaExec>("camaraEnMano") {
+    group = "verification"
+    description = "Paneo sintético: sin pistas falsas y la persona sigue vista."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.HandheldCaseKt")
+    args = listOf("persona", "exigir")
+}
+
+// Zoom automático (C3 de la fase 4): cuadro entero con objetos grandes, teselas
+// con personas pequeñas. Necesita plaza.rgba de scripts/prep_plaza.py.
+tasks.register<JavaExec>("zoomAutomatico") {
+    group = "verification"
+    description = "El zoom automático elige bien en fotos con objetos grandes y en una plaza."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.AutoZoomBenchKt")
+    workingDir = rootProject.projectDir.parentFile
+    args = listOf("android-native/build/det", "exigir")
+}
+
+// Escena (C4 de la fase 4): escala métrica y física contra brain.js. La
+// referencia la genera `node scripts/ref_scene.js`.
+tasks.register<JavaExec>("paridadEscena") {
+    group = "verification"
+    description = "SceneScale y Physics contra brain.js, aritmética idéntica."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.SceneParityKt")
+    workingDir = rootProject.projectDir.parentFile
+}
+
+// La escena entera en marcha: peatones a distintas distancias, la escala se
+// aprende, salen velocidades en m/s y un evento de «detenido».
+tasks.register<JavaExec>("escenaViva") {
+    group = "verification"
+    description = "Escena sintética de extremo a extremo: escala, velocidad, eventos, recuentos."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.SceneScenarioKt")
+}
+
+// Memoria (C5 de la fase 4): guardar, resumir, borrar un objeto, retención.
+tasks.register<JavaExec>("memoria") {
+    group = "verification"
+    description = "Trayectorias: guardar, resumen, borrado por objeto y retención de 30 días."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.StoreCaseKt")
+}

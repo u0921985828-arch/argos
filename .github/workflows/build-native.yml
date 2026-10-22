@@ -100,7 +100,7 @@ jobs:
       # y en teselas ×2, y el caso reservado de las filas rellenadas. Sin esto
       # una regresión en Detector.kt solo la vería la autoprueba del emulador,
       # que mira una foto y tolera mucho más.
-      - name: Detector parity with detector.js
+      - name: Detector parity, auto zoom, scene, handheld camera and memory
         run: |
           set -e
           D=android-native/build/det
@@ -113,7 +113,10 @@ jobs:
           python3 scripts/prep_detector_ref.py "$D" /tmp/fotos/bus.jpg /tmp/fotos/zidane.jpg /tmp/fotos/dog.jpg
           npm install -q --prefix /tmp/ortw onnxruntime-web@1.22.0
           node scripts/ref_detector.js "$D" /tmp/ortw/node_modules/onnxruntime-web
-          cd android-native && ./gradlew --no-daemon :core:paridadDetector :core:casoReservado
+          python3 scripts/prep_plaza.py "$D" /tmp/fotos/bus.jpg /tmp/fotos/zidane.jpg
+          node scripts/ref_scene.js
+          cd android-native && ./gradlew --no-daemon :core:paridadDetector :core:casoReservado \
+            :core:zoomAutomatico :core:paridadEscena :core:escenaViva :core:camaraEnMano :core:memoria
 
       - name: Build debug APK
         working-directory: android-native

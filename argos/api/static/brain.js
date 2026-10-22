@@ -493,6 +493,10 @@ class Brain {
     for (const t of eng.tracker.tracks) {
       if (t.hits < eng.tracker.minHits) continue;
       live.add(t.id);
+      // Una pista que este frame no ha visto nada se queda quieta mientras
+      // agota su margen: medir ahí su física es medir un objeto que ya se fue.
+      // Cada peatón que salía del cuadro dejaba un «detenido» falso.
+      if (t.miss > 0) continue;
       let p = this.physics.get(t.id);
       if (!p) { p = new Physics(); this.physics.set(t.id, p); }
 

@@ -27,7 +27,7 @@ class BackgroundModel(
     val h: Int,
     private val alpha: Double = 0.008,
     private val k: Double = 2.6,
-    varInit: Float = 90f,
+    private val varInit: Float = 90f,
     private val varMin: Double = 16.0,
     private val shadowRatio: Double = 0.55,
     private val warmup: Int = 45,
@@ -60,6 +60,14 @@ class BackgroundModel(
             val b = rgba[p + 2].toInt() and 0xFF
             val y = (r * 77 + g * 150 + b * 29) shr 8
 
+            // Píxel recién destapado por un desplazamiento de cámara: no hay
+            // historia, así que se toma lo que se ve y no opina este frame.
+            // Fuera de la cámara en mano nunca ocurre (la media no baja de 0),
+            // y la paridad con engine.js no se toca.
+            if (mean[i] < 0f) {
+                mean[i] = y.toFloat(); vari[i] = varInit; mask[i] = 0
+                p += 4; continue
+            }
             val mu = mean[i].toDouble()
             val d = y - mu
             val vRaw = vari[i].toDouble()
@@ -95,6 +103,30 @@ class BackgroundModel(
         java.util.Arrays.fill(mean, 0f)
         java.util.Arrays.fill(vari, 90f)
         frames = 0
+    }
+
+    private var tmpMean = FloatArray(0)
+    private var tmpVar = FloatArray(0)
+
+    /**
+     * Desplaza el modelo para que siga alineado con la escena cuando la cámara
+     * se mueve: el contenido que estaba en (x+sx, y+sy) pasa a (x, y). Lo que
+     * entra por el borde no tiene historia y se marca para aprenderse de cero.
+     */
+    fun shift(sx: Int, sy: Int) {
+        if (sx == 0 && sy == 0) return
+        if (tmpMean.size != mean.size) { tmpMean = FloatArray(mean.size); tmpVar = FloatArray(vari.size) }
+        System.arraycopy(mean, 0, tmpMean, 0, mean.size)
+        System.arraycopy(vari, 0, tmpVar, 0, vari.size)
+        for (y in 0 until h) {
+            val oy = y + sy
+            for (x in 0 until w) {
+                val ox = x + sx
+                val i = y * w + x
+                if (ox < 0 || oy < 0 || ox >= w || oy >= h) { mean[i] = -1f; vari[i] = varInit }
+                else { val j = oy * w + ox; mean[i] = tmpMean[j]; vari[i] = tmpVar[j] }
+            }
+        }
     }
 }
 
@@ -298,6 +330,14 @@ class Tracker(
 
     fun setFrameSize(w: Int, h: Int) { frameW = w; frameH = h }
 
+    /** La cámara se movió: todo lo seguido se desplaza con la imagen. */
+    fun shift(dx: Double, dy: Double) {
+        for (t in tracks) {
+            t.x1 += dx; t.x2 += dx; t.y1 += dy; t.y2 += dy
+            t.px1 += dx; t.px2 += dx; t.py1 += dy; t.py2 += dy
+        }
+    }
+
     fun step(frameIdx: Int, dets: List<Det>): List<Track> {
         for (t in tracks) {
             t.age++; t.miss++
@@ -400,7 +440,9 @@ class Box(val id: Int, val klass: String, val age: Int,
 
 /** Caja del detector neuronal, en píxeles de la FUENTE (no del análisis). */
 class DetBox(val x1: Double, val y1: Double, val x2: Double, val y2: Double,
-             val klass: String, val score: Double, val fine: String = klass)
+             val klass: String, val score: Double, val fine: String = klass) {
+    fun shifted(dx: Double, dy: Double) = DetBox(x1 + dx, y1 + dy, x2 + dx, y2 + dy, klass, score, fine)
+}
 
 class Result(val boxes: List<Box>, val disturbed: Boolean, val ms: Double)
 
@@ -423,10 +465,26 @@ class Engine(
     var frameIdx = 0; private set
     var disturbed = false; private set
 
+    /**
+     * Compensar el movimiento de la cámara. Apagado por defecto: así el núcleo
+     * sigue siendo, bit a bit, `engine.js`, y la paridad lo vigila. La app lo
+     * enciende porque un móvil casi nunca está quieto.
+     */
+    var egoMotion = false
+    private var motion: CameraMotion? = null
+    /** Desplazamiento acumulado del contenido, en píxeles de análisis. */
+    var camX = 0.0; private set
+    var camY = 0.0; private set
+    private var lastMove = -1000
+    /** La cámara se ha movido en el último medio segundo, más o menos. */
+    val cameraMoving: Boolean get() = frameIdx - lastMove < 15
+    val analysisW: Int get() = w
+
     private fun ensure(fw: Int, fh: Int) {
         if (w == fw && h == fh && bg != null) return
         w = fw; h = fh
         bg = BackgroundModel(fw, fh)
+        motion = CameraMotion(fw, fh)
         scratch = ByteArray(fw * fh)
         tracker = Tracker()
         frameIdx = 0
@@ -443,6 +501,17 @@ class Engine(
         val t0 = System.nanoTime()
         ensure(fw, fh)
         val model = bg!!
+        if (egoMotion && model.frames > 5) {
+            val m = motion!!
+            if (m.estimate(rgba, model.mean)) {
+                model.shift(m.sx, m.sy)
+                // Lo que estaba en x+sx está ahora en x: las pistas se mueven
+                // con la imagen, o la asociación las perdería en cada paso.
+                tracker.shift(-m.sx.toDouble(), -m.sy.toDouble())
+                camX += m.sx; camY += m.sy
+                lastMove = frameIdx
+            }
+        }
         val mask = model.update(rgba)
 
         // Más de un tercio del cuadro en primer plano no son objetos: es que la
@@ -553,5 +622,89 @@ fun downscaleRgba(src: ByteArray, rowStride: Int, sw: Int, sh: Int,
             dst[o] = (r / n).toByte(); dst[o + 1] = (g / n).toByte()
             dst[o + 2] = (b / n).toByte(); dst[o + 3] = 255.toByte()
         }
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Movimiento de la cámara                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Cuánto se ha desplazado la imagen respecto al modelo de fondo.
+ *
+ * Con el móvil en la mano TODO se mueve, y una resta de fondo que no lo sabe
+ * marca la habitación entera como «movimiento» (medido: 106 de 150 frames con
+ * pistas falsas en un paneo sin un solo objeto). Aquí se busca el
+ * desplazamiento entero (sx, sy) que mejor alinea el frame actual con la MEDIA
+ * del fondo, no con el frame anterior: registrar contra el frame anterior
+ * acumula el error de redondeo de cada paso y el fondo se va despegando; contra
+ * el fondo, el error nunca pasa de medio píxel.
+ *
+ * Búsqueda gruesa a 1/4 de resolución y refinado a resolución completa, con
+ * diferencia absoluta truncada: un objeto que se mueve de verdad no debe
+ * arrastrar la estimación.
+ */
+class CameraMotion(private val w: Int, private val h: Int, private val range: Int = 24) {
+    private val luma = FloatArray(w * h)
+    var sx = 0; private set
+    var sy = 0; private set
+    /** Mejora del ajuste frente a no moverse; ~1 = sin textura o sin movimiento. */
+    var gain = 1.0; private set
+
+    private fun cost(ref: FloatArray, dx: Int, dy: Int, step: Int): Double {
+        var s = 0.0; var n = 0
+        val m = range + 2
+        var y = m
+        while (y < h - m) {
+            val ry = y + dy
+            var x = m
+            while (x < w - m) {
+                val d = Math.abs(luma[y * w + x] - ref[ry * w + x + dx])
+                s += if (d > 40f) 40.0 else d.toDouble()
+                n++
+                x += step
+            }
+            y += step
+        }
+        return if (n == 0) 0.0 else s / n
+    }
+
+    fun estimate(rgba: ByteArray, ref: FloatArray): Boolean {
+        var p = 0
+        for (i in 0 until w * h) {
+            val r = rgba[p].toInt() and 0xFF; val g = rgba[p + 1].toInt() and 0xFF
+            val b = rgba[p + 2].toInt() and 0xFF
+            luma[i] = ((r * 77 + g * 150 + b * 29) shr 8).toFloat()
+            p += 4
+        }
+        val c0 = cost(ref, 0, 0, 2)
+        var best = c0; var bx = 0; var by = 0
+        // Gruesa: rejilla de 4 px, muestreo cada 4.
+        var dy = -range
+        while (dy <= range) {
+            var dx = -range
+            while (dx <= range) {
+                val c = cost(ref, dx, dy, 4)
+                if (c < best) { best = c; bx = dx; by = dy }
+                dx += 4
+            }
+            dy += 4
+        }
+        // Fina: ±3 alrededor, muestreo cada 2.
+        val cx = bx; val cy = by
+        best = cost(ref, cx, cy, 2)
+        for (ddy in -3..3) for (ddx in -3..3) {
+            val dx2 = cx + ddx; val dy2 = cy + ddy
+            if (Math.abs(dx2) > range || Math.abs(dy2) > range) continue
+            val c = cost(ref, dx2, dy2, 2)
+            if (c < best) { best = c; bx = dx2; by = dy2 }
+        }
+        gain = if (best <= 1e-9) 1.0 else c0 / best
+        // Solo se acepta un desplazamiento que explique la imagen claramente
+        // mejor que quedarse quieto: en una pared lisa todo da igual y mover el
+        // fondo a ciegas sería peor que no moverlo.
+        if ((bx != 0 || by != 0) && gain > 1.15) { sx = bx; sy = by; return true }
+        sx = 0; sy = 0
+        return false
     }
 }

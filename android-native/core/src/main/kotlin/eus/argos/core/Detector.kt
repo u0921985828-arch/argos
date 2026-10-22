@@ -314,3 +314,44 @@ class DetectionMemory(
         return i / ((a.x2 - a.x1) * (a.y2 - a.y1) + (b.x2 - b.x1) * (b.y2 - b.y1) - i)
     }
 }
+
+/**
+ * Elige solo entre cuadro entero y teselas ×2, mirando lo que encuentra cada uno.
+ *
+ * Es la regla que domina el proyecto: el presupuesto de píxeles por objeto
+ * manda, y no hay zoom universal. Medido con el detector nativo:
+ *
+ *   bus, zidane, dog (objetos grandes)   cuadro entero 4 / 2 / 3   teselas ×2 1 / 1 / 1
+ *   plaza (personas de ~50 px)           cuadro entero 0           teselas ×2 31
+ *
+ * Ninguno de los dos modos sirve para las dos escenas. Así que se trabaja en
+ * uno y de vez en cuando se SONDEA el otro: se cambia a teselas solo si
+ * encuentran claramente más (al menos 2 más y un 50 % más), y se vuelve al
+ * cuadro entero en cuanto este iguala a las teselas, porque es veinte veces
+ * más barato y no parte los objetos grandes en trozos. Fundir los dos en una
+ * pasada está probado y es peor (el trozo puntúa más que el objeto).
+ */
+class AutoZoom(private val probeEvery: Int = 8, private val minScore: Double = 0.3) {
+    /** 0 = cuadro entero, 2 = teselas ×2. */
+    var mode = 0.0; private set
+    private var pass = probeEvery - 2      // el primer sondeo, en la segunda pasada
+    private var lastMain = -1
+    /** Cuántas veces ha cambiado de modo, para el panel. */
+    var switches = 0; private set
+
+    fun next(): Double {
+        val z = if (pass % probeEvery == probeEvery - 1 && lastMain >= 0) other() else mode
+        pass++
+        return z
+    }
+
+    fun report(zoomUsed: Double, dets: List<DetBox>) {
+        val n = dets.count { it.score >= minScore }
+        if (zoomUsed == mode) { lastMain = n; return }
+        val sube = mode == 0.0 && n >= maxOf(lastMain + 2, Math.ceil(lastMain * 1.5).toInt())
+        val baja = mode == 2.0 && n >= lastMain
+        if (sube || baja) { mode = zoomUsed; lastMain = n; switches++ }
+    }
+
+    private fun other() = if (mode == 0.0) 2.0 else 0.0
+}

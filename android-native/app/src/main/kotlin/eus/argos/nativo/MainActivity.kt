@@ -51,11 +51,20 @@ class MainActivity : ComponentActivity() {
         }
         setContentView(FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
-            // Un toque alterna cuadro entero / teselas ×2.
+            // Un toque recorre los modos del detector: automático → cuadro
+            // entero → teselas ×2 → automático. Una pulsación larga abre la
+            // memoria del día.
             setOnClickListener {
                 val p = pipeline ?: return@setOnClickListener
-                p.zoom = if (p.zoom == 0.0) 2.0 else 0.0
-                Log.i(TAG, "ARGOS nativo modo: " + if (p.zoom == 0.0) "cuadro entero" else "teselas x2")
+                when {
+                    p.autoZoomOn -> { p.autoZoomOn = false; p.zoom = 0.0 }
+                    p.zoom == 0.0 -> p.zoom = 2.0
+                    else -> { p.autoZoomOn = true }
+                }
+                Log.i(TAG, "ARGOS nativo modo: " + modo(p))
+            }
+            setOnLongClickListener {
+                startActivity(android.content.Intent(this@MainActivity, ResumenActivity::class.java)); true
             }
             addView(preview, FrameLayout.LayoutParams(-1, -1))
             addView(capa, FrameLayout.LayoutParams(-1, -1))
@@ -78,7 +87,12 @@ class MainActivity : ComponentActivity() {
             // comérselos todos o la cámara va a tirones mientras infiere.
             val cores = Runtime.getRuntime().availableProcessors()
             val threads = (cores - 1).coerceIn(1, 4)
-            val p = Pipeline(model, threads)
+            // La memoria: trayectorias por día, sin imagen; la retención de 30
+            // días se aplica al abrir, como en la web.
+            val store = eus.argos.core.TrackStore(java.io.File(filesDir, "memoria"))
+            val borrados = store.applyRetention(System.currentTimeMillis() / 1000.0)
+            Log.i(TAG, "ARGOS nativo memoria: retención aplicada, $borrados día(s) borrados")
+            val p = Pipeline(model, threads, store)
             val warm = p.warmup()
             // El proveedor que se nombra es el que se usa: aquí no se pide
             // ninguno más que la CPU, así que no hay nada que pueda caerse en
@@ -164,16 +178,27 @@ class MainActivity : ComponentActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
+    private fun modo(p: Pipeline) = when {
+        p.autoZoomOn -> "automático (" + (if (p.autoZoom.mode == 0.0) "cuadro entero" else "teselas ×2") + ")"
+        p.zoom == 0.0 -> "cuadro entero"
+        else -> "teselas ×2"
+    }
+
     private fun report(p: Pipeline, f: Pipeline.Frame) {
         val now = SystemClock.elapsedRealtime()
         val det = f.boxes.count { it.klassSrc == "det" }
-        val txt = "%.0f fps · %dx%d\ncaptura %.1f · reducir %.1f · análisis %.1f ms\n".format(
-            java.util.Locale.ROOT, p.fps, f.w, f.h, p.grabMs, p.scaleMs, p.engineMs) +
-            "detector %.0f ms (inferencia %.0f, %d tesela%s) · %d hilos · %d objetos\n".format(
-            java.util.Locale.ROOT, p.detMs, p.inferMs, p.lastTiles, if (p.lastTiles == 1) "" else "s",
-            p.threads, p.lastDets) +
-            (if (p.zoom == 0.0) "cuadro entero · toca para teselas ×2\n" else "teselas ×2 · toca para cuadro entero\n") +
-            "pistas %d · con clase del detector %d".format(f.boxes.size, det)
+        val loc = java.util.Locale("es")
+        val escena = when {
+            f.moving -> "cámara en mano: compensando el movimiento"
+            f.scaleValid -> "cámara quieta · escala aprendida de ${f.scaleN} trayectorias"
+            else -> "cámara quieta · aprendiendo la escala"
+        }
+        val ev = f.events.firstOrNull()?.let { "último: ${it.kind} #${it.id} · ${it.detail}" } ?: "sin eventos"
+        val txt = "personas %d · vehículos %d · hoy %d personas distintas\n".format(loc, f.people, f.vehicles, f.peopleSeen) +
+            escena + "\n" + ev + "\n" +
+            "%.0f fps · análisis %.1f ms · detector %.0f ms (%d tesela%s)\n".format(
+                loc, p.fps, p.engineMs, p.detMs, p.lastTiles, if (p.lastTiles == 1) "" else "s") +
+            "modo " + modo(p) + " · toca para cambiar · mantén para la memoria"
         runOnUiThread { hud.text = txt }
         if (now - lastLog > 3000) {
             lastLog = now
@@ -182,6 +207,9 @@ class MainActivity : ComponentActivity() {
                         "pistas %d (det %d)").format(java.util.Locale.ROOT, p.frames, p.fps, f.w, f.h,
                         p.grabMs, p.scaleMs, p.engineMs, p.detMs, p.inferMs, p.inferences, p.lastDets,
                         f.boxes.size, det))
+            Log.i(TAG, "ARGOS nativo escena: " + (if (f.moving) "en mano" else "quieta") +
+                       " · escala " + (if (f.scaleValid) "válida" else "aprendiendo") +
+                       " · personas ${f.people} · vistas ${f.peopleSeen} · modo ${modo(p)}")
         }
     }
 

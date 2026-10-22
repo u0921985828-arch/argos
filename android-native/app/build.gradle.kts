@@ -28,6 +28,10 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // La memoria usa java.time (fechas, retención de 30 días), que en
+        // Android solo existe desde la API 26. Con minSdk 24 hace falta el
+        // desazucarado o la app se cae al abrir en un Android 7.
+        isCoreLibraryDesugaringEnabled = true
     }
     kotlinOptions { jvmTarget = "17" }
     // El modelo se lee entero a memoria; comprimido obligaría a inflarlo en
@@ -37,6 +41,7 @@ android {
 
 dependencies {
     implementation(project(":core"))
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
     // Alinea toda la familia kotlin-stdlib: AndroidX arrastra versiones viejas
     // de -jdk7/-jdk8 y sin esto `checkDebugDuplicateClasses` aborta. Es el
     // mismo arreglo que necesitó la app web.

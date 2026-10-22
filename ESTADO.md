@@ -207,3 +207,44 @@ fps 13-18 → 22-25 y análisis 38-52 ms → 26-35 ms, en el mismo emulador.
 2. Si la inferencia en el teléfono es peor que la web: probar XNNPACK y NNAPI
    y comparar con la misma autoprueba.
 3. Comprobar el rango del color de cámara (16-235 frente a 0-255).
+
+
+---
+
+# FASE 4 — que la nativa sea mucho mejor y más inteligente
+
+## Punto de partida (medido en el teléfono de Eddie, captura del 22-10)
+26 fps · captura 0,3 · reducir 3,4 · análisis 14,9 ms · detector 489 ms con
+20 teselas (inferencia 417 ms, ~21 ms por inferencia, 4 hilos) · 0 objetos ·
+5 pistas, todas «movimiento» sobre muebles: la cámara iba en la mano.
+
+C3 de la fase 3 queda contestado por el aparato real: **~21 ms por inferencia**
+en el teléfono, frente a 687 ms de la web en el emulador. El emulador no
+predecía nada.
+
+## Línea base (JVM, núcleo actual)
+- Paneo sintético con temblor y SIN objetos: **106 de 150 frames con pistas
+  falsas, 5.840 pistas falsas** (`HandheldCase.kt`).
+
+## Criterios
+1. **C1 cámara en mano**: el mismo paneo da ≤ 5 frames con pistas falsas, y
+   con una persona andando, la persona sigue vista en ≥ 80 % de los frames.
+2. **C2 poca luz**: bus y zidane oscurecidos (×0,12): las detecciones con
+   puntuación ≥ 0,3 recuperan ≥ 80 % de las de la foto normal.
+3. **C3 zoom automático**: elige cuadro entero en bus/zidane y teselas en una
+   escena de personas pequeñas, donde las teselas encuentran más.
+4. **C4 escena**: escala métrica y velocidad portadas de brain.js con paridad
+   numérica; contadores y eventos sobre ellas.
+5. **C5 memoria**: trayectorias (sin imágenes) guardadas y recuperadas, con
+   retención de 30 días aplicada.
+6. **C6** CI: compila y en el emulador publica escena y memoria.
+
+## Caso reservado
+Cámara en mano siguiendo a una persona que anda en sentido CONTRARIO al paneo.
+
+## C2 poca luz — resultado NEGATIVO, no se añade nada
+Medido con bus y zidane oscurecidos a ×0,12: el detector NO pierde nada (bus
+4 → 5 objetos ≥ 0,3, zidane 2 → 2). Una ganancia automática (×4) da lo mismo.
+Así que no se añade: una capa que no mejora ninguna medida es solo superficie
+para fallos. Los 0 objetos de la captura del teléfono no eran por la
+oscuridad: en esa habitación no había nadie.

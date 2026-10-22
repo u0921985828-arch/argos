@@ -6,9 +6,13 @@ import ai.onnxruntime.OrtSession
 import android.os.SystemClock
 import android.util.Log
 import eus.argos.core.Box
+import eus.argos.core.AutoZoom
 import eus.argos.core.DetBox
 import eus.argos.core.DetectionMemory
 import eus.argos.core.Engine
+import eus.argos.core.SceneBrain
+import eus.argos.core.SceneEvent
+import eus.argos.core.TrackStore
 import eus.argos.core.YoloxDetector
 import eus.argos.core.downscaleRgba
 import java.nio.ByteBuffer
@@ -32,10 +36,27 @@ const val TAG = "ARGOS"
  * los píxeles en memoria de CPU, sin lienzo ni `getImageData`, que era el 75 %
  * del coste del frame en el navegador.
  */
-class Pipeline(modelBytes: ByteArray, threads: Int) {
-    class Frame(val boxes: List<Box>, val w: Int, val h: Int)
+class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStore? = null) {
+    /**
+     * Lo que ve la interfaz en cada frame: cajas, y lo que se sabe de cada una
+     * y de la escena. `camX/camY` en píxeles de fuente, para dibujar estelas
+     * guardadas en coordenadas de escena.
+     */
+    class Frame(val boxes: List<Box>, val w: Int, val h: Int,
+                val info: Map<Int, SceneBrain.TrackInfo> = emptyMap(),
+                val camX: Double = 0.0, val camY: Double = 0.0,
+                val moving: Boolean = false, val people: Int = 0, val vehicles: Int = 0,
+                val peopleSeen: Int = 0, val scaleValid: Boolean = false, val scaleN: Int = 0,
+                val events: List<SceneEvent> = emptyList())
 
-    val engine = Engine()
+    // Con el móvil en la mano todo se mueve: el núcleo estima el desplazamiento
+    // de la imagen y mantiene el fondo y las pistas alineados con la escena.
+    val engine = Engine().apply { egoMotion = true }
+    /** Escala métrica, velocidades, estaturas, eventos y recuentos (brain.js). */
+    val brain = SceneBrain()
+    // Hora real del instante 0 de la sesión, para guardar con fecha y hora.
+    private val t0Epoch = System.currentTimeMillis() / 1000.0 - SystemClock.elapsedRealtime() / 1000.0
+    private val ioExec = Executors.newSingleThreadExecutor { r -> Thread(r, "argos-memoria") }
     private val memory = DetectionMemory()
 
     private val env = OrtEnvironment.getEnvironment()
@@ -57,6 +78,11 @@ class Pipeline(modelBytes: ByteArray, threads: Int) {
      * cuántos píxeles ocupa el objeto, y eso solo lo ve quien mira la escena.
      */
     @Volatile var zoom = 0.0
+    /** Zoom automático: el detector elige el modo según lo que encuentra. */
+    @Volatile var autoZoomOn = true
+    val autoZoom = AutoZoom()
+    /** Modo de la última pasada (0 cuadro entero, 2 teselas), para el panel. */
+    @Volatile var lastZoom = 0.0; private set
     @Volatile var frames = 0L; private set
     @Volatile var grabMs = 0.0; private set
     @Volatile var scaleMs = 0.0; private set
@@ -138,11 +164,27 @@ class Pipeline(modelBytes: ByteArray, threads: Int) {
         // Repetirlas hasta la pasada siguiente congela la caja mientras la
         // persona sigue andando; entre pasadas manda la resta de fondo y la
         // pista conserva la clase que le dio el detector.
-        val det = if (fresh.getAndSet(false)) memory.forTracking() else null
+        // Las cajas del detector se guardan en coordenadas de ESCENA (imagen +
+        // desplazamiento acumulado de la cámara) y se devuelven a las de este
+        // frame: si el móvil se ha movido desde que se capturó el frame que vio
+        // el detector, la caja va donde está el objeto ahora, no donde estaba.
+        val sc = w.toDouble() / aw
+        val det = if (fresh.getAndSet(false))
+            memory.forTracking()?.map { it.shifted(-engine.camX * sc, -engine.camY * sc) } else null
         val r = engine.analyze(small, aw, ah, w, h, det)
         val t3 = System.nanoTime()
 
-        maybeDetect(rowStride, w, h)
+        // La escena: física en coordenadas de escena (sirve aunque el móvil se
+        // mueva) y escala métrica solo con la cámara quieta.
+        val tSec = SystemClock.elapsedRealtime() / 1000.0
+        val info = brain.update(engine.tracker.tracks, engine.tracker.minHits, tSec, sc, h.toDouble() / ah,
+                                w, h, engine.camX * sc, engine.camY * sc, !engine.cameraMoving)
+        if (brain.finished.isNotEmpty()) {
+            val done = ArrayList(brain.finished); brain.finished.clear()
+            store?.let { s -> try { ioExec.execute { done.forEach { s.save(it, t0Epoch) } } } catch (_: Exception) {} }
+        }
+
+        maybeDetect(rowStride, w, h, engine.camX * sc, engine.camY * sc)
 
         val a = 0.1
         grabMs = grabMs * (1 - a) + (t1 - t0) / 1e6 * a
@@ -154,7 +196,9 @@ class Pipeline(modelBytes: ByteArray, threads: Int) {
         }
         lastT = t0
         frames++
-        return Frame(r.boxes, w, h)
+        return Frame(r.boxes, w, h, info.associateBy { it.id }, engine.camX * sc, engine.camY * sc,
+                     engine.cameraMoving, brain.people, brain.vehicles, brain.seen["person"]?.size ?: 0,
+                     brain.scale.valid, brain.scale.n, brain.events.take(3))
     }
 
     /**
@@ -163,7 +207,7 @@ class Pipeline(modelBytes: ByteArray, threads: Int) {
      * frames viejos es exactamente lo que convierte un detector lento en uno
      * que va siempre por detrás.
      */
-    private fun maybeDetect(rowStride: Int, w: Int, h: Int) {
+    private fun maybeDetect(rowStride: Int, w: Int, h: Int, camX: Double, camY: Double) {
         if (!busy.compareAndSet(false, true)) return
         val need = rowStride * h
         if (detBuf.size < need) detBuf = ByteArray(need)
@@ -172,10 +216,13 @@ class Pipeline(modelBytes: ByteArray, threads: Int) {
         try { detExec.execute {
             try {
                 val t0 = System.nanoTime()
-                val dets: List<DetBox> = detector.detect(buf, rowStride, w, h, zoom)
+                val z = if (autoZoomOn) autoZoom.next() else zoom
+                val dets: List<DetBox> = detector.detect(buf, rowStride, w, h, z)
+                if (autoZoomOn) autoZoom.report(z, dets)
+                lastZoom = z
                 lastTiles = detector.lastTiles
                 val ms = (System.nanoTime() - t0) / 1e6
-                memory.update(dets, SystemClock.elapsedRealtime().toDouble())
+                memory.update(dets.map { it.shifted(camX, camY) }, SystemClock.elapsedRealtime().toDouble())
                 fresh.set(true)
                 val a = if (inferences == 0L) 1.0 else 0.2
                 detMs = detMs * (1 - a) + ms * a
@@ -199,6 +246,7 @@ class Pipeline(modelBytes: ByteArray, threads: Int) {
      * y solo entonces se libera.
      */
     fun close() {
+        ioExec.shutdown()
         detExec.shutdown()
         try { detExec.awaitTermination(3, java.util.concurrent.TimeUnit.SECONDS) }
         catch (_: InterruptedException) { }

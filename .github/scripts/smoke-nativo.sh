@@ -76,6 +76,17 @@ if [ -z "${inf:-}" ] || [ "$inf" -eq 0 ]; then
     echo "::error::el detector no infirió sobre ningún frame de cámara"
     exit 1
 fi
+# La escena y la memoria: que el cerebro corre y la retención se aplicó.
+if ! grep -q 'ARGOS nativo memoria: retención aplicada' logcat.txt; then
+    echo "::error::la memoria no se abrió (sin línea de retención)"
+    exit 1
+fi
+if ! grep -q 'ARGOS nativo escena:' logcat.txt; then
+    echo "::error::la escena no publicó su estado"
+    exit 1
+fi
+grep 'ARGOS nativo escena:' logcat.txt | tail -1
+
 echo "--- cifras ---"
 grep 'ARGOS nativo detector:' logcat.txt | tail -1
 echo "$last"
