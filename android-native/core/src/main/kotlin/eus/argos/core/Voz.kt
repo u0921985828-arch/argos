@@ -417,7 +417,8 @@ class VozPiper(config: String, private val infer: (LongArray, FloatArray) -> Flo
  *  3. Compresión suave 3:1 a −20 dB, con ataque de 10 ms y relajación de
  *     60 ms: igual de cerca en cada sílaba, sin bombeo.
  *  4. Limitador final: nada pasa de −1 dB, sin saturar.
- * `NATURAL` no toca nada y es la que sale por defecto.
+ *  5. De-esser (en las dos): baja las eses solo cuando las hay.
+ * `NATURAL` (por defecto) es la voz tal cual con el de-esser y nada más.
  */
 object EfectoVoz {
     enum class Tipo(val texto: String) { NATURAL("natural"), ESTUDIO("cálida") }
@@ -436,6 +437,10 @@ object EfectoVoz {
             fun pasoAlto(f: Double, sr: Int): Biquad {
                 val w = 2 * Math.PI * f / sr; val al = Math.sin(w) / (2 * 0.707); val cw = Math.cos(w)
                 return Biquad((1 + cw) / 2, -(1 + cw), (1 + cw) / 2, 1 + al, -2 * cw, 1 - al)
+            }
+            fun pasoBajo(f: Double, sr: Int): Biquad {
+                val w = 2 * Math.PI * f / sr; val al = Math.sin(w) / (2 * 0.707); val cw = Math.cos(w)
+                return Biquad((1 - cw) / 2, 1 - cw, (1 - cw) / 2, 1 + al, -2 * cw, 1 - al)
             }
             fun campana(f: Double, q: Double, db: Double, sr: Int): Biquad {
                 val a = Math.pow(10.0, db / 40); val w = 2 * Math.PI * f / sr; val al = Math.sin(w) / (2 * q); val cw = Math.cos(w)
@@ -456,8 +461,39 @@ object EfectoVoz {
         }
     }
 
-    fun aplica(a: FloatArray, sr: Int, tipo: Tipo): FloatArray {
-        if (tipo == Tipo.NATURAL || a.isEmpty()) return a
+    /**
+     * De-esser: separa lo que hay por encima de 4,5 kHz y, cuando esa banda se
+     * come más de un cuarto de la energía (una «s», una «z» silbada), la baja
+     * con fuerza (al cuadrado de lo que se pasa), hasta −10 dB. Las vocales no tienen esa energía arriba y
+     * pasan intactas. Ataque de 1 ms, relajación de 40 ms.
+     */
+    fun deEsser(a: FloatArray, sr: Int): FloatArray {
+        if (a.isEmpty() || sr < 12000) return a
+        // Cruce Linkwitz-Riley de 4.º orden: grave + agudo suman plano, así que
+        // con la ganancia a 1 la voz sale igual.
+        val hp1 = Biquad.pasoAlto(4500.0, sr); val hp2 = Biquad.pasoAlto(4500.0, sr)
+        val lp1 = Biquad.pasoBajo(4500.0, sr); val lp2 = Biquad.pasoBajo(4500.0, sr)
+        val at = Math.exp(-1.0 / (0.001 * sr)); val re = Math.exp(-1.0 / (0.040 * sr))
+        var eAlto = 0.0; var eTodo = 0.0; var g = 1.0
+        val out = FloatArray(a.size)
+        for (i in a.indices) {
+            val x = a[i].toDouble()
+            val alto = hp2.paso(hp1.paso(x)); val bajo = lp2.paso(lp1.paso(x))
+            val ax = alto * alto; val tx = x * x
+            eAlto = if (ax > eAlto) at * eAlto + (1 - at) * ax else re * eAlto + (1 - re) * ax
+            eTodo = if (tx > eTodo) at * eTodo + (1 - at) * tx else re * eTodo + (1 - re) * tx
+            val parte = if (eTodo > 1e-9) eAlto / eTodo else 0.0
+            val objetivo = if (parte > 0.25) Math.max(0.316, Math.pow(0.25 / parte, 2.0)) else 1.0
+            g += (objetivo - g) * (if (objetivo < g) 0.3 else 0.002)
+            out[i] = (bajo + alto * g).toFloat()
+        }
+        return out
+    }
+
+    fun aplica(a0: FloatArray, sr: Int, tipo: Tipo): FloatArray {
+        if (a0.isEmpty()) return a0
+        val a = deEsser(a0, sr)
+        if (tipo == Tipo.NATURAL) return a
         val pico = (a.maxOfOrNull { Math.abs(it) } ?: 0f).toDouble().coerceAtLeast(1e-4)
         val nyq = sr / 2.0
         val filtros = listOfNotNull(

@@ -103,7 +103,30 @@ fun main(args: Array<String>) {
         }
         pide("acabado: rango dinámico al hablar %.1f → %.1f dB".format(rango(a), rango(b)), rango(b) < rango(a) - 3)
         pide("acabado: sin pasarse de escala", b.all { Math.abs(it) <= 1.0f })
-        pide("acabado «natural» no toca nada", EfectoVoz.aplica(a, sr, EfectoVoz.Tipo.NATURAL) === a)
+    }
+    // De-esser: vocal de 300 Hz y «s» (ruido por encima de 5 kHz) alternadas.
+    // La «s» tiene que bajar 6 dB o más y la vocal quedar igual (±0,5 dB).
+    run {
+        val sr = 22050
+        val r = java.util.Random(9)
+        val hp = DoubleArray(4)
+        val a = FloatArray(sr) { i ->
+            val t = i / sr.toDouble(); val s = ((t * 4).toInt() % 2 == 1)
+            if (!s) (0.5 * Math.sin(2 * Math.PI * 300 * t) + 0.1 * Math.sin(2 * Math.PI * 900 * t)).toFloat()
+            else {   // ruido blanco con un paso alto de primer orden muy marcado
+                val n = r.nextGaussian() * 0.25; val y = n - hp[0] + 0.2 * hp[1]; hp[0] = n; hp[1] = y; (y * 0.8).toFloat()
+            }
+        }
+        val b = EfectoVoz.deEsser(a, sr)
+        fun rms(x: FloatArray, i0: Int, i1: Int) = Math.sqrt((i0 until i1).sumOf { x[it] * x[it].toDouble() } / (i1 - i0))
+        fun db(v: Double) = 20 * Math.log10(v.coerceAtLeast(1e-9))
+        val q = sr / 4
+        val vocal = db(rms(b, q * 2 + 600, q * 3)) - db(rms(a, q * 2 + 600, q * 3))
+        val ese = db(rms(b, q * 3 + 600, q * 4)) - db(rms(a, q * 3 + 600, q * 4))
+        pide("de-esser: la «s» %+.1f dB".format(ese), ese < -6)
+        pide("de-esser: la vocal %+.2f dB".format(vocal), Math.abs(vocal) < 0.5)
+        pide("«natural» es la voz con el de-esser y nada más",
+             EfectoVoz.aplica(a, sr, EfectoVoz.Tipo.NATURAL).contentEquals(b))
     }
     println(if (fallos == 0) "VOZ: CUMPLE" else "VOZ: FALLA ($fallos)")
     if (fallos > 0) System.exit(1)
