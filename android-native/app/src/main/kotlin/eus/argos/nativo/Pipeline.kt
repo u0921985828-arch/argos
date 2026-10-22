@@ -116,6 +116,9 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
     @Volatile var fps = 0.0; private set
     private var lastT = 0L
 
+    /** El último frame analizado, para el chat («qué ves»). */
+    @Volatile var last: Frame? = null; private set
+
     private var src = ByteArray(0)
     private var small = ByteArray(0)
     private var detBuf = ByteArray(0)
@@ -225,6 +228,7 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
         return Frame(r.boxes, w, h, info.associateBy { it.id }, engine.camX * sc, engine.camY * sc,
                      engine.cameraMoving, brain.people, brain.vehicles, brain.seen["person"]?.size ?: 0,
                      brain.scale.valid, brain.scale.n, brain.events.take(3), behaviourMature, behaviourReady)
+            .also { last = it }
     }
 
     /**

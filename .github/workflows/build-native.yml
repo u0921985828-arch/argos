@@ -26,6 +26,7 @@ on:
       - 'argos/api/static/brain.js'
       - 'argos/api/static/behaviour.js'
       - 'argos/api/static/detector.js'
+      - 'argos/api/static/ask.js'
       - '.github/workflows/build-native.yml'
       - '.github/scripts/smoke-nativo.sh'
 
@@ -121,9 +122,10 @@ jobs:
           python3 scripts/prep_plaza.py "$D" /tmp/fotos/bus.jpg /tmp/fotos/zidane.jpg
           node scripts/ref_scene.js
           node scripts/ref_behaviour.js
+          node scripts/ref_ask.js
           cd android-native && ./gradlew --no-daemon :core:paridadDetector :core:casoReservado \
             :core:zoomAutomatico :core:paridadEscena :core:escenaViva :core:camaraEnMano :core:memoria \
-            :core:paridadComportamiento :core:comportamientoVivo
+            :core:paridadComportamiento :core:comportamientoVivo :core:chat
 
       - name: Build debug APK
         working-directory: android-native

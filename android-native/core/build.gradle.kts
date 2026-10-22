@@ -105,3 +105,13 @@ tasks.register<JavaExec>("comportamientoVivo") {
     classpath = sourceSets["test"].runtimeClasspath
     mainClass.set("eus.argos.paridad.BehaviourScenarioKt")
 }
+
+// El chat contra ask.js (cómo entiende cada frase) y respuestas sobre una
+// memoria sembrada. La referencia: `node scripts/ref_ask.js`.
+tasks.register<JavaExec>("chat") {
+    group = "verification"
+    description = "Ask.kt contra ask.js y respuestas con cifras que cuadran."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.AskParityKt")
+    workingDir = rootProject.projectDir.parentFile
+}

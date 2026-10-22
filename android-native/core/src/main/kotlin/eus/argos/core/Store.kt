@@ -62,6 +62,16 @@ class TrackStore(private val dir: File, private val zone: ZoneId = ZoneId.system
         }
     }
 
+    /** Filas de todos los días que tocan [desdeS, hastaS) (null = sin límite), más recientes primero. */
+    fun rowsBetween(desdeS: Double?, hastaS: Double?, nowS: Double): List<Row> {
+        val hasta = hastaS ?: nowS
+        val desde = desdeS ?: (nowS - (retentionDays + 1) * 86400.0)
+        var d = dayOf(desde); val fin = dayOf(hasta)
+        val out = ArrayList<Row>()
+        while (!d.isAfter(fin)) { out.addAll(rows(d)); d = d.plusDays(1) }
+        return out.filter { it.start >= desde && it.start < hasta }.sortedByDescending { it.start }
+    }
+
     class Summary(val day: LocalDate, val people: Int, val vehicles: Int, val bikes: Int, val unclassified: Int,
                   val perHour: IntArray, val events: Map<String, Int>, val longestStayS: Double)
 

@@ -36,6 +36,14 @@ class MainActivity : ComponentActivity() {
     private val analysisExec = Executors.newSingleThreadExecutor { r -> Thread(r, "argos-rapido") }
     private var lastLog = 0L
     @Volatile private var destroyed = false
+    private lateinit var chat: Chat
+    @Volatile private var ask: eus.argos.core.Ask? = null
+    @Volatile private var store: eus.argos.core.TrackStore? = null
+    private var chatProbado = false
+
+    private val askMicro = registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) chat.escuchar()
+    }
 
     private val askCamera = registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) startCamera() else hud.text = "Sin permiso de cámara no hay nada que analizar."
@@ -48,6 +56,15 @@ class MainActivity : ComponentActivity() {
         hud = TextView(this).apply {
             setTextColor(Color.WHITE); setBackgroundColor(Color.argb(150, 0, 0, 0))
             textSize = 13f; setPadding(18, 12, 18, 12); text = "Cargando el detector…"
+        }
+        chat = Chat(this, { ask }, { askMicro.launch(Manifest.permission.RECORD_AUDIO) })
+        chat.view.visibility = android.view.View.GONE
+        val botonChat = android.widget.Button(this).apply {
+            text = "Hablar con ARGOS"
+            setOnClickListener {
+                chat.view.visibility = if (chat.view.visibility == android.view.View.VISIBLE) android.view.View.GONE
+                                       else android.view.View.VISIBLE
+            }
         }
         setContentView(FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
@@ -69,6 +86,8 @@ class MainActivity : ComponentActivity() {
             addView(preview, FrameLayout.LayoutParams(-1, -1))
             addView(capa, FrameLayout.LayoutParams(-1, -1))
             addView(hud, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
+            addView(chat.view, FrameLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * 0.55).toInt(), Gravity.TOP))
+            addView(botonChat, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END))
         })
 
         // El detector se carga fuera del hilo de la interfaz: leer 3,6 MB de
@@ -92,6 +111,7 @@ class MainActivity : ComponentActivity() {
             val store = eus.argos.core.TrackStore(java.io.File(filesDir, "memoria"))
             val borrados = store.applyRetention(System.currentTimeMillis() / 1000.0)
             Log.i(TAG, "ARGOS nativo memoria: retención aplicada, $borrados día(s) borrados")
+            this.store = store
             val p = Pipeline(model, threads, store, java.io.File(filesDir, "memoria/comportamiento.txt"))
             val warm = p.warmup()
             // El proveedor que se nombra es el que se usa: aquí no se pide
@@ -104,6 +124,18 @@ class MainActivity : ComponentActivity() {
             // Si la actividad murió mientras cargaba, nadie cerraría esta sesión.
             if (destroyed) { p.close(); return }
             pipeline = p
+            // El chat: una gramática sobre la memoria y la escena viva.
+            ask = eus.argos.core.Ask(object : eus.argos.core.Ask.Source {
+                override fun rows(desdeS: Double?, hastaS: Double?, nowS: Double) = store.rowsBetween(desdeS, hastaS, nowS)
+                override fun live(): eus.argos.core.Ask.Live? {
+                    val f = pipeline?.last ?: return null
+                    val raros = f.info.values.filter { (it.anomaly?.score ?: 0.0) >= 0.2 }
+                        .sortedByDescending { it.anomaly!!.score }
+                        .map { "objeto ${it.id}: " + (it.anomaly!!.reasons.firstOrNull() ?: "fuera de lo habitual") }
+                    return eus.argos.core.Ask.Live(f.people, f.vehicles, f.boxes.size, raros, f.moving, f.scaleValid,
+                                                   f.events.map { "${it.kind} #${it.id}" })
+                }
+            })
             Log.i(TAG, "ARGOS nativo listo")
         } catch (e: Throwable) {
             Log.e(TAG, "ARGOS nativo: el detector no cargó: ${e.message}", e)
@@ -208,6 +240,13 @@ class MainActivity : ComponentActivity() {
                 loc, p.fps, p.engineMs, p.detMs, p.lastTiles, if (p.lastTiles == 1) "" else "s") +
             "modo " + modo(p) + " · toca para cambiar · mantén para la memoria"
         runOnUiThread { hud.text = txt }
+        // Una pregunta de prueba al chat cuando ya hay escena, para que el
+        // registro diga que responde y no solo que existe.
+        if (!chatProbado && p.frames > 60) {
+            chatProbado = true
+            val r = ask?.ask("qué ves") ?: "(sin chat)"
+            Log.i(TAG, "ARGOS chat: voz ${chat.reconocimiento} · «qué ves» -> $r")
+        }
         if (now - lastLog > 3000) {
             lastLog = now
             Log.i(TAG, ("ARGOS nativo: frames %d · %.1f fps · %dx%d · captura %.2f ms · reducir %.2f ms · " +
@@ -224,6 +263,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         destroyed = true
+        chat.close()
         super.onDestroy()
         // Primero el reloj rápido (deja de mandar trabajo al detector), luego
         // el detector, que espera a su inferencia en curso antes de liberar.
