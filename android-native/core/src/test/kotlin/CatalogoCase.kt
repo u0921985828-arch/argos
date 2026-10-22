@@ -59,19 +59,74 @@ fun main(args: Array<String>) {
     val muchas = (1..30).map { a.copy(id = "caltrans:4:$it") } + (1..30).map { a.copy(id = "caltrans:7:$it") } + (1..5).map { b.copy(id = "tfl:$it") }
     val m = R.muestra(muchas, 9, 1)
     pide("muestra: de cada sitio un poco", m.size == 9 && m.count { it.id.startsWith("tfl") } == 3 && m.count { it.id.startsWith("caltrans:7") } == 3)
+    // Los demás organismos, con lo que devolvían al sondearlos.
+    val del = Catalogo.deldot("""{"cameraCount":2,"videoCameras":[{"urls":{"m3u8":"http://video.deldot.gov:1935/live/KCAM001.stream/playlist.m3u8",
+      "m3u8s":"https://video.deldot.gov:443/live/KCAM001.stream/playlist.m3u8"},"id":"KCAM001","title":"DE 1 @ MILFORD NECK ROAD","county":"Kent",
+      "lat":38.990931,"lon":-75.448625,"enabled":true},{"urls":{"m3u8s":"https://x/y.m3u8"},"id":"K2","title":"Apagada","enabled":false}]}""")
+    pide("DelDOT: la encendida, por https, con condado", del.size == 1 && del[0].video.startsWith("https://video.deldot.gov:443") &&
+        del[0].zona == "Kent" && Math.abs(del[0].lon + 75.448625) < 1e-9)
+    val mo = Catalogo.modot("""[{"location":"141 AT 21, MM 27.1","x":-90.424496,"y":38.4623,"rtmp":null,
+      "html":"https://sfs02-traveler.modot.mo.gov/rtplive/MODOT_CAM_209/playlist.m3u8"},
+      {"location":"repetida","x":-90.4,"y":38.4,"html":"https://sfs02-traveler.modot.mo.gov/rtplive/MODOT_CAM_209/playlist.m3u8"},
+      {"location":"sin vídeo","x":-90.4,"y":38.4,"html":null}]""")
+    pide("MoDOT: una por cámara, lat y lon en su sitio", mo.size == 1 && mo[0].id == "modot:MODOT_CAM_209" && Math.abs(mo[0].lat - 38.4623) < 1e-9)
+    val ia = Catalogo.cars("""[{"id":59644814,"public":true,"name":"DM - I-35/80 @ MM 136.2","location":{"latitude":41.649792,"longitude":-93.600168,
+      "cityReference":"near Ankeny"},"views":[{"type":"WMP","url":"https://video3.iowadot.gov:8888/ankeny/dmtv024lb/playlist.m3u8"}]},
+      {"id":1,"public":true,"active":true,"name":"Foto","location":{},"views":[{"type":"STILL_IMAGE","url":"https://k/x.JPG"}]},
+      {"id":2,"public":false,"name":"Privada","views":[{"url":"https://p/q.m3u8"}]}]""", "ia", "Iowa")
+    pide("CARS: solo la de vídeo y pública, con su ciudad", ia.size == 1 && ia[0].zona == "Ankeny" && ia[0].proveedor == "Iowa")
+    val nv = Catalogo.p511("""{"draw":0,"recordsTotal":652,"data":[{"id":2,"location":"McCarran & Caughlin","roadway":"McCarran Blvd",
+      "latLng":{"geography":{"coordinateSystemId":4326,"wellKnownText":"POINT (-119.85 39.51)"}},
+      "images":[{"videoUrl":"https://d2wse2.its.nv.gov:443/renoxcd02/a_public.stream/playlist.m3u8","isVideoAuthRequired":false,
+      "videoDisabled":false,"disabled":false,"blocked":false}]},
+      {"id":3,"location":"Con credenciales","images":[{"videoUrl":"https://g/a.m3u8","isVideoAuthRequired":true}]},
+      {"id":4,"location":"Solo foto","images":[{"imageUrl":"/map/Cctv/4","isVideoAuthRequired":false}]}]}""", "nvroads", "Nevada")
+    pide("511: solo vídeo sin credenciales; POINT es (lon lat)", nv.size == 1 && Math.abs(nv[0].lat - 39.51) < 1e-9 &&
+        Math.abs(nv[0].lon + 119.85) < 1e-9 && nv[0].zona == "McCarran Blvd")
+    val l511 = Catalogo.listas().first { it.sitio == "Nevada" }
+    pide("511: pide el resto por páginas", l511.mas("""{"recordsTotal":1200,"data":[]}""").size == 2 &&
+        l511.url.contains("length%22%3A500"))
+    pide("búsqueda por estado, en español o en inglés", Catalogo.busca(mo + nv, "missouri").size == 1 &&
+        Catalogo.busca(mo + nv, "Misuri").size == 1 && Catalogo.busca(mo + nv, "estados unidos").size == 2)
     pide("JSON roto no revienta", Catalogo.caltrans("{\"data\":[{\"cctv\":").isEmpty() && Catalogo.tfl("nada").isEmpty())
-    if (args.getOrNull(0) == "vivo") {
-        val dir = File(args[1])
-        dir.listFiles()?.sortedBy { it.name }?.forEach { f ->
-            val l = if (f.name.startsWith("tfl")) Catalogo.tfl(f.readText()) else Catalogo.caltrans(f.readText())
-            pide("en vivo ${f.name}: ${l.size} cámaras con vídeo", l.isNotEmpty())
-            // Se busca por ciudad: si el organismo deja de darla, la búsqueda vuelve a fallar.
-            if (!f.name.startsWith("tfl")) {
-                val conZona = l.count { it.zona.isNotEmpty() }
-                pide("en vivo ${f.name}: $conZona con ciudad o condado (p. ej. «${l.firstOrNull { it.zona.isNotEmpty() }?.zona}»)", conZona * 2 >= l.size)
-            }
-        }
-    }
+    if (args.getOrNull(0) == "vivo") enVivo(::pide)
     println(if (fallos == 0) "CATÁLOGO: CUMPLE" else "CATÁLOGO: FALLA ($fallos)")
     if (fallos > 0) System.exit(1)
+}
+
+/**
+ * Las listas reales, pedidas ahora a cada organismo. Si una responde y no sale
+ * ninguna cámara, el formato ha cambiado: falla. Si un servidor no contesta,
+ * se avisa sin parar la compilación (es ajeno). De cada sitio se comprueba
+ * además que la primera cámara da una lista HLS de verdad.
+ */
+fun enVivo(pide: (String, Boolean) -> Unit) {
+    fun baja(url: String): String? = try {
+        val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+        c.connectTimeout = 15000; c.readTimeout = 30000
+        c.setRequestProperty("User-Agent", "ARGOS/1.0 (Android)")
+        try { if (c.responseCode == 200) c.inputStream.use { it.readBytes().toString(Charsets.UTF_8) } else { println("aviso  $url → HTTP ${c.responseCode}"); null } }
+        finally { c.disconnect() }
+    } catch (e: Exception) { println("aviso  $url → ${e.javaClass.simpleName}"); null }
+    val porSitio = LinkedHashMap<String, MutableList<eus.argos.core.CamaraPublica>>()
+    for (l in Catalogo.listas()) {
+        val t = baja(l.url) ?: continue
+        val primeras = l.lee(t)
+        pide("en vivo ${l.sitio} ${l.url.take(70)}: ${primeras.size} cámaras con vídeo", primeras.isNotEmpty())
+        val resto = l.mas(t).flatMap { u -> baja(u)?.let(l.lee).orEmpty() }
+        porSitio.getOrPut(l.sitio) { ArrayList() } += primeras + resto
+    }
+    var total = 0
+    for ((sitio, cams) in porSitio) {
+        val unicas = cams.distinctBy { it.id }; total += unicas.size
+        val m = unicas.firstOrNull { it.directo }
+        val hls = m?.let { baja(it.video) }
+        println("       $sitio: ${unicas.size} cámaras" + (if (m == null) "" else
+            " · la primera da ${if (hls?.startsWith("#EXTM3U") == true) "HLS" else "NADA"} (${m.nombre})"))
+    }
+    if (porSitio.containsKey("California")) {
+        val ca = porSitio.getValue("California")
+        pide("en vivo California: con ciudad o condado al menos la mitad", ca.count { it.zona.isNotEmpty() } * 2 >= ca.size)
+    }
+    pide("en vivo: $total cámaras en ${porSitio.size} sitios", total > 0)
 }

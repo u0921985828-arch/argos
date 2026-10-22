@@ -151,13 +151,9 @@ jobs:
       # si cambian de formato, el CI lo dice antes que el usuario.
       - name: Live public camera catalogs
         working-directory: android-native
-        run: |
-          mkdir -p /tmp/catalogos
-          curl -fsSL -m 30 -o /tmp/catalogos/caltrans-d4.json https://cwwp2.dot.ca.gov/data/d4/cctv/cctvStatusD04.json || true
-          curl -fsSL -m 30 -o /tmp/catalogos/caltrans-d7.json https://cwwp2.dot.ca.gov/data/d7/cctv/cctvStatusD07.json || true
-          curl -fsSL -m 30 -o /tmp/catalogos/tfl.json https://api.tfl.gov.uk/Place/Type/JamCam || true
-          ls -l /tmp/catalogos
-          ./gradlew --no-daemon :core:catalogo -Pvivo=/tmp/catalogos
+        # Cada lista que trae la app, pedida ahora a su organismo, y la
+        # primera cámara de cada sitio comprobada como HLS de verdad.
+        run: ./gradlew --no-daemon :core:catalogo -Pvivo=red
 
       # Release, no depuración: no depurable y sin `run-as` sobre la memoria.
       # Con el secreto ARGOS_KEYSTORE_B64 se firma con la clave de tienda; sin

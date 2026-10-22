@@ -668,30 +668,32 @@ class MainActivity : ComponentActivity() {
         catalogo = emptyList()
         pintaLista()
         Thread({
-            val C = eus.argos.core.Catalogo
-            val listas = C.DISTRITOS.map { "California" to C.urlCaltrans(it) } + ("Londres" to C.URL_TFL)
             val todas = ArrayList<eus.argos.core.CamaraPublica>()
             val fallos = java.util.concurrent.ConcurrentHashMap<String, String>()
-            val pool = java.util.concurrent.Executors.newFixedThreadPool(4)
-            for ((sitio, url) in listas) pool.execute {
+            val pool = java.util.concurrent.Executors.newFixedThreadPool(6)
+            fun baja(url: String): String {
+                val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                c.connectTimeout = 10000; c.readTimeout = 20000
+                c.setRequestProperty("User-Agent", "ARGOS/1.0 (Android)")
+                c.setRequestProperty("Accept", "application/json")
+                return try {
+                    if (c.responseCode != 200) throw java.io.IOException("HTTP ${c.responseCode}")
+                    c.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
+                } finally { c.disconnect() }
+            }
+            for (l in eus.argos.core.Catalogo.listas()) pool.execute {
                 try {
-                    val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-                    c.connectTimeout = 10000; c.readTimeout = 20000
-                    c.setRequestProperty("User-Agent", "ARGOS/1.0 (Android)")
-                    c.setRequestProperty("Accept", "application/json")
-                    val txt = try {
-                        if (c.responseCode != 200) throw java.io.IOException("HTTP ${c.responseCode}")
-                        c.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
-                    } finally { c.disconnect() }
-                    val nuevas = if (sitio == "Londres") C.tfl(txt) else C.caltrans(txt)
+                    val txt = baja(l.url)
+                    // Las que vienen por páginas: el resto, en el mismo hilo.
+                    val nuevas = l.lee(txt) + l.mas(txt).flatMap { u -> runCatching { l.lee(baja(u)) }.getOrDefault(emptyList()) }
                     if (nuevas.isEmpty()) throw java.io.IOException("lista vacía")
                     synchronized(todas) {
                         todas += nuevas
-                        catalogo = todas.sortedWith(compareBy({ it.proveedor }, { it.zona }, { it.nombre }))
+                        catalogo = todas.distinctBy { it.id }.sortedWith(compareBy({ it.proveedor }, { it.zona }, { it.nombre }))
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "ARGOS red: $url → ${e.javaClass.simpleName}: ${e.message}")
-                    fallos.putIfAbsent(sitio, when (e) {
+                    Log.w(TAG, "ARGOS red: ${l.url} → ${e.javaClass.simpleName}: ${e.message}")
+                    fallos.putIfAbsent(l.sitio, when (e) {
                         is java.net.UnknownHostException -> "sin conexión"
                         is java.net.SocketTimeoutException -> "no responde"
                         else -> e.message ?: e.javaClass.simpleName
@@ -701,7 +703,7 @@ class MainActivity : ComponentActivity() {
             }
             pool.shutdown()
             pool.awaitTermination(3, java.util.concurrent.TimeUnit.MINUTES)
-            val n = synchronized(todas) { todas.size }
+            val n = catalogo?.size ?: 0
             Log.i(TAG, "ARGOS red: catálogo de cámaras públicas, $n con vídeo" +
                 (if (fallos.isEmpty()) "" else " · fallos: $fallos"))
             fallosCatalogo = fallos.entries.joinToString(" · ") { "${it.key}: ${it.value}" }
@@ -710,7 +712,7 @@ class MainActivity : ComponentActivity() {
             runOnUiThread { pintaLista() }
             // Sin búsqueda salen primero las de menos retraso: se mide una
             // muestra de cada sitio y de cada distrito.
-            catalogo?.let { mide(eus.argos.core.Retraso.muestra(it, 160, System.currentTimeMillis()), false) }
+            catalogo?.let { mide(eus.argos.core.Retraso.muestra(it, 240, System.currentTimeMillis()), false) }
         }, "argos-catalogo").start()
     }
 
@@ -814,8 +816,8 @@ class MainActivity : ComponentActivity() {
             todas.isEmpty() && cargandoCatalogo -> "Buscando cámaras públicas…"
             todas.isEmpty() -> "No se pudo bajar la lista" + (if (fallosCatalogo.isEmpty()) "" else " ($fallosCatalogo)") +
                 ". Toca aquí para reintentar."
-            filtradas.isEmpty() -> "Ninguna con «${filtro.trim()}». Hay cámaras de California (EE. UU.) y de Londres: " +
-                "prueba «Los Angeles», «San Diego», «Oakland» o «London»."
+            filtradas.isEmpty() -> "Ninguna con «${filtro.trim()}». Hay cámaras de ${eus.argos.core.Catalogo.SITIOS}: " +
+                "prueba una ciudad («Los Angeles», «Minneapolis», «Kansas City»), un estado o «London»."
             else -> (if (filtradas.size > 400) "400 de ${filtradas.size}" else "${filtradas.size}") +
                 " cámara${if (filtradas.size == 1) "" else "s"}" +
                 (if (medidas > 0) ", primero las de menos retraso" else "") +

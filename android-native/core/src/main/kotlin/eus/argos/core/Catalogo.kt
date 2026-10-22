@@ -15,6 +15,42 @@ data class CamaraPublica(val id: String, val nombre: String, val lat: Double, va
                          val zona: String = "")
 
 object Catalogo {
+    /**
+     * Una lista que publica un organismo: dónde está, cómo se lee y, si viene
+     * por páginas, qué más hay que pedir a la vista de la primera.
+     */
+    class Lista(val sitio: String, val url: String, val lee: (String) -> List<CamaraPublica>,
+                val mas: (String) -> List<String> = { emptyList() })
+
+    /**
+     * Todas las listas con VÍDEO y sin clave. Probadas una a una desde el CI
+     * (`.github/scripts/sondas-camaras.py`): Georgia, Florida y Connecticut
+     * piden credenciales para el vídeo; Arizona, Idaho, Pensilvania, Utah,
+     * Alaska, Alberta, Ontario y Nebraska solo dan fotos; Massachusetts da
+     * MJPEG de un tercero con clave. Esas no están.
+     */
+    fun listas(): List<Lista> =
+        DISTRITOS.map { d -> Lista("California", urlCaltrans(d), ::caltrans) } +
+        Lista("Londres", URL_TFL, ::tfl) +
+        Lista("Delaware", "https://tmc.deldot.gov/json/videocamera.json", ::deldot) +
+        Lista("Misuri", "https://traveler.modot.org/timconfig/feed/desktop/StreamingCams2.json", ::modot) +
+        CARS.map { (e, nombre) -> Lista(nombre, "https://${e}tg.carsprogram.org/cameras_v1/api/cameras", { t -> cars(t, e, nombre) }) } +
+        P511.map { (host, nombre) ->
+            val clave = host.removePrefix("www.").substringBefore('.')
+            Lista(nombre, url511(host, 0), { t -> p511(t, clave, nombre) }, { t ->
+                val total = num((Json.lee(t) as? Map<*, *>)?.get("recordsTotal")).takeIf { it.isFinite() }?.toInt() ?: 0
+                (PAGINA_511 until minOf(total, 5000) step PAGINA_511).map { url511(host, it) }
+            })
+        }
+
+    /** CARS (Castle Rock): estado → nombre. Iowa, Minnesota, Indiana y Kansas dan HLS público. */
+    private val CARS = listOf("ia" to "Iowa", "mn" to "Minnesota", "in" to "Indiana", "ks" to "Kansas")
+    /** Plataforma «511» (Iteris): solo donde el vídeo no pide credenciales. */
+    private val P511 = listOf("www.nvroads.com" to "Nevada", "www.511la.org" to "Luisiana", "511wi.gov" to "Wisconsin")
+    const val PAGINA_511 = 500
+    fun url511(host: String, desde: Int) = "https://$host/List/GetData/Cameras?query=" +
+        java.net.URLEncoder.encode("""{"columns":[{"data":null,"name":""}],"start":$desde,"length":$PAGINA_511}""", "UTF-8") + "&lang=en"
+
     /** Distritos de Caltrans con vídeo en directo (HLS). */
     val DISTRITOS = listOf("3", "4", "5", "6", "7", "8", "10", "11", "12")
     fun urlCaltrans(d: String) = "https://cwwp2.dot.ca.gov/data/d$d/cctv/cctvStatusD${d.padStart(2, '0')}.json"
@@ -53,13 +89,83 @@ object Catalogo {
         }
     }
 
+    /** DelDOT: `{videoCameras: [{id, title, county, lat, lon, enabled, urls: {m3u8s, m3u8}}]}`. */
+    fun deldot(json: String): List<CamaraPublica> {
+        val filas = (Json.lee(json) as? Map<*, *>)?.get("videoCameras") as? List<*> ?: return emptyList()
+        return filas.mapNotNull { f ->
+            val c = f as? Map<*, *> ?: return@mapNotNull null
+            if (c["enabled"] == false) return@mapNotNull null
+            val u = c["urls"] as? Map<*, *> ?: return@mapNotNull null
+            val video = listOf(u["m3u8s"], u["m3u8"]).mapNotNull { it as? String }.firstOrNull { it.startsWith("http") }
+                ?: return@mapNotNull null
+            CamaraPublica("deldot:${c["id"]}", (c["title"] as? String)?.trim().orEmpty().ifEmpty { "sin nombre" },
+                num(c["lat"]), num(c["lon"]), video, "Delaware", true, (c["county"] as? String)?.trim().orEmpty())
+        }
+    }
+
+    /** MoDOT: `[{location, x: lon, y: lat, html: playlist.m3u8}]`. */
+    fun modot(json: String): List<CamaraPublica> {
+        val filas = Json.lee(json) as? List<*> ?: return emptyList()
+        return filas.mapNotNull { f ->
+            val c = f as? Map<*, *> ?: return@mapNotNull null
+            val video = (c["html"] as? String)?.takeIf { it.startsWith("http") && ".m3u8" in it } ?: return@mapNotNull null
+            val id = video.substringAfter("/rtplive/", "").substringBefore('/').ifEmpty { video.hashCode().toString() }
+            CamaraPublica("modot:$id", (c["location"] as? String)?.trim().orEmpty().ifEmpty { "sin nombre" },
+                num(c["y"]), num(c["x"]), video, "Misuri", true)
+        }.distinctBy { it.id }
+    }
+
+    /** CARS: `[{id, public, active, name, location: {latitude, longitude, cityReference}, views: [{type, url}]}]`. */
+    fun cars(json: String, estado: String, nombre: String): List<CamaraPublica> {
+        val filas = Json.lee(json) as? List<*> ?: return emptyList()
+        return filas.mapNotNull { f ->
+            val c = f as? Map<*, *> ?: return@mapNotNull null
+            if (c["public"] == false || c["active"] == false) return@mapNotNull null
+            val video = (c["views"] as? List<*>).orEmpty().mapNotNull { (it as? Map<*, *>)?.get("url") as? String }
+                .firstOrNull { it.startsWith("http") && ".m3u8" in it } ?: return@mapNotNull null
+            val loc = c["location"] as? Map<*, *> ?: emptyMap<String, Any>()
+            val ciudad = (loc["cityReference"] as? String)?.trim().orEmpty()
+                .removePrefix("in ").removePrefix("near ").trim()
+            CamaraPublica("cars-$estado:${c["id"]}", (c["name"] as? String)?.trim().orEmpty().ifEmpty { "sin nombre" },
+                num(loc["latitude"]), num(loc["longitude"]), video, nombre, true, ciudad)
+        }
+    }
+
+    /**
+     * Plataforma 511: `{recordsTotal, data: [{id, location, roadway, latLng: {geography: {wellKnownText: "POINT (lon lat)"}},
+     * images: [{videoUrl, isVideoAuthRequired, videoDisabled, disabled, blocked}]}]}`. Solo vídeo sin credenciales.
+     */
+    fun p511(json: String, clave: String, nombre: String): List<CamaraPublica> {
+        val filas = (Json.lee(json) as? Map<*, *>)?.get("data") as? List<*> ?: return emptyList()
+        return filas.mapNotNull { f ->
+            val c = f as? Map<*, *> ?: return@mapNotNull null
+            val video = (c["images"] as? List<*>).orEmpty().mapNotNull { it as? Map<*, *> }.firstOrNull { im ->
+                (im["videoUrl"] as? String)?.let { it.startsWith("http") && ".m3u8" in it } == true &&
+                    im["isVideoAuthRequired"] != true && im["videoDisabled"] != true && im["disabled"] != true && im["blocked"] != true
+            }?.get("videoUrl") as? String ?: return@mapNotNull null
+            val punto = (((c["latLng"] as? Map<*, *>)?.get("geography") as? Map<*, *>)?.get("wellKnownText") as? String)
+                ?.substringAfter('(')?.substringBefore(')')?.trim()?.split(Regex("\\s+"))
+            val zona = listOf(c["city"], c["county"], c["roadway"]).mapNotNull { (it as? String)?.trim() }
+                .filter { it.isNotEmpty() }.distinct().joinToString(" · ")
+            CamaraPublica("511-$clave:${c["id"]}", (c["location"] as? String)?.trim().orEmpty().ifEmpty { "sin nombre" },
+                punto?.getOrNull(1)?.toDoubleOrNull() ?: Double.NaN, punto?.getOrNull(0)?.toDoubleOrNull() ?: Double.NaN,
+                video, nombre, true, zona)
+        }
+    }
+
     /** Otros nombres con los que se busca cada sitio: en español y en inglés. */
+    private const val EEUU = "ee uu eeuu estados unidos usa us america"
     private val ALIAS = mapOf(
-        "California" to "california ee uu eeuu estados unidos usa us america",
+        "California" to "california",
+        "Delaware" to "delaware", "Misuri" to "misuri missouri", "Iowa" to "iowa", "Minnesota" to "minnesota",
+        "Indiana" to "indiana", "Kansas" to "kansas", "Nevada" to "nevada", "Luisiana" to "luisiana louisiana",
+        "Wisconsin" to "wisconsin",
         "Londres" to "londres london reino unido uk inglaterra england gran bretana")
+    val SITIOS = "California, Delaware, Indiana, Iowa, Kansas, Luisiana, Minnesota, Misuri, Nevada y Wisconsin (EE. UU.), y Londres"
 
     /** Lo que se busca de una cámara: nombre, ciudad, condado y sitio, sin tildes ni mayúsculas. */
-    fun texto(c: CamaraPublica) = Ask.norm(c.nombre + " " + c.zona + " " + c.proveedor + " " + (ALIAS[c.proveedor] ?: ""))
+    fun texto(c: CamaraPublica) = Ask.norm(c.nombre + " " + c.zona + " " + c.proveedor + " " + (ALIAS[c.proveedor] ?: "") +
+        (if (c.proveedor != "Londres") " $EEUU" else ""))
 
     /**
      * Las cámaras que casan con lo escrito: cada palabra tiene que estar, en
@@ -71,7 +177,7 @@ object Catalogo {
         return todas.filter { c -> val t = texto(c); palabras.all { t.contains(it) } }
     }
 
-    private fun num(v: Any?): Double = when (v) { is Number -> v.toDouble(); is String -> v.toDoubleOrNull() ?: Double.NaN; else -> Double.NaN }
+    internal fun num(v: Any?): Double = when (v) { is Number -> v.toDouble(); is String -> v.toDoubleOrNull() ?: Double.NaN; else -> Double.NaN }
 }
 
 /**

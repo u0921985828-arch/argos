@@ -331,9 +331,15 @@ giroscopio (sin retraso): un temblor de 3 Hz baja de 0,85° a 0,15°; la
 inclinación a propósito no se toca y la corrección no pasa de ±2°.
 
 **Fuentes por red (nativa).** Además de la cámara del móvil: las cámaras
-públicas de tráfico (Caltrans en directo por HLS, TfL en clips), que la app
-baja y lista ella sola (`core/Catalogo.kt`, el mismo catálogo que
-`cameras.js`), y cámaras IP propias por RTSP. Media3 decodifica, un
+públicas de tráfico con VÍDEO y sin clave, que la app baja y lista ella sola
+(`core/Catalogo.kt`): Caltrans, Delaware, Misuri, Iowa, Minnesota, Indiana,
+Kansas (CARS), Nevada, Luisiana y Wisconsin (plataforma 511) en directo por
+HLS, y TfL en clips; y cámaras IP propias por RTSP. Qué organismos valen se
+decidió sondeándolos desde el CI (`.github/scripts/sondas-camaras.py`):
+Georgia, Florida y Connecticut piden credenciales para el vídeo, y casi todo
+lo demás del mundo (DGT, Ontario, Alberta, Arizona…) son fotos fijas, que no
+sirven para seguir trayectorias. `:core:catalogo -Pvivo=red` pide cada lista
+real y la primera cámara de cada sitio. Media3 decodifica, un
 TextureView pinta y se toma una imagen cada 80 ms para el mismo análisis. Al
 cambiar de fuente se empieza una escena nueva (núcleo y cerebro), y cada
 cámara aprende lo suyo y lo conserva entre sesiones (`memoria/escenas/`,
