@@ -39,8 +39,8 @@ jobs:
           curl -fsSL -o yolox_nano.onnx $base/yolox_nano.onnx
           printf '%s\n' "7860ae79de6c89a3c1eb72ae9a2756c0ccfbe04b7791bb5880afabd97855a411  yolox_l.onnx" \
                         "cd28f55fbbc1829f99d9ac9b38a16d259a22889739c8728ea877610201feff7b  yolox_nano.pth" | sha256sum -c -
-          curl -fsSL -o bus.jpg https://raw.githubusercontent.com/ultralytics/yolov5/master/data/images/bus.jpg || true
-          curl -fsSL -o zidane.jpg https://raw.githubusercontent.com/ultralytics/yolov5/master/data/images/zidane.jpg || true
+          curl -fsSL -o bus.jpg https://github.com/ultralytics/assets/releases/download/v0.0.0/bus.jpg || true
+          curl -fsSL -o zidane.jpg https://github.com/ultralytics/assets/releases/download/v0.0.0/zidane.jpg || true
           curl -fsSL -o dog.jpg https://raw.githubusercontent.com/pjreddie/darknet/master/data/dog.jpg || true
       - name: Ronda anterior
         run: |

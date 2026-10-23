@@ -97,10 +97,15 @@ val probeFile = rootProject.file("../autoprueba.jpg")
 // La voz Piper es opcional: si el CI la descargó a la raíz, va dentro; si no,
 // el chat habla con la voz del sistema. Su ficha (licencia) viaja con ella.
 val vozFiles = listOf("voz.onnx", "voz.onnx.json", "voz-ficha.txt").map { rootProject.file("../$it") }
+// El detector ajustado a las cámaras de tráfico (android-native/entrena) es
+// opcional: si el CI lo trajo a la raíz, va dentro y se usa en las cámaras por
+// red; la cámara del móvil sigue con el de serie, que es el de cerca.
+val traficoFile = rootProject.file("../argos_trafico.onnx")
 val syncAssets by tasks.registering(Copy::class) {
     from(modelFile)
     from(probeFile)
     from(vozFiles.filter { it.exists() })
+    if (traficoFile.exists()) from(traficoFile)
     into(layout.buildDirectory.dir("generated/argos-assets"))
     doFirst {
         if (!modelFile.exists())

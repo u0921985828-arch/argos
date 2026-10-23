@@ -298,7 +298,9 @@ class MainActivity : ComponentActivity() {
             val borrados = store.applyRetention(System.currentTimeMillis() / 1000.0)
             Log.i(TAG, "ARGOS nativo memoria: retención aplicada, $borrados día(s) borrados")
             this.store = store
-            val p = Pipeline(model, threads, store, java.io.File(filesDir, "memoria/comportamiento.txt"))
+            val trafico = runCatching { assets.open("argos_trafico.onnx").use { it.readBytes() } }.getOrNull()
+            val p = Pipeline(model, threads, store, java.io.File(filesDir, "memoria/comportamiento.txt"), trafico)
+            Log.i(TAG, "ARGOS nativo detector de tráfico: " + (if (trafico != null) "entrenado con cámaras públicas, ${trafico.size / 1024} KB" else "no viene; se usa el de serie"))
             val warm = p.warmup()
             // El proveedor que se nombra es el que se usa: aquí no se pide
             // ninguno más que la CPU, así que no hay nada que pueda caerse en

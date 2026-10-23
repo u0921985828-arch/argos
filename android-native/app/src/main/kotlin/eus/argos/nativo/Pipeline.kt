@@ -37,7 +37,7 @@ const val TAG = "ARGOS"
  * del coste del frame en el navegador.
  */
 class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStore? = null,
-               behaviourFile: java.io.File? = null) {
+               behaviourFile: java.io.File? = null, traficoBytes: ByteArray? = null) {
     /** Dónde se guarda lo normal de la escena actual: uno por cámara, para que cada una aprenda lo suyo. */
     @Volatile private var archivoEscena: java.io.File? = behaviourFile
     /**
@@ -170,6 +170,16 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
     private var small = ByteArray(0)
     private var detBuf = ByteArray(0)
 
+    /*
+     * El detector ajustado a las cámaras de tráfico, si viaja en el APK: se usa
+     * en las cámaras FIJAS por red. La cámara del móvil sigue con el de serie,
+     * que es el que conoce lo de cerca.
+     */
+    private val sesionTrafico: OrtSession?
+    val detectorTrafico: YoloxDetector?
+    /** El detector de la escena actual. */
+    private val detActual: YoloxDetector get() = if (fuenteFija) detectorTrafico ?: detector else detector
+
     init {
         this.threads = threads
         val opts = OrtSession.SessionOptions().apply {
@@ -194,7 +204,20 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
                 }
             }
         }
+        sesionTrafico = traficoBytes?.let { env.createSession(it, opts) }
+        detectorTrafico = sesionTrafico?.let { s ->
+            val nombre = s.inputNames.first()
+            YoloxDetector(416) { tensor ->
+                OnnxTensor.createTensor(env, FloatBuffer.wrap(tensor), longArrayOf(1, 3, 416, 416)).use { t ->
+                    s.run(mapOf(nombre to t)).use { r ->
+                        val fb = (r[0] as OnnxTensor).floatBuffer
+                        FloatArray(fb.remaining()).also { fb.get(it) }
+                    }
+                }
+            }
+        }
     }
+
 
     /**
      * Primera inferencia, pagada al arrancar. ORT reserva la arena y prepara
@@ -205,6 +228,7 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
      */
     fun warmup(): Long {
         val zeros = ByteArray(416 * 416 * 4)
+        detectorTrafico?.detect(zeros, 416 * 4, 416, 416)
         detector.detect(zeros, 416 * 4, 416, 416)
         // Solo la inferencia, sin letterbox ni decodificación: es lo mismo que
         // mide el calentamiento de la web (un `sess.run` sobre ceros), y sin
@@ -327,7 +351,8 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
                 val modoPrincipal = if (autoZoomOn) autoZoom.mode else zoom
                 val z = if (autoZoomOn) autoZoom.next() else zoom
                 val esSondeo = autoZoomOn && z != modoPrincipal
-                val crudas: List<DetBox> = detector.detect(buf, rowStride, w, h, z)
+                val d = detActual
+                val crudas: List<DetBox> = d.detect(buf, rowStride, w, h, z)
                 // En una cámara fija por red, los rótulos aprendidos no son
                 // objetos: ni entran en el seguimiento ni empujan al zoom.
                 val fj = fijos
@@ -336,7 +361,7 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
                 } else crudas
                 if (autoZoomOn) autoZoom.report(z, dets)
                 lastZoom = z
-                lastTiles = detector.lastTiles
+                lastTiles = d.lastTiles
                 val ms = (System.nanoTime() - t0) / 1e6
                 if (!esSondeo) {
                     memory.update(dets.map { it.shifted(camX, camY) }, SystemClock.elapsedRealtime().toDouble())
@@ -344,7 +369,7 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
                 }
                 val a = if (inferences == 0L) 1.0 else 0.2
                 detMs = detMs * (1 - a) + ms * a
-                inferMs = inferMs * (1 - a) + detector.lastInferMs * a
+                inferMs = inferMs * (1 - a) + d.lastInferMs * a
                 lastDets = dets.size
                 inferences++
             } catch (e: Throwable) {
@@ -372,5 +397,6 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
         try { detExec.awaitTermination(3, java.util.concurrent.TimeUnit.SECONDS) }
         catch (_: InterruptedException) { }
         session.close()
+        sesionTrafico?.close()
     }
 }

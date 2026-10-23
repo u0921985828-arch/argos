@@ -92,6 +92,19 @@ jobs:
             https://raw.githubusercontent.com/pjreddie/darknet/master/data/dog.jpg
           test "$(stat -c%s autoprueba.jpg)" -gt 100000
 
+      # El detector ajustado a las cámaras de tráfico (entrena.yml), solo si
+      # hay uno aprobado: su sha256 se fija en el repositorio tras mirar su
+      # informe. Sin él, la app usa el de serie para todo.
+      - name: Fetch approved traffic detector
+        run: |
+          if [ -f android-native/entrena/modelo-trafico.sha256 ]; then
+            git fetch -q origin modelo-argos
+            git show origin/modelo-argos:argos_trafico.onnx > argos_trafico.onnx
+            sha256sum -c android-native/entrena/modelo-trafico.sha256
+          else
+            echo "sin detector de tráfico aprobado: se usa el de serie"
+          fi
+
       # La voz de ARGOS: Piper es_ES «davefx», calidad media, CC0. Se fija por
       # su sha256: si en Hugging Face cambia el fichero, el CI lo dice en vez
       # de meter en el APK una voz distinta.
