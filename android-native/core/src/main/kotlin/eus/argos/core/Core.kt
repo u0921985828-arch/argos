@@ -489,6 +489,8 @@ class Engine(
     /** La cámara se ha movido en el último medio segundo, más o menos. */
     val cameraMoving: Boolean get() = frameIdx - lastMove < 15 || cameraUnstable
     val analysisW: Int get() = w
+    /** Luma del modelo de fondo, a la resolución del análisis (solo lectura, para quien mire fuera del núcleo). */
+    val fondo: FloatArray? get() = bg?.mean
 
     private fun ensure(fw: Int, fh: Int) {
         if (w == fw && h == fh && bg != null) return

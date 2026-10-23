@@ -260,6 +260,13 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
         val det = if (fresh.getAndSet(false))
             memory.forTracking()?.map { it.shifted(-engine.camX * sc, -engine.camY * sc) } else null
         val r = engine.analyze(small, aw, ah, w, h, det)
+        // En una cámara fija, un «movimiento» que solo es luz (un faro que barre
+        // el asfalto, su reflejo, una farola que se enciende) no se enseña.
+        val fondo = engine.fondo
+        val cajas = if (fuenteFija && fondo != null && engine.analysisW == aw) r.boxes.filter { b ->
+            b.klassSrc == "det" || !eus.argos.core.Luz.esLuz(small, fondo, aw, ah, (b.x1 / sc).toInt(), (b.y1 / sc).toInt(),
+                Math.ceil(b.x2 / sc).toInt(), Math.ceil(b.y2 / sc).toInt())
+        } else r.boxes
         val t3 = System.nanoTime()
 
         // La escena: física en coordenadas de escena (sirve aunque el móvil se
@@ -289,7 +296,7 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
         }
         lastT = t0
         frames++
-        return Frame(r.boxes, w, h, info.associateBy { it.id }, engine.camX * sc, engine.camY * sc,
+        return Frame(cajas, w, h, info.associateBy { it.id }, engine.camX * sc, engine.camY * sc,
                      engine.cameraMoving, brain.people, brain.vehicles, brain.seen["person"]?.size ?: 0,
                      brain.scale.valid, brain.scale.n, brain.events.take(3), behaviourMature, behaviourReady,
                      colgada, fijos.fijas)
@@ -324,7 +331,9 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
                 // En una cámara fija por red, los rótulos aprendidos no son
                 // objetos: ni entran en el seguimiento ni empujan al zoom.
                 val fj = fijos
-                val dets = if (fuenteFija) synchronized(fj) { fj.filtra(crudas, h, SystemClock.elapsedRealtime() / 1000.0) } else crudas
+                val dets = if (fuenteFija) synchronized(fj) {
+                    fj.filtra(crudas, h, SystemClock.elapsedRealtime() / 1000.0) { d -> eus.argos.core.Luz.fraccion(buf, rowStride, w, h, d) }
+                } else crudas
                 if (autoZoomOn) autoZoom.report(z, dets)
                 lastZoom = z
                 lastTiles = detector.lastTiles

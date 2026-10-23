@@ -50,6 +50,50 @@ fun main() {
     for (i in 0 until 600) grande += b.filtra(listOf(caja(40.0, 205.0, 90.0, 34.0)), h, i * 0.5).size
     pide("vehículo grande en la franja de abajo: sale siempre ($grande/600)", grande == 600)
 
+    // En el centro: un semáforo tomado por persona, quieto del todo, sí es fijo (a los 3 min)...
+    val sem = Fijos()
+    var semAntes = 0; var semDespues = 0
+    for (i in 0 until 500) {
+        val t = i * 0.5
+        val sale = sem.filtra(listOf(caja(200.0, 100.0, 6.0, 18.0, "person", 0.4)), h, t).size
+        if (t < 170) semAntes += sale else if (t > 190) semDespues += sale
+    }
+    pide("semáforo tomado por persona: sale al principio ($semAntes) y a los 3 min ya no ($semDespues)", semAntes > 300 && semDespues == 0)
+    // ...pero una persona de verdad, parada mucho rato, se balancea: sigue saliendo.
+    val per = Fijos()
+    var perVista = 0
+    val rnd = java.util.Random(3)
+    for (i in 0 until 800) {
+        val dx = rnd.nextGaussian() * 2.0; val dy = rnd.nextGaussian() * 2.5
+        perVista += per.filtra(listOf(caja(200.0 + dx, 100.0 + dy, 16.0, 40.0, "person", 0.6)), h, i * 0.5).size
+    }
+    pide("persona parada que se balancea: sale siempre ($perVista/800)", perVista == 800)
+    // Un «vehículo» que es casi todo luz y no se mueve (farola, cartel): fijo. Un coche aparcado: no.
+    val far = Fijos(); var farDespues = 0; val apar = Fijos(); var aparVisto = 0
+    for (i in 0 until 500) {
+        val t = i * 0.5
+        val d = caja(250.0, 90.0, 14.0, 10.0)
+        val sale = far.filtra(listOf(d), h, t) { 0.7 }.size
+        if (t > 190) farDespues += sale
+        aparVisto += apar.filtra(listOf(caja(150.0, 120.0, 30.0, 18.0)), h, t) { 0.1 }.size
+    }
+    pide("luz quieta tomada por vehículo: deja de salir ($farDespues); coche aparcado oscuro sale siempre ($aparVisto/500)",
+        farDespues == 0 && aparVisto == 500)
+
+    // Movimiento que solo es luz: el faro aclara; un objeto aclara y oscurece.
+    val aw = 64; val ah = 48
+    val fondo = FloatArray(aw * ah) { 40f }
+    fun imagen(f: (Int, Int) -> Int) = ByteArray(aw * ah * 4).also { a ->
+        for (y in 0 until ah) for (x in 0 until aw) { val v = f(x, y).coerceIn(0, 255).toByte(); val i = (y * aw + x) * 4; a[i] = v; a[i + 1] = v; a[i + 2] = v; a[i + 3] = -1 } }
+    val faro = imagen { x, y -> if (x in 10..29 && y in 10..19) 160 else 40 }
+    val coche = imagen { x, y -> if (x in 10..29 && y in 10..19) (if ((x + y) % 3 == 0) 5 else 120) else 40 }
+    pide("faro sobre el asfalto: es luz", eus.argos.core.Luz.esLuz(faro, fondo, aw, ah, 8, 8, 32, 22))
+    pide("coche que pasa (partes más claras y más oscuras): no es luz", !eus.argos.core.Luz.esLuz(coche, fondo, aw, ah, 8, 8, 32, 22))
+    pide("casi nada cambia: no se decide que sea luz", !eus.argos.core.Luz.esLuz(imagen { _, _ -> 40 }, fondo, aw, ah, 8, 8, 32, 22))
+    val blanca = imagen { x, y -> if (x < 32) 250 else 30 }
+    val fr = eus.argos.core.Luz.fraccion(blanca, aw * 4, aw, ah, DetBox(0.0, 0.0, 64.0, 48.0, "vehicle", 0.5))
+    pide("fracción de luz: media caja blanca ≈ 0,5 (%.2f)".format(fr), Math.abs(fr - 0.5) < 0.05)
+
     // Lo aprendido se guarda por cámara: la vez siguiente, fuera desde el principio.
     val texto = f.serializa(200.0)
     val otra = Fijos().apply { lee(texto, 1000.0) }

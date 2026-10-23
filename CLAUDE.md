@@ -365,6 +365,15 @@ por el detector en cuadro entero, teselas ×1, ×2 y ×3:
   en las franjas de arriba y abajo, lo que el detector repite en el mismo
   sitio 2 minutos se ignora y se recuerda por cámara. En el centro no: un
   coche parado es un coche.
+- Luces y reflejos. El detector puso «vehículo» en destellos de faros y
+  farolas y «persona» en semáforos; la resta de fondo ve «movimiento» donde
+  un faro barre el asfalto. `Fijos` también en el centro, a los 3 minutos,
+  pero solo para una persona o bici que no se balancea nada y un vehículo
+  que es casi todo luz (≥ 45 % de píxeles casi blancos): un coche aparcado
+  oscuro sigue siendo coche. `Luz.esLuz`: un «movimiento» donde lo cambiado
+  solo se ha ACLARADO es luz, no objeto (un objeto deja partes más oscuras
+  y más claras a la vez). Probado con casos sintéticos, no sobre vídeo real
+  de noche: las ráfagas de 4 s no bastan para que el fondo aprenda.
 - 4 de 33 ráfagas eran la misma imagen repetida: cámara colgada con el
   servidor vivo. `Congelada` lo dice en vez de parecer que el análisis falla.
 - La muestra era de noche en EE. UU.: de noche el detector apenas ve coches
