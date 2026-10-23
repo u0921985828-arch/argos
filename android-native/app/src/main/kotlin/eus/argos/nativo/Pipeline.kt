@@ -51,7 +51,9 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
                 val moving: Boolean = false, val people: Int = 0, val vehicles: Int = 0,
                 val peopleSeen: Int = 0, val scaleValid: Boolean = false, val scaleN: Int = 0,
                 val events: List<SceneEvent> = emptyList(),
-                val behaviourMature: Int = 0, val behaviourReady: Boolean = false)
+                val behaviourMature: Int = 0, val behaviourReady: Boolean = false,
+                /** La cámara por red da siempre la misma imagen: está colgada, no es la escena quieta. */
+                val congelada: Boolean = false, val rotulos: Int = 0)
 
     // Con el móvil en la mano todo se mueve: el núcleo estima el desplazamiento
     // de la imagen y mantiene el fondo y las pistas alineados con la escena.
@@ -87,8 +89,38 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
         }
     }
 
+    /*
+     * Lo aprendido de una cámara FIJA por red, además de lo normal de la
+     * escena: dónde están sus rótulos sobreimpresos y qué zoom le va. Se guarda
+     * junto a lo demás de esa cámara (`<archivo>.fijos`).
+     */
+    @Volatile private var fuenteFija = false
+    @Volatile private var fijos = eus.argos.core.Fijos()
+    private val congelada = eus.argos.core.Congelada()
+    private fun archivoFijos(f: java.io.File) = java.io.File(f.parentFile, f.name.removeSuffix(".txt") + ".fijos")
+
+    private fun cargaFijos(archivo: java.io.File?) {
+        val fj = eus.argos.core.Fijos()
+        var modo = 0.0
+        if (fuenteFija) archivo?.let(::archivoFijos)?.takeIf { it.exists() }?.let { f ->
+            runCatching {
+                val t = f.readText()
+                t.lineSequence().firstOrNull { it.startsWith("zoom ") }?.substringAfter(' ')?.toDoubleOrNull()?.let { modo = it }
+                fj.lee(t, SystemClock.elapsedRealtime() / 1000.0)
+            }
+        }
+        fijos = fj
+        autoZoom = AutoZoom().apply { empiezaEn(modo) }
+    }
+
     private fun saveBehaviour(sync: Boolean) {
         val f = archivoEscena ?: return
+        if (fuenteFija) {
+            val fj = fijos; val modo = autoZoom.mode
+            val txt = "zoom $modo\n" + synchronized(fj) { fj.serializa(SystemClock.elapsedRealtime() / 1000.0) }
+            val job = Runnable { runCatching { f.parentFile?.mkdirs(); archivoFijos(f).writeText(txt) } }
+            if (sync) job.run() else try { ioExec.execute(job) } catch (_: Exception) {}
+        }
         val txt = brain.behaviour?.serialize() ?: return
         val job = Runnable { runCatching { f.parentFile?.mkdirs(); f.writeText(txt) } }
         if (sync) job.run() else try { ioExec.execute(job) } catch (_: Exception) {}
@@ -116,7 +148,7 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
     @Volatile var zoom = 0.0
     /** Zoom automático: el detector elige el modo según lo que encuentra. */
     @Volatile var autoZoomOn = true
-    val autoZoom = AutoZoom()
+    @Volatile var autoZoom = AutoZoom(); private set
     /** Modo de la última pasada (0 cuadro entero, 2 teselas), para el panel. */
     @Volatile var lastZoom = 0.0; private set
     @Volatile var frames = 0L; private set
@@ -194,6 +226,8 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
             engine = Engine().apply { egoMotion = movil }
             brain = SceneBrain()
             archivoEscena = archivo
+            fuenteFija = !movil
+            cargaFijos(archivo)
             archivo?.takeIf { it.exists() }?.let { f ->
                 runCatching { eus.argos.core.BehaviourModel.deserialize(f.readText()) }.getOrNull()?.let { brain.behaviour = it }
             }
@@ -212,6 +246,7 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
         if (small.size != aw * ah * 4) small = ByteArray(aw * ah * 4)
         downscaleRgba(src, rowStride, w, h, small, aw, ah)
         val t2 = System.nanoTime()
+        val colgada = fuenteFija && congelada.paso(small, SystemClock.elapsedRealtime() / 1000.0)
 
         // Las cajas del detector entran UNA vez, en el frame en que llegan.
         // Repetirlas hasta la pasada siguiente congela la caja mientras la
@@ -256,7 +291,8 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
         frames++
         return Frame(r.boxes, w, h, info.associateBy { it.id }, engine.camX * sc, engine.camY * sc,
                      engine.cameraMoving, brain.people, brain.vehicles, brain.seen["person"]?.size ?: 0,
-                     brain.scale.valid, brain.scale.n, brain.events.take(3), behaviourMature, behaviourReady)
+                     brain.scale.valid, brain.scale.n, brain.events.take(3), behaviourMature, behaviourReady,
+                     colgada, fijos.fijas)
             .also { last = it }
     }
 
@@ -284,7 +320,11 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
                 val modoPrincipal = if (autoZoomOn) autoZoom.mode else zoom
                 val z = if (autoZoomOn) autoZoom.next() else zoom
                 val esSondeo = autoZoomOn && z != modoPrincipal
-                val dets: List<DetBox> = detector.detect(buf, rowStride, w, h, z)
+                val crudas: List<DetBox> = detector.detect(buf, rowStride, w, h, z)
+                // En una cámara fija por red, los rótulos aprendidos no son
+                // objetos: ni entran en el seguimiento ni empujan al zoom.
+                val fj = fijos
+                val dets = if (fuenteFija) synchronized(fj) { fj.filtra(crudas, h, SystemClock.elapsedRealtime() / 1000.0) } else crudas
                 if (autoZoomOn) autoZoom.report(z, dets)
                 lastZoom = z
                 lastTiles = detector.lastTiles

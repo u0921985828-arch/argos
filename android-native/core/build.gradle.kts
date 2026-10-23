@@ -23,6 +23,14 @@ tasks.register<JavaExec>("paridad") {
     args = listOf("android-native/build/ref_js.txt")
 }
 
+// Lo aprendido mirando cámaras públicas: rótulos fijos, cámara colgada, zoom con pocos objetos.
+tasks.register<JavaExec>("fijos") {
+    group = "verification"
+    description = "Los rótulos sobreimpresos dejan de contar, una cámara colgada se nota y el zoom aprende."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.FijosCaseKt")
+}
+
 // Paridad del detector con detector.js (C1). La referencia la generan
 // scripts/prep_detector_ref.py y scripts/ref_detector.js en android-native/build/det.
 tasks.register<JavaExec>("paridadDetector") {

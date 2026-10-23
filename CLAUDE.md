@@ -352,6 +352,24 @@ primero las de menos retraso (`core/Retraso`): se mide desde el teléfono una
 muestra de cada sitio y distrito (red + lo que el directo va por detrás, o la
 edad del clip); lo buscado se mide antes que la muestra y las caídas no salen.
 
+**Lo que enseñaron 110 cámaras públicas (nativa).** Fotogramas reales de once
+sitios (`.github/workflows/muestras.yml` → rama `muestras-camaras`), pasados
+por el detector en cuadro entero, teselas ×1, ×2 y ×3:
+- Teselas ×2 encuentran un 32 % más que el cuadro entero (82 % frente a 62 %
+  de lo seguro); ×3 hunde el recuento (27 %), como dice la invariante 2. Pero
+  el zoom automático pedía «2 más y un 50 % más» y con 1-3 coches no saltaba
+  nunca: ahora también salta con una ventaja pequeña y constante (media de
+  varios sondeos), y cada cámara recuerda su modo. 15 → 39 de 110 cámaras.
+- Una de cada cinco cajas que solo salían con ×2 eran LETRAS del rótulo
+  sobreimpreso (nombre de la cámara, hora, logotipo), hasta 0,68. `Fijos`:
+  en las franjas de arriba y abajo, lo que el detector repite en el mismo
+  sitio 2 minutos se ignora y se recuerda por cámara. En el centro no: un
+  coche parado es un coche.
+- 4 de 33 ráfagas eran la misma imagen repetida: cámara colgada con el
+  servidor vivo. `Congelada` lo dice en vez de parecer que el análisis falla.
+- La muestra era de noche en EE. UU.: de noche el detector apenas ve coches
+  (solo faros). Falta repetir la medida de día.
+
 **Física plausible.** Una escala con altura de cámara fuera de 2-150 m no vale;
 un paso imposible para la clase no da velocidad; «corriendo» pide 1 s seguido.
 

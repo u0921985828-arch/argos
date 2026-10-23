@@ -199,6 +199,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        fuenteRed.libre = { !ocupadoRed.get() }
         fichaFuente = Ui.fila(this, "Fuente", "cámara del móvil") { panel(fuentesCaja); cargaCatalogo() }
         fuentesCaja = construyeFuentes { panel(null) }.apply { visibility = android.view.View.GONE }
         ajustesCaja = android.widget.LinearLayout(this).apply {
@@ -382,6 +383,11 @@ class MainActivity : ComponentActivity() {
             runOnUiThread { fichaEstable.text = Ui.textoFila("Estabilizar", if (estabilizar) (if (ois) "sí · óptico" else "sí") else "no") }
             val prevB = Preview.Builder().setResolutionSelector(selector)
             if (ois) pideOis(prevB)
+            // Hasta 60 imágenes por segundo si la cámara las da a esta
+            // resolución. Con rango variable (p. ej. 15-60) la exposición puede
+            // alargarse de noche: una imagen oscura no la ve el detector.
+            val fps = mejorFps(provider)
+            fps?.let { pideFps(prevB, it) }
             val prev = prevB.build().also { it.setSurfaceProvider(preview.surfaceProvider) }
             val analysis = ImageAnalysis.Builder()
                 .setResolutionSelector(selector)
@@ -391,7 +397,7 @@ class MainActivity : ComponentActivity() {
                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                 .setOutputImageRotationEnabled(true)
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .also { if (ois) pideOis(it) }
+                .also { if (ois) pideOis(it); fps?.let { r -> pideFps(it, r) } }
                 .build()
             analysis.setAnalyzer(analysisExec) { image ->
                 try {
@@ -411,7 +417,7 @@ class MainActivity : ComponentActivity() {
             }
             provider.unbindAll()
             provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, prev, analysis)
-            Log.i(TAG, "ARGOS nativo cámara: análisis RGBA, objetivo 640x480 · estabilización óptica " +
+            Log.i(TAG, "ARGOS nativo cámara: análisis RGBA, objetivo 640x480 · ${fps?.let { "${it.lower}-${it.upper} fps" } ?: "fps por defecto"} · estabilización óptica " +
                        (if (ois) "sí" else "no disponible") + " · estabilizado en pantalla " + (if (estabilizar) "sí" else "no") +
                        " · giroscopio " + (if (sensores.getDefaultSensor(android.hardware.Sensor.TYPE_GYROSCOPE) != null) "sí" else "no"))
         }, ContextCompat.getMainExecutor(this))
@@ -424,6 +430,21 @@ class MainActivity : ComponentActivity() {
             .getCameraCharacteristic(android.hardware.camera2.CameraCharacteristics.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION)
             ?.contains(android.hardware.camera2.CameraMetadata.LENS_OPTICAL_STABILIZATION_MODE_ON) == true
     }.getOrDefault(false)
+
+    /** El rango de imágenes por segundo más alto (hasta 60) que admite la cámara trasera; dentro de él, el más amplio. */
+    @androidx.annotation.OptIn(markerClass = [androidx.camera.camera2.interop.ExperimentalCamera2Interop::class])
+    private fun mejorFps(provider: ProcessCameraProvider): android.util.Range<Int>? = runCatching {
+        val info = CameraSelector.DEFAULT_BACK_CAMERA.filter(provider.availableCameraInfos).firstOrNull() ?: return null
+        androidx.camera.camera2.interop.Camera2CameraInfo.from(info)
+            .getCameraCharacteristic(android.hardware.camera2.CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES)
+            ?.filter { it.upper <= 60 }?.maxWithOrNull(compareBy<android.util.Range<Int>>({ it.upper }, { -it.lower }))
+    }.getOrNull()
+
+    @androidx.annotation.OptIn(markerClass = [androidx.camera.camera2.interop.ExperimentalCamera2Interop::class])
+    private fun <T> pideFps(b: androidx.camera.core.ExtendableBuilder<T>, r: android.util.Range<Int>) {
+        androidx.camera.camera2.interop.Camera2Interop.Extender(b).setCaptureRequestOption(
+            android.hardware.camera2.CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, r)
+    }
 
     @androidx.annotation.OptIn(markerClass = [androidx.camera.camera2.interop.ExperimentalCamera2Interop::class])
     private fun <T> pideOis(b: androidx.camera.core.ExtendableBuilder<T>) {
@@ -539,10 +560,12 @@ class MainActivity : ComponentActivity() {
         val det = f.boxes.count { it.klassSrc == "det" }
         val loc = java.util.Locale("es")
         val escena = when {
+            f.congelada -> "la cámara no se actualiza: da siempre la misma imagen"
             f.moving -> "cámara en mano · compensando el movimiento"
             f.scaleValid -> "cámara quieta · escala aprendida de ${f.scaleN} recorridos"
             else -> "cámara quieta · aprendiendo la escala"
-        } + " · " + (if (f.behaviourReady) "lo normal: aprendido" else "lo normal: aprendiendo (${f.behaviourMature} zonas)")
+        } + " · " + (if (f.behaviourReady) "lo normal: aprendido" else "lo normal: aprendiendo (${f.behaviourMature} zonas)") +
+            (if (f.rotulos > 0) " · ${f.rotulos} rótulo${if (f.rotulos == 1) "" else "s"} de la cámara ignorado${if (f.rotulos == 1) "" else "s"}" else "")
         val ev = f.events.firstOrNull()?.let { "último: ${it.kind} · objeto ${it.id} · ${it.detail}" } ?: "sin eventos"
         val tecnico = "%.0f fps · análisis %.1f ms · detector %.0f ms (%d tesela%s) · zoom %s".format(
             loc, p.fps, p.engineMs, p.detMs, p.lastTiles, if (p.lastTiles == 1) "" else "s", modo(p))
@@ -555,10 +578,11 @@ class MainActivity : ComponentActivity() {
             hud.text = tecnico
             estado.text = when {
                 aviso -> "● aviso de radio"
+                f.congelada -> "● imagen congelada"
                 f.moving -> "● cámara en mano"
                 else -> "● vigilando"
             }
-            estado.setTextColor(when { aviso -> Ui.ROJO; f.moving -> Ui.AMBAR; else -> Ui.VERDE })
+            estado.setTextColor(when { aviso -> Ui.ROJO; f.moving || f.congelada -> Ui.AMBAR; else -> Ui.VERDE })
         }
         // Una pregunta de prueba al chat cuando ya hay escena, para que el
         // registro diga que responde y no solo que existe.

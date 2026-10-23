@@ -338,6 +338,14 @@ class AutoZoom(private val probeEvery: Int = 8, private val minScore: Double = 0
     private var lastMain = -1
     /** Cuántas veces ha cambiado de modo, para el panel. */
     var switches = 0; private set
+    // Medias de lo que encuentra cada modo. Con pocos objetos (una carretera
+    // con 1-3 coches) la regla instantánea «2 más y un 50 % más» no salta
+    // nunca: en 110 cámaras públicas las teselas ×2 vieron 1,4 veces más que
+    // el cuadro entero y el modo se quedaba en cuadro entero. Con la media de
+    // varios sondeos, una ventaja pequeña pero constante también cuenta.
+    private var mediaPrincipal = -1.0
+    private var mediaSondeo = -1.0
+    private var sondeos = 0
 
     fun next(): Double {
         val z = if (pass % probeEvery == probeEvery - 1 && lastMain >= 0) other() else mode
@@ -345,12 +353,27 @@ class AutoZoom(private val probeEvery: Int = 8, private val minScore: Double = 0
         return z
     }
 
+    /** Lo aprendido de esta cámara en otra sesión: se empieza en ese modo. */
+    fun empiezaEn(modo: Double) {
+        if (modo == 0.0 || modo == 2.0) mode = modo
+    }
+
     fun report(zoomUsed: Double, dets: List<DetBox>) {
         val n = dets.count { it.score >= minScore }
-        if (zoomUsed == mode) { lastMain = n; return }
-        val sube = mode == 0.0 && n >= maxOf(lastMain + 2, Math.ceil(lastMain * 1.5).toInt())
-        val baja = mode == 2.0 && n >= lastMain
-        if (sube || baja) { mode = zoomUsed; lastMain = n; switches++ }
+        if (zoomUsed == mode) {
+            lastMain = n
+            mediaPrincipal = if (mediaPrincipal < 0) n.toDouble() else mediaPrincipal * 0.8 + n * 0.2
+            return
+        }
+        mediaSondeo = if (sondeos == 0) n.toDouble() else mediaSondeo * 0.5 + n * 0.5
+        sondeos++
+        val sube = mode == 0.0 && (n >= maxOf(lastMain + 2, Math.ceil(lastMain * 1.5).toInt()) ||
+            (sondeos >= 3 && mediaSondeo >= mediaPrincipal + 0.8 && mediaSondeo >= mediaPrincipal * 1.3))
+        val baja = mode == 2.0 && n >= lastMain && (sondeos >= 2 && mediaSondeo >= mediaPrincipal || n > lastMain + 1)
+        if (sube || baja) {
+            mode = zoomUsed; lastMain = n; switches++
+            mediaPrincipal = mediaSondeo; mediaSondeo = -1.0; sondeos = 0
+        }
     }
 
     private fun other() = if (mode == 0.0) 2.0 else 0.0
