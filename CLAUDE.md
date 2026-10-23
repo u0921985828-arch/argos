@@ -362,6 +362,18 @@ probados: 2020 (Tapo), 80, 8000 (Reolink), 8080, 8899. Sin ONVIF, la ruta
 habitual `:554/stream1` o la que se escriba a mano. Sin probar con una
 cámara real.
 
+**Detector de tráfico entrenado (nativa).** `android-native/entrena` +
+`.github/workflows/entrena.yml`: YOLOX-L etiqueta fotogramas de 1.200
+cámaras públicas y el nano de la app aprende de él. Ronda 1, con 240
+cámaras que no vio (etiquetas del maestro, corte 0,3): cuadro entero 37,8 %
+→ 59,0 % de recall y precisión 68 % → 80 %; teselas ×2 53,7 % → 76,6 %,
+falsos 164 → 84. Ve peor lo de cerca (el bus sale «truck»), así que solo se
+usa en las cámaras FIJAS por red; el móvil sigue con el de serie. Se mete
+en el APK solo el modelo cuyo sha256 está en `entrena/modelo-trafico.sha256`.
+Dos trampas: con BatchNorm entrenando, la red se descoloca con lotes de
+tráfico; y sin recortar el gradiente la pérdida de objeto se dispara en 9
+pasos (pocos objetos por lote: se divide por casi nada).
+
 **Zonas, avisos y búsqueda de cámaras (nativa).** Ideas de iSpy y de
 Surveillance Center, no su código (LGPL y AGPL no caben en una app de pago).
 En Ajustes → Zonas se tocan las esquinas sobre la imagen: una zona VIGILADA
