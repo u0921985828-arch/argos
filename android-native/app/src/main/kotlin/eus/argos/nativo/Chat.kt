@@ -38,7 +38,9 @@ import java.util.Locale
  */
 class Chat(private val act: ComponentActivity, private val ask: () -> Ask?,
            private val pedirMicro: () -> Unit, private val cerrar: () -> Unit,
-           private val vozPropia: () -> VozApp? = { null }) {
+           private val vozPropia: () -> VozApp? = { null },
+           /** Lo que se PIDE (cambiar de cámara, moverla, encender cosas): lo hace la app y dice qué ha hecho. */
+           private val mando: (eus.argos.core.Orden) -> String? = { null }) {
     val view: LinearLayout
     private val burbujas = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; setPadding(0, Ui.dp(act, 4), 0, Ui.dp(act, 4)) }
     private val scroll = ScrollView(act).apply { addView(burbujas) }
@@ -183,8 +185,17 @@ class Chat(private val act: ComponentActivity, private val ask: () -> Ask?,
     /** Pregunta y respuesta; en voz alta si la pregunta llegó hablada. */
     fun preguntar(q: String, porVoz: Boolean): String {
         di("tú", q)
-        val a = ask()
-        val r = a?.ask(q) ?: "Aún estoy cargando el detector; pregúntame en un momento."
+        val orden = eus.argos.core.Ordenes.lee(q)
+        if (orden == eus.argos.core.Orden.Calla) { tts?.stop(); vozPropia()?.para(); return "" }
+        val r = orden?.let { mando(it) } ?: run {
+            val a = ask()
+            var x = a?.ask(q) ?: "Aún estoy cargando el detector; pregúntame en un momento."
+            // A quien pregunta qué sabe hacer, también lo que puede mandar.
+            if (Regex("\\b(que (puedes|sabes) hacer|ayuda|como funcionas|para que sirves|comandos|ordenes|que te puedo (decir|pedir))\\b")
+                    .containsMatchIn(eus.argos.core.Ask.norm(q)))
+                x += " Y manejo la app: " + eus.argos.core.Ordenes.EJEMPLOS.joinToString(", ") { "«$it»" } + "."
+            x
+        }
         di("argos", r)
         if (porVoz) {
             val propia = vozPropia()

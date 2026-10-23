@@ -157,7 +157,7 @@ jobs:
           node scripts/ref_behaviour.js
           node scripts/ref_ask.js
           cd android-native && ./gradlew --no-daemon :core:paridadDetector :core:casoReservado \
-            :core:zoomAutomatico :core:paridadEscena :core:escenaViva :core:camaraEnMano :core:casosCamara :core:fisica :core:radio :core:voz :core:estabiliza :core:memoria :core:fijos :core:onvif :core:zonas \
+            :core:zoomAutomatico :core:paridadEscena :core:escenaViva :core:camaraEnMano :core:casosCamara :core:fisica :core:radio :core:voz :core:estabiliza :core:memoria :core:fijos :core:onvif :core:zonas :core:ordenes \
             :core:paridadComportamiento :core:comportamientoVivo :core:chat
 
       # Las listas de cámaras públicas, tal como las sirven HOY los organismos:

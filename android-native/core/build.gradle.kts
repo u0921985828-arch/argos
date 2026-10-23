@@ -31,6 +31,14 @@ tasks.register<JavaExec>("zonas") {
     mainClass.set("eus.argos.paridad.ZonasCaseKt")
 }
 
+// Lo que se le pide al asistente: cámaras, mover, ajustes, paneles.
+tasks.register<JavaExec>("ordenes") {
+    group = "verification"
+    description = "Las órdenes en español, como las dice la gente; las preguntas no son órdenes."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.OrdenesCaseKt")
+}
+
 // ONVIF: resumen de la clave, mensajes y respuestas como las de una Tapo.
 tasks.register<JavaExec>("onvif") {
     group = "verification"

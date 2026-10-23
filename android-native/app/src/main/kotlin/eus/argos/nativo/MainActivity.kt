@@ -23,6 +23,7 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+import eus.argos.core.Orden
 import java.nio.ByteBuffer
 import java.util.concurrent.Executors
 
@@ -183,7 +184,7 @@ class MainActivity : ComponentActivity() {
             tarjeta.visibility = if (libre) android.view.View.VISIBLE else android.view.View.GONE
             botonera.visibility = if (libre) android.view.View.VISIBLE else android.view.View.GONE
         }
-        chat = Chat(this, { ask }, { askMicro.launch(Manifest.permission.RECORD_AUDIO) }, { panel(null) }, { voz })
+        chat = Chat(this, { ask }, { askMicro.launch(Manifest.permission.RECORD_AUDIO) }, { panel(null) }, { voz }, { o -> manda(o) })
         chatCaja = FrameLayout(this).apply {
             visibility = android.view.View.GONE
             addView(chat.view, FrameLayout.LayoutParams(-1, -1))
@@ -202,6 +203,10 @@ class MainActivity : ComponentActivity() {
         }
         fuenteRed.libre = { !ocupadoRed.get() }
         fichaFuente = Ui.fila(this, "Fuente", "cámara del móvil") { panel(fuentesCaja); cargaCatalogo() }
+        abre = { q ->
+            panel(when (q) { "ajustes" -> ajustesCaja; "fuentes" -> fuentesCaja; "chat" -> chatCaja; else -> null })
+            if (q == "fuentes") cargaCatalogo()
+        }
         fuentesCaja = construyeFuentes { panel(null) }.apply { visibility = android.view.View.GONE }
         ajustesCaja = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
@@ -1217,5 +1222,74 @@ class MainActivity : ComponentActivity() {
             Log.i(TAG, "ARGOS ip: búsqueda en la wifi, ${vistas.size} cámara(s)")
             runOnUiThread { alFin(vistas.values.toList()) }
         }, "argos-busca").start()
+    }
+
+    /*
+     * El asistente maneja la app: lo que se le PIDE en voz o por escrito
+     * (Ordenes) se hace aquí y se contesta qué se ha hecho. Lo que se le
+     * PREGUNTA sigue yendo a Ask.
+     */
+    private var abre: (String?) -> Unit = {}
+    private var listaVoz: List<eus.argos.core.CamaraPublica> = emptyList()
+    private var idxVoz = 0
+
+    private fun manda(o: Orden): String? {
+        return when (o) {
+            Orden.Movil -> { usarMovil(); "Pongo la cámara del móvil." }
+            Orden.CamaraIp -> {
+                val h = prefs.getString("ip_host", "").orEmpty(); val manual = prefs.getString("rtsp", "").orEmpty()
+                if (h.isEmpty() && manual.isEmpty()) "No tengo ninguna cámara IP guardada. Añádela en Ajustes, Fuente, Cámara IP."
+                else { conectaIp(h, prefs.getString("ip_usuario", "").orEmpty(), prefs.getString("ip_clave", "").orEmpty(), manual); "Conecto con tu cámara IP." }
+            }
+            is Orden.Publica -> ponPublica(o.lugar, false)
+            Orden.OtraCamara -> ponPublica(null, true)
+            is Orden.Mueve -> {
+                val c = camara
+                if (c == null || !c.mueve) "Esta cámara no se puede mover."
+                else { c.mueve(o.x, o.y, o.zoom); escena.postDelayed({ c.para(); pipeline?.camaraMovida() }, o.ms); "Hecho." }
+            }
+            Orden.ACasa -> camara?.takeIf { it.mueve }?.let { it.aCasa(); escena.postDelayed({ pipeline?.camaraMovida() }, 2000); "Vuelvo a la posición inicial." }
+                ?: "Esta cámara no se puede mover."
+            is Orden.Estabilizar -> {
+                if (estabilizar != o.si) fichaEstable.performClick()
+                if (o.si) "Estabilizado activado." else "Estabilizado desactivado."
+            }
+            is Orden.Radio -> {
+                if (radio.activa != o.si) alternarRadio()
+                when { !o.si -> "Radio apagada."; radio.activa -> "La radio ya está encendida."; else -> "Para encender la radio necesito tu permiso: te lo pido en pantalla." }
+            }
+            is Orden.Zoom -> {
+                val p = pipeline ?: return "Aún estoy cargando el detector."
+                when (o.modo) { "auto" -> p.autoZoomOn = true; "entero" -> { p.autoZoomOn = false; p.zoom = 0.0 }; else -> { p.autoZoomOn = false; p.zoom = 2.0 } }
+                fichaZoom.text = Ui.textoFila("Zoom", when { p.autoZoomOn -> "auto"; p.zoom == 0.0 -> "cuadro entero"; else -> "teselas ×2" })
+                "Zoom " + when (o.modo) { "auto" -> "automático."; "entero" -> "en cuadro entero."; else -> "por teselas ×2." }
+            }
+            is Orden.Abre -> when (o.que) {
+                "memoria" -> { startActivity(android.content.Intent(this, ResumenActivity::class.java)); "Abro la memoria." }
+                "zonas" -> { abre(null); empiezaZonas(); "Toca la imagen para marcar las esquinas de la zona." }
+                "fuentes" -> { abre("fuentes"); "Aquí tienes las cámaras." }
+                else -> { abre("ajustes"); "Abro los ajustes." }
+            }
+            Orden.BorraZonas -> { pipeline?.ponZonas(emptyList()); capa.zonas = emptyList(); capa.invalidate(); "Zonas borradas." }
+            Orden.Cierra -> { abre(null); "Cerrado." }
+            Orden.Calla -> null
+        }
+    }
+
+    /** Una cámara pública por voz: la de menos retraso del sitio pedido, o la siguiente de la última lista. */
+    private fun ponPublica(lugar: String?, siguiente: Boolean): String {
+        val todas = catalogo.orEmpty()
+        if (todas.isEmpty()) { cargaCatalogo(); return "Estoy bajando la lista de cámaras públicas; pídemelo otra vez en unos segundos." }
+        if (!siguiente || listaVoz.isEmpty()) {
+            val enc = if (lugar == null) todas else eus.argos.core.Catalogo.busca(todas, lugar)
+            listaVoz = eus.argos.core.Retraso.ordena(enc, retrasos, caidas); idxVoz = 0
+        } else idxVoz++
+        if (listaVoz.isEmpty()) return if (lugar != null) "No encuentro cámaras de $lugar. Tengo de ${eus.argos.core.Catalogo.SITIOS}." else "Ahora no hay cámaras públicas disponibles."
+        val c = listaVoz[idxVoz % listaVoz.size]
+        camara?.cierra(); camara = null; padPtz.visibility = android.view.View.GONE
+        usarRed(c.video, c.nombre, !c.directo, c.id)
+        // Las siguientes de la lista se miden ya, para que «otra» salte a una viva.
+        mide(listaVoz.drop(idxVoz + 1).take(15), true)
+        return "Pongo ${c.nombre}, ${c.proveedor}" + (if (c.zona.isNotEmpty()) " (${c.zona})" else "") + "."
     }
 }

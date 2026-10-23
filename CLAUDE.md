@@ -374,6 +374,13 @@ Dos trampas: con BatchNorm entrenando, la red se descoloca con lotes de
 tráfico; y sin recortar el gradiente la pérdida de objeto se dispara en 9
 pasos (pocos objetos por lote: se divide por casi nada).
 
+**El asistente maneja la app (nativa).** `core/Ordenes.kt`: lo que se PIDE
+(«pon una cámara de Los Ángeles», «otra cámara», «pon mi cámara IP», «gira
+a la izquierda un poco», «acerca», «activa el estabilizado», «dibuja una
+zona», «abre la memoria», «calla») lo hace `MainActivity.manda` y contesta
+qué ha hecho; lo que se PREGUNTA sigue a `Ask`. Gramática local, sin red;
+`:core:ordenes` comprueba también que las preguntas no se toman por órdenes.
+
 **Zonas, avisos y búsqueda de cámaras (nativa).** Ideas de iSpy y de
 Surveillance Center, no su código (LGPL y AGPL no caben en una app de pago).
 En Ajustes → Zonas se tocan las esquinas sobre la imagen: una zona VIGILADA
