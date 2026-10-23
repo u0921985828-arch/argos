@@ -397,4 +397,9 @@ sustituto del barrido (40-50 % del recall), persistencia de cajas del detector
 entre barridos (residuos), fundir la escala del cuadro entero con la de teselas
 (el trozo puntúa más que el objeto y sobrevive a la supresión), reconstruir la
 respuesta del `WebViewAssetLoader` con línea de estado para conseguir el
-aislamiento (idéntico: las cabeceras ya llegaban).
+aislamiento (idéntico: las cabeceras ya llegaban), «realzar» la imagen antes
+del detector (110 cámaras, etiquetas de YOLOX-L: superresolución FSRCNN ×2
+51,8 % y ESPCN ×2 55,4 % frente a 56,2 % del bilineal, a 2-3 veces el coste;
+CLAHE no suma en teselas y añade falsos. La superresolución inventa bordes,
+no detalle: es la invariante 2 otra vez). Lo que sí mueve la aguja es
+ENTRENAR el nano con lo que ven estas cámaras (`android-native/entrena`).
