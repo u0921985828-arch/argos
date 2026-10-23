@@ -1,0 +1,31 @@
+name: Muestras de cámaras públicas
+
+# Fotogramas reales de una muestra de cámaras para estudiar el detector. Van a
+# la rama `muestras-camaras`, que se borra a mano cuando ya no hace falta.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/scripts/muestras-camaras.py
+      - .github/workflows/muestras.yml
+
+permissions:
+  contents: write
+
+jobs:
+  muestras:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - run: which ffmpeg || (sudo apt-get update -q && sudo apt-get install -y -q ffmpeg)
+      - run: python3 .github/scripts/muestras-camaras.py /tmp/muestras 10
+      - name: Publicar en la rama muestras-camaras
+        run: |
+          cd /tmp/muestras
+          git init -q -b muestras-camaras
+          git config user.name "github-actions"; git config user.email "github-actions@users.noreply.github.com"
+          git add -A && git commit -q -m "Muestras de cámaras públicas"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" muestras-camaras
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
