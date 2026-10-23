@@ -31,6 +31,14 @@ tasks.register<JavaExec>("zonas") {
     mainClass.set("eus.argos.paridad.ZonasCaseKt")
 }
 
+// Lo detectado no se pierde entre pasadas del detector: lentos, normales y rápidos.
+tasks.register<JavaExec>("continuidad") {
+    group = "verification"
+    description = "Un coche que el núcleo pierde a ratos sale en todos los frames, con su número y en su sitio."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.ContinuidadCaseKt")
+}
+
 // Lo que se le pide al asistente: cámaras, mover, ajustes, paneles.
 tasks.register<JavaExec>("ordenes") {
     group = "verification"

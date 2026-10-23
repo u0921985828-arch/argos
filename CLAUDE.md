@@ -374,6 +374,15 @@ Dos trampas: con BatchNorm entrenando, la red se descoloca con lotes de
 tráfico; y sin recortar el gradiente la pérdida de objeto se dispara en 9
 pasos (pocos objetos por lote: se divide por casi nada).
 
+**Lo detectado no se pierde (nativa).** Entre pasadas del detector la
+pista vivía de la resta de fondo, que en tráfico suelta los coches lejanos
+(mancha bajo el mínimo) y los rápidos: se veían «a ratos» y con otro número.
+`core/Continuidad.kt` sigue en CADA imagen lo que dio el detector aunque el
+núcleo lo pierda (predicción por velocidad + plantilla en grises buscada
+alrededor), conserva su número cuando el núcleo lo renumera y lo suelta a
+los 3 s sin confirmar o si deja de parecerse. `:core:continuidad`: lento,
+normal y rápido, en 30/30 frames con su número; uno que desaparece se suelta.
+
 **El asistente maneja la app (nativa).** `core/Ordenes.kt`: lo que se PIDE
 («pon una cámara de Los Ángeles», «otra cámara», «pon mi cámara IP», «gira
 a la izquierda un poco», «acerca», «activa el estabilizado», «dibuja una

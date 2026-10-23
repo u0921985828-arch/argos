@@ -82,6 +82,7 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
      * cámara (rótulos, zoom del detector, lo normal) sigue valiendo.
      */
     @Volatile private var fondoViejo = false
+    private val continuidad = eus.argos.core.Continuidad()
     fun camaraMovida() { fondoViejo = true }
     // Hora real del instante 0 de la sesión, para guardar con fecha y hora.
     private val t0Epoch = System.currentTimeMillis() / 1000.0 - SystemClock.elapsedRealtime() / 1000.0
@@ -285,6 +286,7 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
             brain = SceneBrain()
             archivoEscena = archivo
             fuenteFija = !movil
+            continuidad.reinicia()
             cargaFijos(archivo)
             cargaZonas(archivo)
             archivo?.takeIf { it.exists() }?.let { f ->
@@ -295,6 +297,7 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
         if (fondoViejo) {
             fondoViejo = false
             engine = Engine().apply { egoMotion = !fuenteFija }
+            continuidad.reinicia()
             fresh.set(false)
         }
         val t0 = System.nanoTime()
@@ -331,8 +334,11 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
             b.klassSrc == "det" || !eus.argos.core.Luz.esLuz(small, fondo, aw, ah, (b.x1 / sc).toInt(), (b.y1 / sc).toInt(),
                 Math.ceil(b.x2 / sc).toInt(), Math.ceil(b.y2 / sc).toInt())
         } else r.boxes
+        // Lo que dio el detector no se pierde entre pasadas: se sigue en cada
+        // imagen por su aspecto aunque el núcleo lo suelte, con su número.
+        val seguidas = continuidad.paso(cajas, small, aw, ah, sc, SystemClock.elapsedRealtime() / 1000.0)
         val zs = zonas
-        val vistas = eus.argos.core.Zonas.filtra(cajas, w, h, zs)
+        val vistas = eus.argos.core.Zonas.filtra(seguidas, w, h, zs)
         val avisos = alertas.paso(vistas, w, h, zs, SystemClock.elapsedRealtime() / 1000.0)
         val t3 = System.nanoTime()
 
