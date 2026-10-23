@@ -17,7 +17,8 @@ import java.util.concurrent.Executors
  * Solo habla con la cámara, en la red de casa (o por VPN). La clave no viaja:
  * va su resumen WS-Security, firmado con la hora de la cámara.
  */
-class CamaraPtz(private val host: String, private val usuario: String, private val clave: String) {
+class CamaraPtz(private val host: String, private val usuario: String, private val clave: String,
+                private val conocido: String? = null) {
     private val hilo = Executors.newSingleThreadExecutor { r -> Thread(r, "argos-ptz") }
     private val azar = SecureRandom()
     @Volatile private var desfaseMs = 0L
@@ -52,8 +53,10 @@ class CamaraPtz(private val host: String, private val usuario: String, private v
     /** Prueba los puertos ONVIF habituales (Tapo 2020, la mayoría 80, Reolink 8000). */
     fun conecta(alFin: (Resultado) -> Unit) = hilo.execute {
         var aviso = "la cámara no responde a ONVIF en los puertos habituales (2020, 80, 8000, 8080)"
-        for (puerto in listOf(2020, 80, 8000, 8080, 8899)) {
-            val dispositivo = "http://$host:$puerto/onvif/device_service"
+        // Si la búsqueda en la wifi dio su dirección, esa primero.
+        val candidatos = listOfNotNull(conocido) + listOf(2020, 80, 8000, 8080, 8899).map { "http://$host:$it/onvif/device_service" }
+        for (dispositivo in candidatos.distinct()) {
+            val puerto = runCatching { URI(dispositivo).port }.getOrDefault(-1)
             val hora = runCatching { post(dispositivo, Onvif.sobre(Onvif.HORA_CAMARA, null)) }.getOrNull() ?: continue
             Onvif.leeHora(hora)?.let { desfaseMs = it.toEpochMilli() - System.currentTimeMillis() }
             try {

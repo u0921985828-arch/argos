@@ -53,7 +53,9 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
                 val events: List<SceneEvent> = emptyList(),
                 val behaviourMature: Int = 0, val behaviourReady: Boolean = false,
                 /** La cámara por red da siempre la misma imagen: está colgada, no es la escena quieta. */
-                val congelada: Boolean = false, val rotulos: Int = 0)
+                val congelada: Boolean = false, val rotulos: Int = 0,
+                /** Entradas en zonas vigiladas en este frame. */
+                val avisos: List<eus.argos.core.Alertas.Aviso> = emptyList())
 
     // Con el móvil en la mano todo se mueve: el núcleo estima el desplazamiento
     // de la imagen y mantiene el fondo y las pistas alineados con la escena.
@@ -106,6 +108,28 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
     @Volatile private var fijos = eus.argos.core.Fijos()
     private val congelada = eus.argos.core.Congelada()
     private fun archivoFijos(f: java.io.File) = java.io.File(f.parentFile, f.name.removeSuffix(".txt") + ".fijos")
+
+    /*
+     * Zonas dibujadas sobre esta cámara (vigiladas e ignoradas) y sus avisos.
+     * Se guardan junto a lo demás de la cámara (`<archivo>.zonas`).
+     */
+    @Volatile var zonas: List<eus.argos.core.Zona> = emptyList(); private set
+    private var alertas = eus.argos.core.Alertas()
+    private fun archivoZonas(f: java.io.File) = java.io.File(f.parentFile, f.name.removeSuffix(".txt") + ".zonas")
+
+    private fun cargaZonas(archivo: java.io.File?) {
+        zonas = archivo?.let(::archivoZonas)?.takeIf { it.exists() }
+            ?.let { runCatching { eus.argos.core.Zonas.lee(it.readText()) }.getOrNull() } ?: emptyList()
+        alertas = eus.argos.core.Alertas()
+    }
+
+    /** Las zonas nuevas de la cámara actual: se usan desde el frame siguiente y se guardan ya. */
+    fun ponZonas(nuevas: List<eus.argos.core.Zona>) {
+        zonas = nuevas
+        val f = archivoEscena ?: return
+        val txt = eus.argos.core.Zonas.serializa(nuevas)
+        try { ioExec.execute { runCatching { f.parentFile?.mkdirs(); archivoZonas(f).writeText(txt) } } } catch (_: Exception) {}
+    }
 
     private fun cargaFijos(archivo: java.io.File?) {
         val fj = eus.argos.core.Fijos()
@@ -189,6 +213,8 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
     private val detActual: YoloxDetector get() = if (fuenteFija) detectorTrafico ?: detector else detector
 
     init {
+        // Aquí y no en el primer init: las zonas se declaran después de aquel.
+        cargaZonas(archivoEscena)
         this.threads = threads
         val opts = OrtSession.SessionOptions().apply {
             setIntraOpNumThreads(threads)
@@ -260,6 +286,7 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
             archivoEscena = archivo
             fuenteFija = !movil
             cargaFijos(archivo)
+            cargaZonas(archivo)
             archivo?.takeIf { it.exists() }?.let { f ->
                 runCatching { eus.argos.core.BehaviourModel.deserialize(f.readText()) }.getOrNull()?.let { brain.behaviour = it }
             }
@@ -304,6 +331,9 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
             b.klassSrc == "det" || !eus.argos.core.Luz.esLuz(small, fondo, aw, ah, (b.x1 / sc).toInt(), (b.y1 / sc).toInt(),
                 Math.ceil(b.x2 / sc).toInt(), Math.ceil(b.y2 / sc).toInt())
         } else r.boxes
+        val zs = zonas
+        val vistas = eus.argos.core.Zonas.filtra(cajas, w, h, zs)
+        val avisos = alertas.paso(vistas, w, h, zs, SystemClock.elapsedRealtime() / 1000.0)
         val t3 = System.nanoTime()
 
         // La escena: física en coordenadas de escena (sirve aunque el móvil se
@@ -333,10 +363,10 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
         }
         lastT = t0
         frames++
-        return Frame(cajas, w, h, info.associateBy { it.id }, engine.camX * sc, engine.camY * sc,
+        return Frame(vistas, w, h, info.associateBy { it.id }, engine.camX * sc, engine.camY * sc,
                      engine.cameraMoving, brain.people, brain.vehicles, brain.seen["person"]?.size ?: 0,
                      brain.scale.valid, brain.scale.n, brain.events.take(3), behaviourMature, behaviourReady,
-                     colgada, fijos.fijas)
+                     colgada, fijos.fijas, avisos)
             .also { last = it }
     }
 

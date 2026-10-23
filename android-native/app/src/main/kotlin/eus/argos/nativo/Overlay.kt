@@ -36,6 +36,37 @@ class Overlay(ctx: Context) : View(ctx) {
                        var tx1: Float, var ty1: Float, var tx2: Float, var ty2: Float,
                        var vx: Float = 0f, var vy: Float = 0f, var tMs: Long = 0L)
     private val anim = HashMap<Int, Anim>()
+
+    /** Zonas de la cámara y la que se está dibujando (puntos normalizados 0-1). */
+    @Volatile var zonas: List<eus.argos.core.Zona> = emptyList()
+    @Volatile var dibujando: List<DoubleArray> = emptyList()
+    @Volatile var dibujandoVigilar = true
+    private val zonaVig = Paint().apply { style = Paint.Style.FILL; color = Color.argb(55, 255, 60, 60) }
+    private val zonaVigBorde = Paint().apply { style = Paint.Style.STROKE; strokeWidth = 4f; color = Color.argb(220, 255, 80, 80); isAntiAlias = true }
+    private val zonaIgn = Paint().apply { style = Paint.Style.FILL; color = Color.argb(70, 120, 120, 130) }
+    private val zonaIgnBorde = Paint().apply { style = Paint.Style.STROKE; strokeWidth = 3f; color = Color.argb(200, 180, 180, 190); isAntiAlias = true
+        pathEffect = android.graphics.DashPathEffect(floatArrayOf(12f, 8f), 0f) }
+    private val punto = Paint().apply { style = Paint.Style.FILL; color = Color.WHITE; isAntiAlias = true }
+
+    /** Del toque en pantalla a la imagen (0-1), con el mismo encaje que el dibujo. Null fuera de la imagen. */
+    fun aImagen(px: Float, py: Float): DoubleArray? {
+        val f = frame ?: return null
+        val s = minOf(width.toFloat() / f.w, height.toFloat() / f.h)
+        val ox = (width - f.w * s) / 2; val oy = (height - f.h * s) / 2
+        val x = (px - ox) / (f.w * s); val y = (py - oy) / (f.h * s)
+        return if (x in 0f..1f && y in 0f..1f) doubleArrayOf(x.toDouble(), y.toDouble()) else null
+    }
+
+    private fun pintaZona(canvas: Canvas, pts: List<DoubleArray>, vigilar: Boolean, nombre: String?, cerrada: Boolean,
+                          ox: Float, oy: Float, ancho: Float, alto: Float) {
+        if (pts.isEmpty()) return
+        val path = android.graphics.Path()
+        pts.forEachIndexed { i, p -> val x = ox + p[0].toFloat() * ancho; val y = oy + p[1].toFloat() * alto; if (i == 0) path.moveTo(x, y) else path.lineTo(x, y) }
+        if (cerrada) { path.close(); canvas.drawPath(path, if (vigilar) zonaVig else zonaIgn) }
+        canvas.drawPath(path, if (vigilar) zonaVigBorde else zonaIgnBorde)
+        if (!cerrada) for (p in pts) canvas.drawCircle(ox + p[0].toFloat() * ancho, oy + p[1].toFloat() * alto, 9f, punto)
+        if (nombre != null) canvas.drawText(nombre, ox + pts[0][0].toFloat() * ancho + 8, oy + pts[0][1].toFloat() * alto + 30, small)
+    }
     private var ultimoDibujo = 0L
 
     private val det = Paint().apply {
@@ -96,6 +127,8 @@ class Overlay(ctx: Context) : View(ctx) {
         val ox = (width - f.w * s) / 2
         val oy = (height - f.h * s) / 2
         val cx = f.camX.toFloat(); val cy = f.camY.toFloat()
+        for (z in zonas) pintaZona(canvas, z.puntos, z.vigilar, (if (z.vigilar) "⚠ " else "") + z.nombre, true, ox, oy, f.w * s, f.h * s)
+        pintaZona(canvas, dibujando, dibujandoVigilar, null, false, ox, oy, f.w * s, f.h * s)
 
         // Dónde va cada caja en ESTE instante de pantalla.
         val ahora = android.os.SystemClock.uptimeMillis()

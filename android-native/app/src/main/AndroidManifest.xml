@@ -22,6 +22,10 @@
          propia. Nada se envía: el análisis, la memoria y la voz siguen en el
          aparato. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Avisos de zona; y buscar cámaras en la wifi (multidifusión de ONVIF). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <application
         android:label="ARGOS"
         android:networkSecurityConfig="@xml/red"

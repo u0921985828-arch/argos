@@ -23,6 +23,14 @@ tasks.register<JavaExec>("paridad") {
     args = listOf("android-native/build/ref_js.txt")
 }
 
+// Zonas vigiladas e ignoradas, avisos de entrada y búsqueda de cámaras en la wifi.
+tasks.register<JavaExec>("zonas") {
+    group = "verification"
+    description = "Zonas: dentro/fuera, avisos al entrar sin repetir, y respuestas de WS-Discovery."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.ZonasCaseKt")
+}
+
 // ONVIF: resumen de la clave, mensajes y respuestas como las de una Tapo.
 tasks.register<JavaExec>("onvif") {
     group = "verification"

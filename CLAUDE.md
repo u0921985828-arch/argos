@@ -362,6 +362,17 @@ probados: 2020 (Tapo), 80, 8000 (Reolink), 8080, 8899. Sin ONVIF, la ruta
 habitual `:554/stream1` o la que se escriba a mano. Sin probar con una
 cámara real.
 
+**Zonas, avisos y búsqueda de cámaras (nativa).** Ideas de iSpy y de
+Surveillance Center, no su código (LGPL y AGPL no caben en una app de pago).
+En Ajustes → Zonas se tocan las esquinas sobre la imagen: una zona VIGILADA
+avisa (notificación) cuando ENTRA una persona, un vehículo o una bici del
+detector, una vez por objeto y como mucho cada 30 s por zona; una IGNORADA
+deja de enseñar lo que pisa dentro. Cuenta el pie del objeto, no su caja.
+Se guardan por cámara (`<archivo>.zonas`, puntos 0-1). En Cámara IP, «Buscar
+cámaras en esta wifi» pregunta por WS-Discovery (ONVIF, 239.255.255.250:3702)
+y rellena la IP. `core/Zonas.kt`, `core/Descubre.kt`, `:core:zonas`. Sin
+probar con una cámara real.
+
 **Lo que enseñaron 110 cámaras públicas (nativa).** Fotogramas reales de once
 sitios (`.github/workflows/muestras.yml` → rama `muestras-camaras`), pasados
 por el detector en cuadro entero, teselas ×1, ×2 y ×3:

@@ -92,6 +92,7 @@ class MainActivity : ComponentActivity() {
     private val askMicro = registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) chat.escuchar()
     }
+    private val pideAvisos = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     private val askCamera = registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) startCamera() else hud.text = "Sin permiso de cámara no hay nada que analizar."
@@ -215,7 +216,9 @@ class MainActivity : ComponentActivity() {
                 }, android.widget.LinearLayout.LayoutParams(0, -2, 1f))
                 addView(Ui.boton(this@MainActivity, R.drawable.ic_cerrar, "Cerrar", 44, Color.TRANSPARENT) { panel(null) })
             })
-            addView(fichaFuente); addView(fichaEstable); addView(fichaZoom); addView(fichaRadio)
+            addView(fichaFuente)
+            addView(Ui.fila(this@MainActivity, "Zonas", "dibujar dónde avisar y qué ignorar") { panel(null); empiezaZonas() })
+            addView(fichaEstable); addView(fichaZoom); addView(fichaRadio)
             addView(lEscena, android.widget.LinearLayout.LayoutParams(-1, -2).apply { topMargin = d(12) })
             addView(hud)
         }
@@ -267,6 +270,8 @@ class MainActivity : ComponentActivity() {
             addView(fuentesCaja, FrameLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * 0.7).toInt(), Gravity.BOTTOM).apply {
                 setMargins(d(6), 0, d(6), d(6))
             })
+            barraZonas = construyeBarraZonas()
+            addView(barraZonas, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { setMargins(d(6), 0, d(6), d(6)) })
         })
 
         // La prueba del CI pide la lista de cámaras públicas al arrancar, para
@@ -573,6 +578,7 @@ class MainActivity : ComponentActivity() {
         val ev = f.events.firstOrNull()?.let { "último: ${it.kind} · objeto ${it.id} · ${it.detail}" } ?: "sin eventos"
         val tecnico = "%.0f fps · análisis %.1f ms · detector %.0f ms (%d tesela%s) · zoom %s".format(
             loc, p.fps, p.engineMs, p.detMs, p.lastTiles, if (p.lastTiles == 1) "" else "s", modo(p))
+        if (f.avisos.isNotEmpty()) f.avisos.forEach { avisaZona(it) }
         val lineaRadio = radio.linea()
         val aviso = radio.hayAviso()
         runOnUiThread {
@@ -963,6 +969,8 @@ class MainActivity : ComponentActivity() {
      * mano. Todo se recuerda solo en este teléfono.
      */
     private var camara: CamaraPtz? = null
+    /** La dirección ONVIF que dio la búsqueda en la wifi: se prueba primero. */
+    private var dispositivoElegido: String? = null
     private lateinit var padPtz: android.widget.LinearLayout
 
     private fun pideRtsp(cerrar: () -> Unit) {
@@ -977,6 +985,20 @@ class MainActivity : ComponentActivity() {
         val rtsp = campo("Dirección RTSP (solo si no la encuentra)", prefs.getString("rtsp", ""))
         val caja = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL; setPadding(d(20), d(8), d(20), 0)
+            addView(TextView(this@MainActivity).apply {
+                text = "🔍 Buscar cámaras en esta wifi"; setTextColor(Ui.AZUL); textSize = 15f; setPadding(0, d(6), 0, d(10))
+                setOnClickListener {
+                    text = "Buscando…"
+                    buscaCamaras { cams ->
+                        text = "🔍 Buscar cámaras en esta wifi"
+                        if (cams.isEmpty()) { lEvento.text = "no ha contestado ninguna cámara ONVIF en esta wifi"; return@buscaCamaras }
+                        android.app.AlertDialog.Builder(this@MainActivity).setTitle("Cámaras encontradas")
+                            .setItems(cams.map { c -> listOf(c.nombre.ifEmpty { c.modelo }, c.ip).filter { it.isNotEmpty() }.joinToString(" · ") }.toTypedArray()) { _, i ->
+                                ip.setText(cams[i].ip); dispositivoElegido = cams[i].dispositivo
+                            }.show()
+                    }
+                }
+            })
             addView(ip); addView(usuario); addView(clave)
             addView(TextView(this@MainActivity).apply {
                 text = "En Tapo, el usuario y la contraseña son los de «Cuenta de la cámara» (Ajustes avanzados), no los de la app. " +
@@ -1006,7 +1028,7 @@ class MainActivity : ComponentActivity() {
         if (manual.startsWith("rtsp://", true) || manual.startsWith("http", true)) usarRed(manual, "cámara IP", false, id)
         if (host.isEmpty()) return
         lEvento.text = "buscando la cámara $host…"
-        val cam = CamaraPtz(host, usuario, clave)
+        val cam = CamaraPtz(host, usuario, clave, dispositivoElegido?.takeIf { it.contains("//$host") })
         camara = cam
         cam.conecta { r ->
             runOnUiThread {
@@ -1067,5 +1089,133 @@ class MainActivity : ComponentActivity() {
             addView(fila(tecla("◀", "Izquierda", -v, 0.0, 0.0), tecla("⌂", "Posición inicial", 0.0, 0.0, 0.0, true), tecla("▶", "Derecha", v, 0.0, 0.0)))
             addView(fila(hueco(), tecla("▼", "Bajar", 0.0, -v, 0.0), tecla("−", "Alejar", 0.0, 0.0, -v)))
         }
+    }
+
+    /*
+     * Zonas, como en los programas de vigilancia de siempre: se tocan las
+     * esquinas sobre la imagen. Una zona VIGILADA avisa cuando entra una
+     * persona, un vehículo o una bici; una IGNORADA deja de enseñar lo que pasa
+     * dentro (un árbol que se mueve, la carretera de fondo).
+     */
+    private lateinit var barraZonas: android.widget.LinearLayout
+    private val puntosZona = ArrayList<DoubleArray>()
+    private var zonaVigilar = true
+    private lateinit var tipoZona: TextView
+
+    private fun empiezaZonas() {
+        puntosZona.clear(); capa.dibujando = emptyList(); capa.dibujandoVigilar = zonaVigilar
+        capa.zonas = pipeline?.zonas.orEmpty()
+        barraZonas.visibility = android.view.View.VISIBLE
+        capa.setOnTouchListener { _, e ->
+            if (e.actionMasked == android.view.MotionEvent.ACTION_UP) {
+                capa.aImagen(e.x, e.y)?.let { puntosZona.add(it); capa.dibujando = puntosZona.toList(); capa.invalidate() }
+            }
+            true
+        }
+    }
+
+    private fun acabaZonas() {
+        barraZonas.visibility = android.view.View.GONE
+        capa.setOnTouchListener(null); capa.isClickable = false
+        puntosZona.clear(); capa.dibujando = emptyList(); capa.invalidate()
+    }
+
+    private fun construyeBarraZonas(): android.widget.LinearLayout {
+        val d = { v: Int -> Ui.dp(this, v) }
+        fun boton(t: String, alPulsar: () -> Unit) = TextView(this).apply {
+            text = t; setTextColor(Ui.TEXTO); textSize = 14f; gravity = Gravity.CENTER
+            setPadding(d(12), d(10), d(12), d(10))
+            background = Ui.fondo(Color.argb(150, 40, 44, 52), d(16).toFloat(), Ui.BORDE, this@MainActivity)
+            layoutParams = android.widget.LinearLayout.LayoutParams(-2, -2).apply { setMargins(d(3), d(3), d(3), d(3)) }
+            setOnClickListener { alPulsar() }
+        }
+        tipoZona = boton("Tipo: vigilar") {
+            zonaVigilar = !zonaVigilar; capa.dibujandoVigilar = zonaVigilar
+            tipoZona.text = if (zonaVigilar) "Tipo: vigilar" else "Tipo: ignorar"; capa.invalidate()
+        }
+        val guardar = boton("Guardar zona") {
+            if (puntosZona.size < 3) { lEvento.text = "una zona necesita al menos 3 esquinas"; return@boton }
+            val p = pipeline ?: return@boton
+            val n = p.zonas.count { it.vigilar == zonaVigilar } + 1
+            val z = eus.argos.core.Zona(if (zonaVigilar) "zona $n" else "ignorar $n", zonaVigilar, puntosZona.toList())
+            p.ponZonas(p.zonas + z); capa.zonas = p.zonas
+            puntosZona.clear(); capa.dibujando = emptyList(); capa.invalidate()
+            lEvento.text = if (z.vigilar) "«${z.nombre}» guardada: avisará cuando entre alguien" else "«${z.nombre}» guardada: lo de dentro no se enseña"
+            if (z.vigilar && android.os.Build.VERSION.SDK_INT >= 33 &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+                pideAvisos.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        return android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL; visibility = android.view.View.GONE
+            setPadding(d(14), d(12), d(14), d(12))
+            background = Ui.fondo(Ui.FONDO, d(24).toFloat())
+            addView(TextView(this@MainActivity).apply {
+                text = "Toca la imagen para marcar las esquinas de la zona"; setTextColor(Ui.TEXTO); textSize = 15f
+                setPadding(d(4), 0, d(4), d(6))
+            })
+            addView(android.widget.HorizontalScrollView(this@MainActivity).apply {
+                addView(android.widget.LinearLayout(this@MainActivity).apply {
+                    orientation = android.widget.LinearLayout.HORIZONTAL
+                    addView(tipoZona)
+                    addView(boton("Deshacer") { if (puntosZona.isNotEmpty()) puntosZona.removeAt(puntosZona.size - 1); capa.dibujando = puntosZona.toList(); capa.invalidate() })
+                    addView(guardar)
+                    addView(boton("Borrar todas") { pipeline?.ponZonas(emptyList()); capa.zonas = emptyList(); capa.invalidate(); lEvento.text = "zonas borradas" })
+                    addView(boton("Hecho") { acabaZonas() })
+                })
+            })
+        }
+    }
+
+    private var canalAvisos = false
+    private fun avisaZona(a: eus.argos.core.Alertas.Aviso) {
+        val que = when (a.clase) { "person" -> "Persona"; "vehicle" -> "Vehículo"; "bike" -> "Bici"; else -> a.clase }
+        runOnUiThread { lEvento.text = "⚠ $que en «${a.zona}»" }
+        val nm = ContextCompat.getSystemService(this, android.app.NotificationManager::class.java) ?: return
+        if (!canalAvisos && android.os.Build.VERSION.SDK_INT >= 26) {
+            nm.createNotificationChannel(android.app.NotificationChannel("avisos", "Avisos de zona", android.app.NotificationManager.IMPORTANCE_HIGH))
+            canalAvisos = true
+        }
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        val abre = android.app.PendingIntent.getActivity(this, 0, android.content.Intent(this, MainActivity::class.java),
+            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+        val n = androidx.core.app.NotificationCompat.Builder(this, "avisos")
+            .setSmallIcon(R.drawable.ic_argos)
+            .setContentTitle("$que en «${a.zona}»")
+            .setContentText(fichaFuente.text.toString().substringAfter('\n').ifEmpty { "ARGOS" })
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(abre).setAutoCancel(true)
+            .build()
+        runCatching { nm.notify(a.zona.hashCode(), n) }
+    }
+
+    /*
+     * Buscar cámaras en la wifi sin saber su IP (WS-Discovery de ONVIF): una
+     * pregunta por multidifusión y cada cámara contesta con su dirección.
+     */
+    private fun buscaCamaras(alFin: (List<eus.argos.core.Descubre.Camara>) -> Unit) {
+        Thread({
+            val wifi = ContextCompat.getSystemService(applicationContext, android.net.wifi.WifiManager::class.java)
+            val cerrojo = wifi?.createMulticastLock("argos-busca")?.apply { setReferenceCounted(false); runCatching { acquire() } }
+            val vistas = LinkedHashMap<String, eus.argos.core.Descubre.Camara>()
+            try {
+                java.net.DatagramSocket().use { so ->
+                    so.soTimeout = 500
+                    val q = eus.argos.core.Descubre.pregunta(java.util.UUID.randomUUID().toString()).toByteArray()
+                    val grupo = java.net.InetAddress.getByName(eus.argos.core.Descubre.GRUPO)
+                    repeat(2) { so.send(java.net.DatagramPacket(q, q.size, grupo, eus.argos.core.Descubre.PUERTO)) }
+                    val fin = SystemClock.elapsedRealtime() + 3000
+                    val buf = ByteArray(16384)
+                    while (SystemClock.elapsedRealtime() < fin) {
+                        val p = java.net.DatagramPacket(buf, buf.size)
+                        try { so.receive(p) } catch (_: java.net.SocketTimeoutException) { continue }
+                        eus.argos.core.Descubre.lee(String(p.data, 0, p.length, Charsets.UTF_8))?.let { vistas.putIfAbsent(it.ip, it) }
+                    }
+                }
+            } catch (e: Exception) { Log.w(TAG, "ARGOS ip: búsqueda falló: ${e.message}") }
+            finally { runCatching { cerrojo?.release() } }
+            Log.i(TAG, "ARGOS ip: búsqueda en la wifi, ${vistas.size} cámara(s)")
+            runOnUiThread { alFin(vistas.values.toList()) }
+        }, "argos-busca").start()
     }
 }
