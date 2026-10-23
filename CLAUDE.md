@@ -352,6 +352,16 @@ primero las de menos retraso (`core/Retraso`): se mide desde el teléfono una
 muestra de cada sitio y distrito (red + lo que el directo va por detrás, o la
 edad del clip); lo buscado se mide antes que la muestra y las caídas no salen.
 
+**Cámaras IP propias que se mueven (nativa).** Se dan IP, usuario y clave;
+por ONVIF (`core/Onvif.kt`, `app/CamaraPtz.kt`) la app pide la dirección del
+vídeo (cada marca tiene su ruta RTSP) y, si la cámara tiene PTZ, salen unos
+mandos: mientras se pulsa, gira, inclina o hace zoom; al soltar, para y el
+análisis vuelve a aprender el fondo (`Pipeline.camaraMovida`). La clave no
+viaja: va su resumen WS-Security firmado con la hora de la cámara. Puertos
+probados: 2020 (Tapo), 80, 8000 (Reolink), 8080, 8899. Sin ONVIF, la ruta
+habitual `:554/stream1` o la que se escriba a mano. Sin probar con una
+cámara real.
+
 **Lo que enseñaron 110 cámaras públicas (nativa).** Fotogramas reales de once
 sitios (`.github/workflows/muestras.yml` → rama `muestras-camaras`), pasados
 por el detector en cuadro entero, teselas ×1, ×2 y ×3:

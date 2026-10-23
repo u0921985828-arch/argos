@@ -23,6 +23,14 @@ tasks.register<JavaExec>("paridad") {
     args = listOf("android-native/build/ref_js.txt")
 }
 
+// ONVIF: resumen de la clave, mensajes y respuestas como las de una Tapo.
+tasks.register<JavaExec>("onvif") {
+    group = "verification"
+    description = "Los mensajes ONVIF para mover una cámara IP propia, y la lectura de sus respuestas."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.OnvifCaseKt")
+}
+
 // Lo aprendido mirando cámaras públicas: rótulos fijos, cámara colgada, zoom con pocos objetos.
 tasks.register<JavaExec>("fijos") {
     group = "verification"

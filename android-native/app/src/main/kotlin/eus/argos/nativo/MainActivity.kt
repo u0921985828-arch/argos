@@ -256,6 +256,8 @@ class MainActivity : ComponentActivity() {
                 addView(capa, FrameLayout.LayoutParams(-1, -1))
             }
             addView(escena, FrameLayout.LayoutParams(-1, -1))
+            padPtz = construyePad()
+            addView(padPtz, FrameLayout.LayoutParams(-2, -2, Gravity.END or Gravity.CENTER_VERTICAL).apply { setMargins(0, 0, d(10), 0) })
             addView(barra, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
             addView(abajo, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
             addView(chatCaja, FrameLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * 0.62).toInt(), Gravity.BOTTOM).apply {
@@ -610,6 +612,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         destroyed = true
         fuenteRed.cierra()
+        camara?.cierra()
         chat.close()
         voz?.close()
         radio.para()
@@ -648,6 +651,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun usarMovil() {
+        camara?.cierra(); camara = null; padPtz.visibility = android.view.View.GONE
         fuenteRed.cierra()
         fuenteMovil = true
         textura.visibility = android.view.View.GONE
@@ -875,6 +879,7 @@ class MainActivity : ComponentActivity() {
         }
         lista.setOnItemClickListener { _, _, pos, _ ->
             val c = filtradas.getOrNull(pos) ?: return@setOnItemClickListener
+            camara?.cierra(); camara = null; padPtz.visibility = android.view.View.GONE
             usarRed(c.video, c.nombre, !c.directo, c.id); cierra()
         }
         // Al deslizar la lista se baja el teclado para ver más resultados.
@@ -886,7 +891,7 @@ class MainActivity : ComponentActivity() {
             override fun onScroll(v: android.widget.AbsListView?, a: Int, b: Int, c: Int) {}
         })
         val filaMovil = Ui.fila(this, "Cámara del móvil", "la de este teléfono") { usarMovil(); cierra() }
-        val filaIp = Ui.fila(this, "Cámara IP propia", "dirección RTSP de tu cámara") { pideRtsp(cierra) }
+        val filaIp = Ui.fila(this, "Cámara IP propia", "IP, usuario y contraseña; si se mueve, con mandos") { pideRtsp(cierra) }
         val rotulo = TextView(this).apply {
             text = "Cámaras públicas de tráfico"
             setTextColor(Ui.SUAVE); textSize = 13f; setPadding(d(4), d(14), 0, d(6))
@@ -951,25 +956,116 @@ class MainActivity : ComponentActivity() {
         return caja
     }
 
-    /** Cámara IP: la dirección RTSP con usuario y clave; se recuerda en este teléfono. */
+    /*
+     * Cámara IP propia. Basta con su IP, usuario y clave: por ONVIF se le pide
+     * la dirección del vídeo (cada marca tiene la suya) y se averigua si se
+     * puede mover. Si la cámara no habla ONVIF, se escribe la dirección RTSP a
+     * mano. Todo se recuerda solo en este teléfono.
+     */
+    private var camara: CamaraPtz? = null
+    private lateinit var padPtz: android.widget.LinearLayout
+
     private fun pideRtsp(cerrar: () -> Unit) {
-        val campo = android.widget.EditText(this).apply {
-            hint = "rtsp://usuario:clave@192.168.1.50:554/stream1"
-            setText(prefs.getString("rtsp", "")); isSingleLine = true
+        val d = { v: Int -> Ui.dp(this, v) }
+        fun campo(pista: String, valor: String?, clave: Boolean = false) = android.widget.EditText(this).apply {
+            hint = pista; setText(valor.orEmpty()); isSingleLine = true
+            if (clave) inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        val ip = campo("IP de la cámara (p. ej. 192.168.1.50)", prefs.getString("ip_host", ""))
+        val usuario = campo("Usuario de la cámara", prefs.getString("ip_usuario", ""))
+        val clave = campo("Contraseña", prefs.getString("ip_clave", ""), true)
+        val rtsp = campo("Dirección RTSP (solo si no la encuentra)", prefs.getString("rtsp", ""))
+        val caja = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL; setPadding(d(20), d(8), d(20), 0)
+            addView(ip); addView(usuario); addView(clave)
+            addView(TextView(this@MainActivity).apply {
+                text = "En Tapo, el usuario y la contraseña son los de «Cuenta de la cámara» (Ajustes avanzados), no los de la app. " +
+                    "El móvil tiene que estar en la misma wifi que la cámara, o conectado por VPN."
+                textSize = 12f; setPadding(0, d(8), 0, d(8))
+            })
+            addView(rtsp)
         }
         android.app.AlertDialog.Builder(this)
             .setTitle("Cámara IP")
-            .setMessage("La dirección RTSP de tu cámara. Suele venir en su manual o en su app (Hikvision, Dahua, Reolink, Tapo…). El móvil tiene que estar en su misma wifi, o conectado por VPN.")
-            .setView(campo)
+            .setView(android.widget.ScrollView(this).apply { addView(caja) })
             .setPositiveButton("Conectar") { _, _ ->
-                val url = campo.text.toString().trim()
-                if (url.startsWith("rtsp://", ignoreCase = true) || url.startsWith("http", ignoreCase = true)) {
-                    prefs.edit().putString("rtsp", url).apply()
-                    // La clave no entra en el identificador: solo servidor y ruta.
-                    usarRed(url, "cámara IP", false, "ip:" + url.substringAfter("@")); cerrar()
-                }
+                val host = ip.text.toString().trim().removePrefix("http://").removePrefix("rtsp://").substringBefore('/')
+                val u = usuario.text.toString().trim(); val c = clave.text.toString()
+                val manual = rtsp.text.toString().trim()
+                prefs.edit().putString("ip_host", host).putString("ip_usuario", u).putString("ip_clave", c).putString("rtsp", manual).apply()
+                conectaIp(host, u, c, manual); cerrar()
             }
             .setNegativeButton("Cancelar", null)
             .show()
+    }
+
+    private fun conectaIp(host: String, usuario: String, clave: String, manual: String) {
+        camara?.cierra(); camara = null; padPtz.visibility = android.view.View.GONE
+        // La clave no entra en el identificador de lo aprendido: solo el servidor.
+        val id = "ip:" + (host.ifEmpty { manual.substringAfter("@").substringBefore('/') })
+        if (manual.startsWith("rtsp://", true) || manual.startsWith("http", true)) usarRed(manual, "cámara IP", false, id)
+        if (host.isEmpty()) return
+        lEvento.text = "buscando la cámara $host…"
+        val cam = CamaraPtz(host, usuario, clave)
+        camara = cam
+        cam.conecta { r ->
+            runOnUiThread {
+                if (camara !== cam) return@runOnUiThread
+                when {
+                    manual.isNotEmpty() -> {}
+                    r.rtsp != null -> usarRed(r.rtsp, "cámara IP", false, id)
+                    // Sin ONVIF: la ruta más común (Tapo y muchas otras).
+                    else -> usarRed("rtsp://${java.net.URLEncoder.encode(usuario, "UTF-8")}:${java.net.URLEncoder.encode(clave, "UTF-8")}@$host:554/stream1",
+                                    "cámara IP", false, id)
+                }
+                padPtz.visibility = if (r.ptz) android.view.View.VISIBLE else android.view.View.GONE
+                lEvento.text = when {
+                    r.aviso != null && r.rtsp == null && manual.isEmpty() -> "cámara IP: ${r.aviso}; probando la ruta habitual"
+                    r.ptz -> "cámara IP conectada · se puede mover con los mandos"
+                    else -> "cámara IP conectada" + (r.aviso?.let { " · $it" } ?: "")
+                }
+            }
+        }
+    }
+
+    /**
+     * Mandos de la cámara: mientras se mantiene pulsado, se mueve; al soltar,
+     * para, y el análisis vuelve a aprender el fondo de lo que ahora se ve.
+     */
+    private fun construyePad(): android.widget.LinearLayout {
+        val d = { v: Int -> Ui.dp(this, v) }
+        fun tecla(t: String, desc: String, x: Double, y: Double, z: Double, casa: Boolean = false) = TextView(this).apply {
+            text = t; contentDescription = desc; textSize = 20f; gravity = Gravity.CENTER; setTextColor(Ui.TEXTO)
+            background = Ui.fondo(Color.argb(150, 20, 24, 30), d(26).toFloat(), Ui.BORDE, this@MainActivity)
+            layoutParams = android.widget.LinearLayout.LayoutParams(d(52), d(52)).apply { setMargins(d(3), d(3), d(3), d(3)) }
+            setOnTouchListener { v, e ->
+                val cam = camara ?: return@setOnTouchListener false
+                when (e.actionMasked) {
+                    android.view.MotionEvent.ACTION_DOWN -> {
+                        v.alpha = 0.6f
+                        if (casa) cam.aCasa() else cam.mueve(x, y, z)
+                    }
+                    android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                        v.alpha = 1f
+                        if (!casa) cam.para()
+                        pipeline?.camaraMovida()
+                        if (e.actionMasked == android.view.MotionEvent.ACTION_UP) v.performClick()
+                    }
+                }
+                true
+            }
+        }
+        fun fila(vararg vs: android.view.View) = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; vs.forEach { addView(it) }
+        }
+        fun hueco() = android.view.View(this).apply { layoutParams = android.widget.LinearLayout.LayoutParams(d(58), d(58)) }
+        val v = 0.5
+        return android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL; gravity = Gravity.CENTER
+            visibility = android.view.View.GONE
+            addView(fila(hueco(), tecla("▲", "Subir", 0.0, v, 0.0), tecla("+", "Acercar", 0.0, 0.0, v)))
+            addView(fila(tecla("◀", "Izquierda", -v, 0.0, 0.0), tecla("⌂", "Posición inicial", 0.0, 0.0, 0.0, true), tecla("▶", "Derecha", v, 0.0, 0.0)))
+            addView(fila(hueco(), tecla("▼", "Bajar", 0.0, -v, 0.0), tecla("−", "Alejar", 0.0, 0.0, -v)))
+        }
     }
 }

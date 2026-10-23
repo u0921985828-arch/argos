@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Las cámaras IP de casa hablan ONVIF por HTTP sin cifrar (es lo que traen de
+  fábrica: Tapo, Hikvision, Dahua…) y algunas públicas sirven vídeo por HTTP.
+  Sin esto, Android corta esas conexiones. La clave de la cámara no viaja en
+  claro: ONVIF manda su resumen WS-Security.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

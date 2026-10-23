@@ -73,6 +73,14 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
      * agregados por celda (rumbos, velocidades, clases), ningún recorrido.
      */
     fun nuevaEscena(movil: Boolean, archivo: java.io.File?) { nuevaEscena = movil to archivo }
+
+    /**
+     * La cámara IP se ha girado o ha cambiado el zoom: el fondo aprendido ya no
+     * es el de lo que se ve, así que se vuelve a aprender. Lo demás de la
+     * cámara (rótulos, zoom del detector, lo normal) sigue valiendo.
+     */
+    @Volatile private var fondoViejo = false
+    fun camaraMovida() { fondoViejo = true }
     // Hora real del instante 0 de la sesión, para guardar con fecha y hora.
     private val t0Epoch = System.currentTimeMillis() / 1000.0 - SystemClock.elapsedRealtime() / 1000.0
     private val ioExec = Executors.newSingleThreadExecutor { r -> Thread(r, "argos-memoria") }
@@ -255,6 +263,11 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
             archivo?.takeIf { it.exists() }?.let { f ->
                 runCatching { eus.argos.core.BehaviourModel.deserialize(f.readText()) }.getOrNull()?.let { brain.behaviour = it }
             }
+            fresh.set(false)
+        }
+        if (fondoViejo) {
+            fondoViejo = false
+            engine = Engine().apply { egoMotion = !fuenteFija }
             fresh.set(false)
         }
         val t0 = System.nanoTime()
