@@ -1,0 +1,84 @@
+name: Entrena el detector de tráfico
+
+# Ajusta el detector de la app (YOLOX nano) a las cámaras públicas: un maestro
+# grande etiqueta fotogramas de ~1.200 cámaras y el nano aprende a ver lo mismo.
+# Cada ronda parte de la anterior (rama `modelo-argos`) con fotogramas nuevos,
+# de otra hora del día. Los fotogramas viven solo mientras corre el trabajo.
+on:
+  workflow_dispatch:
+    inputs:
+      camaras: { description: "Fotogramas (uno por cámara)", default: "1200" }
+      epocas: { description: "Épocas", default: "20" }
+      minutos: { description: "Tope de minutos de entrenamiento", default: "150" }
+      desde_cero: { description: "Empezar del nano de serie (sí/no)", default: "no" }
+
+permissions:
+  contents: write
+
+jobs:
+  entrena:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Dependencias
+        run: |
+          which ffmpeg || (sudo apt-get update -q && sudo apt-get install -y -q ffmpeg)
+          pip install -q torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install -q numpy opencv-python-headless onnx onnxruntime loguru tabulate pycocotools psutil tqdm thop
+          git clone -q https://github.com/Megvii-BaseDetection/YOLOX.git /tmp/yolox
+          git -C /tmp/yolox checkout -q 6ddff4824372906469a7fae2dc3206c7aa4bbaee
+      - name: Maestro (YOLOX-L) y alumno (YOLOX nano), fijados por sha256
+        run: |
+          cd /tmp
+          base=https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0
+          curl -fsSL -o yolox_l.onnx $base/yolox_l.onnx
+          curl -fsSL -o yolox_nano.pth $base/yolox_nano.pth
+          curl -fsSL -o yolox_nano.onnx $base/yolox_nano.onnx
+          printf '%s\n' "7860ae79de6c89a3c1eb72ae9a2756c0ccfbe04b7791bb5880afabd97855a411  yolox_l.onnx" \
+                        "cd28f55fbbc1829f99d9ac9b38a16d259a22889739c8728ea877610201feff7b  yolox_nano.pth" | sha256sum -c -
+          curl -fsSL -o bus.jpg https://raw.githubusercontent.com/ultralytics/yolov5/master/data/images/bus.jpg || true
+          curl -fsSL -o zidane.jpg https://raw.githubusercontent.com/ultralytics/yolov5/master/data/images/zidane.jpg || true
+          curl -fsSL -o dog.jpg https://raw.githubusercontent.com/pjreddie/darknet/master/data/dog.jpg || true
+      - name: Ronda anterior
+        run: |
+          mkdir -p /tmp/modelo
+          if [ "${{ inputs.desde_cero }}" != "sí" ] && git fetch -q origin modelo-argos 2>/dev/null; then
+            git --work-tree=/tmp/modelo checkout origin/modelo-argos -- .
+            git reset -q
+          fi
+          ls -la /tmp/modelo
+          if [ -f /tmp/modelo/argos_trafico.pth ]; then echo "PESOS=/tmp/modelo/argos_trafico.pth" >> $GITHUB_ENV; cp /tmp/modelo/argos_trafico.onnx /tmp/anterior.onnx
+          else echo "PESOS=/tmp/yolox_nano.pth" >> $GITHUB_ENV; fi
+          echo "RONDA=$(( $(ls /tmp/modelo/informe-ronda-*.md 2>/dev/null | wc -l) + 1 ))" >> $GITHUB_ENV
+      - name: Fotogramas de cámaras públicas
+        run: python3 android-native/entrena/argos_entrena.py muestra /tmp/datos --n ${{ inputs.camaras }} --hilos 24 --semilla $RANDOM
+      - name: El maestro etiqueta
+        run: python3 android-native/entrena/argos_entrena.py etiqueta /tmp/datos --maestro /tmp/yolox_l.onnx --procesos 2 --hilos 2
+      - name: El alumno aprende
+        env: { YOLOX_SRC: /tmp/yolox }
+        run: |
+          python3 android-native/entrena/argos_entrena.py entrena /tmp/datos --pesos "$PESOS" --salida /tmp/argos_trafico.pth \
+            --epocas ${{ inputs.epocas }} --minutos ${{ inputs.minutos }} --lr 0.0005
+          python3 android-native/entrena/argos_entrena.py exporta --pesos /tmp/argos_trafico.pth --salida /tmp/argos_trafico.onnx
+      - name: Examen con cámaras que no vio
+        run: |
+          M="/tmp/yolox_nano.onnx"; [ -f /tmp/anterior.onnx ] && M="$M /tmp/anterior.onnx"
+          python3 android-native/entrena/argos_entrena.py evalua /tmp/datos $M /tmp/argos_trafico.onnx \
+            --cerca /tmp/bus.jpg /tmp/zidane.jpg /tmp/dog.jpg --informe /tmp/tabla.md | tee /tmp/examen.txt
+      - name: Publicar en la rama modelo-argos
+        run: |
+          cd /tmp/modelo
+          cp /tmp/argos_trafico.pth /tmp/argos_trafico.onnx .
+          [ -f /tmp/anterior.onnx ] && cp /tmp/anterior.onnx argos_trafico_ronda_$((RONDA-1)).onnx
+          { echo "# Ronda $RONDA · $(date -u +%Y-%m-%dT%H:%MZ)"; echo; echo "Fotogramas: ${{ inputs.camaras }} · épocas ${{ inputs.epocas }} · desde: $(basename $PESOS)"; echo;
+            cat /tmp/tabla.md; echo; echo '```'; grep '^cerca' /tmp/examen.txt; echo '```'; } > informe-ronda-$RONDA.md
+          sha256sum argos_trafico.onnx > argos_trafico.onnx.sha256
+          rm -rf .git; git init -q -b modelo-argos
+          git config user.name "github-actions"; git config user.email "github-actions@users.noreply.github.com"
+          git add -A && git commit -q -m "Detector de tráfico, ronda $RONDA"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" modelo-argos
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
