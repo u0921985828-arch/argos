@@ -581,8 +581,11 @@ class MainActivity : ComponentActivity() {
         } + " · " + (if (f.behaviourReady) "lo normal: aprendido" else "lo normal: aprendiendo (${f.behaviourMature} zonas)") +
             (if (f.rotulos > 0) " · ${f.rotulos} rótulo${if (f.rotulos == 1) "" else "s"} de la cámara ignorado${if (f.rotulos == 1) "" else "s"}" else "")
         val ev = f.events.firstOrNull()?.let { "último: ${it.kind} · objeto ${it.id} · ${it.detail}" } ?: "sin eventos"
-        val tecnico = "%.0f fps · análisis %.1f ms · detector %.0f ms (%d tesela%s) · zoom %s".format(
-            loc, p.fps, p.engineMs, p.detMs, p.lastTiles, if (p.lastTiles == 1) "" else "s", modo(p))
+        // «4 de 12»: el entorno aprendido manda mirar solo por donde pasan.
+        val teselas = if (p.lastTiles < p.teselasPlan) "${p.lastTiles} de ${p.teselasPlan} teselas, por el entorno"
+            else "${p.lastTiles} tesela${if (p.lastTiles == 1) "" else "s"}"
+        val tecnico = "%.0f fps · análisis %.1f ms · detector %.0f ms (%s) · zoom %s".format(
+            loc, p.fps, p.engineMs, p.detMs, teselas, modo(p))
         if (f.avisos.isNotEmpty()) f.avisos.forEach { avisaZona(it) }
         val lineaRadio = radio.linea()
         val aviso = radio.hayAviso()

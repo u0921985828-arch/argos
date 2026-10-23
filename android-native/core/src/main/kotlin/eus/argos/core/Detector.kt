@@ -222,10 +222,12 @@ class YoloxDetector(
 
     /**
      * Una pasada completa: cuadro entero (`zoom <= 0`) o todas las teselas.
-     * Cajas en píxeles del búfer de entrada.
+     * Cajas en píxeles del búfer de entrada. `soloTeselas`, si viene, es un
+     * subconjunto de `tiles(w, h, zoom)`: la pasada mira solo esas.
      */
-    fun detect(rgba: ByteArray, rowStride: Int, w: Int, h: Int, zoom: Double = 0.0): List<DetBox> {
-        val plan = tiles(w, h, zoom)
+    fun detect(rgba: ByteArray, rowStride: Int, w: Int, h: Int, zoom: Double = 0.0,
+               soloTeselas: List<IntArray>? = null): List<DetBox> {
+        val plan = soloTeselas ?: tiles(w, h, zoom)
         lastTiles = plan.size
         val boxes = ArrayList<DoubleArray>(); val scores = ArrayList<Double>()
         val labels = ArrayList<Int>()
@@ -296,6 +298,18 @@ class DetectionMemory(
             fresh.add(Mem(d, nowMs, seen, mejor != null && seen >= confirmPasses))
         }
         boxes = fresh
+    }
+
+    /**
+     * Una pasada que miró solo parte del cuadro: lo de fuera de lo mirado
+     * (`fuera`) se conserva tal cual estaba, con su hora, así que caduca por
+     * `ttlMs` si ninguna pasada vuelve a verlo. Lo de dentro se renueva.
+     */
+    fun updateParcial(dets: List<DetBox>, nowMs: Double, fuera: (DetBox) -> Boolean) {
+        val (quedan, dentro) = boxes.filter { nowMs - it.t < ttlMs }.partition { fuera(it.d) }
+        boxes = dentro
+        update(dets, nowMs)
+        boxes = boxes + quedan
     }
 
     /** `null` sin ninguna caja: entonces el seguimiento usa la resta de fondo. */

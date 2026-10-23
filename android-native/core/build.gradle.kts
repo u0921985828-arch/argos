@@ -39,6 +39,14 @@ tasks.register<JavaExec>("continuidad") {
     mainClass.set("eus.argos.paridad.ContinuidadCaseKt")
 }
 
+// Primero el entorno: por dónde pasan las cosas, y mirar ahí sin dejar de barrer.
+tasks.register<JavaExec>("entorno") {
+    group = "verification"
+    description = "Con el entorno aprendido una pasada mira pocas teselas, y aun así al final se mira todo."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("eus.argos.paridad.EntornoCaseKt")
+}
+
 // Lo que se le pide al asistente: cámaras, mover, ajustes, paneles.
 tasks.register<JavaExec>("ordenes") {
     group = "verification"

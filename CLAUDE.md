@@ -383,6 +383,18 @@ alrededor), conserva su número cuando el núcleo lo renumera y lo suelta a
 los 3 s sin confirmar o si deja de parecerse. `:core:continuidad`: lento,
 normal y rápido, en 30/30 frames con su número; uno que desaparece se suelta.
 
+**Primero el entorno, después la búsqueda (nativa).** En una cámara fija en
+teselas, `core/Entorno.kt` aprende por dónde pasan las cosas (rejilla 16×9
+de dónde ha visto el detector algo, con olvido lento; el rumbo ya lo aprende
+`BehaviourModel`). Con 40 vistas, cada pasada mira solo las teselas de lo que
+se sigue, las de más paso y una más por turno: 3-5 inferencias en vez de
+12-24, así que lo seguido se refresca varias veces más por segundo. Cada 5
+pasadas, barrido completo: mirar SOLO lo conocido es la «atención foveal» de
+los resultados negativos (40-50 % del recall). Una pasada parcial conserva en
+la memoria lo que no miró (caduca a los 4 s si nadie lo vuelve a ver) y no
+cuenta para el zoom automático ni para aprender el entorno, que se guarda por
+cámara (`<archivo>.entorno`). `:core:entorno`. Sin medir en una cámara real.
+
 **El asistente maneja la app (nativa).** `core/Ordenes.kt`: lo que se PIDE
 («pon una cámara de Los Ángeles», «otra cámara», «pon mi cámara IP», «gira
 a la izquierda un poco», «acerca», «activa el estabilizado», «dibuja una

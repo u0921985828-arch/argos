@@ -109,6 +109,16 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
     @Volatile private var fijos = eus.argos.core.Fijos()
     private val congelada = eus.argos.core.Congelada()
     private fun archivoFijos(f: java.io.File) = java.io.File(f.parentFile, f.name.removeSuffix(".txt") + ".fijos")
+    /*
+     * Por dónde pasan las cosas en esta cámara fija (`core/Entorno`): con eso
+     * aprendido, una pasada en teselas mira solo las que tocan y lo que se
+     * sigue se refresca varias veces más por segundo. `<archivo>.entorno`.
+     */
+    @Volatile private var entorno = eus.argos.core.Entorno()
+    private var pasada = 0
+    /** Teselas de la última pasada / del barrido completo, para el panel. */
+    @Volatile var teselasPlan = 0; private set
+    private fun archivoEntorno(f: java.io.File) = java.io.File(f.parentFile, f.name.removeSuffix(".txt") + ".entorno")
 
     /*
      * Zonas dibujadas sobre esta cámara (vigiladas e ignoradas) y sus avisos.
@@ -144,6 +154,11 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
         }
         fijos = fj
         autoZoom = AutoZoom().apply { empiezaEn(modo) }
+        val en = eus.argos.core.Entorno()
+        if (fuenteFija) archivo?.let(::archivoEntorno)?.takeIf { it.exists() }
+            ?.let { f -> runCatching { en.lee(f.readText()) } }
+        entorno = en
+        pasada = 0
     }
 
     private fun saveBehaviour(sync: Boolean) {
@@ -151,7 +166,11 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
         if (fuenteFija) {
             val fj = fijos; val modo = autoZoom.mode
             val txt = "zoom $modo\n" + synchronized(fj) { fj.serializa(SystemClock.elapsedRealtime() / 1000.0) }
-            val job = Runnable { runCatching { f.parentFile?.mkdirs(); archivoFijos(f).writeText(txt) } }
+            val en = entorno
+            val txtEn = synchronized(en) { en.serializa() }
+            val job = Runnable { runCatching {
+                f.parentFile?.mkdirs(); archivoFijos(f).writeText(txt); archivoEntorno(f).writeText(txtEn)
+            } }
             if (sync) job.run() else try { ioExec.execute(job) } catch (_: Exception) {}
         }
         val txt = brain.behaviour?.serialize() ?: return
@@ -401,19 +420,37 @@ class Pipeline(modelBytes: ByteArray, threads: Int, private val store: TrackStor
                 val z = if (autoZoomOn) autoZoom.next() else zoom
                 val esSondeo = autoZoomOn && z != modoPrincipal
                 val d = detActual
-                val crudas: List<DetBox> = d.detect(buf, rowStride, w, h, z)
+                // En teselas sobre una cámara fija, con el entorno aprendido,
+                // solo las teselas que tocan; cada pocas pasadas, todas.
+                val en = entorno
+                val todas = d.tiles(w, h, z)
+                val plan = if (fuenteFija && z > 0 && !esSondeo) synchronized(en) {
+                    val seguidos = memory.boxes.map { it.d.shifted(-camX, -camY) }
+                    en.plan(todas, w, h, seguidos, pasada++)
+                } else todas
+                val parcial = plan.size < todas.size
+                teselasPlan = todas.size
+                val crudas: List<DetBox> = d.detect(buf, rowStride, w, h, z, plan)
                 // En una cámara fija por red, los rótulos aprendidos no son
                 // objetos: ni entran en el seguimiento ni empujan al zoom.
                 val fj = fijos
                 val dets = if (fuenteFija) synchronized(fj) {
                     fj.filtra(crudas, h, SystemClock.elapsedRealtime() / 1000.0) { d -> eus.argos.core.Luz.fraccion(buf, rowStride, w, h, d) }
                 } else crudas
-                if (autoZoomOn) autoZoom.report(z, dets)
+                // Una pasada parcial no vale para comparar modos ni para
+                // aprender el entorno: vería solo lo que ya se esperaba.
+                if (autoZoomOn && !parcial) autoZoom.report(z, dets)
+                if (fuenteFija && !parcial && !esSondeo) synchronized(en) { en.anota(dets, w, h) }
                 lastZoom = z
                 lastTiles = d.lastTiles
                 val ms = (System.nanoTime() - t0) / 1e6
                 if (!esSondeo) {
-                    memory.update(dets.map { it.shifted(camX, camY) }, SystemClock.elapsedRealtime().toDouble())
+                    val ahora = SystemClock.elapsedRealtime().toDouble()
+                    val escena = dets.map { it.shifted(camX, camY) }
+                    if (parcial) memory.updateParcial(escena, ahora) { m ->
+                        val cx = (m.x1 + m.x2) / 2 - camX; val cy = (m.y1 + m.y2) / 2 - camY
+                        plan.none { cx >= it[0] && cx < it[2] && cy >= it[1] && cy < it[3] }
+                    } else memory.update(escena, ahora)
                     fresh.set(true)
                 }
                 val a = if (inferences == 0L) 1.0 else 0.2
