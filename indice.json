@@ -1,0 +1,882 @@
+[
+ {
+  "fichero": "california_00.jpg",
+  "sitio": "california",
+  "nombre": "TVA41 -- I-580 : 35th Avenue",
+  "url": "https://wzmedia.dot.ca.gov/D4/W580_at_35th_Av.stream/playlist.m3u8",
+  "dims": "720,480",
+  "rafaga": true
+ },
+ {
+  "fichero": "california_01.jpg",
+  "sitio": "california",
+  "nombre": "Hwy 49 at Pleasant Valley",
+  "url": "https://wzmedia.dot.ca.gov/D3/49_Pleasant_Valley_ED49_NB.stream/playlist.m3u8",
+  "dims": "720,480",
+  "rafaga": true
+ },
+ {
+  "fichero": "california_02.jpg",
+  "sitio": "california",
+  "nombre": "SR-14 : (69) Newhall Ave",
+  "url": "https://wzmedia.dot.ca.gov/D7/CCTV-69.stream/playlist.m3u8",
+  "dims": "1280,720",
+  "rafaga": true
+ },
+ {
+  "fichero": "california_03.jpg",
+  "sitio": "california",
+  "nombre": "I-110 : (795) PCH On-Ramp",
+  "url": "https://wzmedia.dot.ca.gov/D7/CCTV-795.stream/playlist.m3u8",
+  "dims": "1280,720",
+  "rafaga": false
+ },
+ {
+  "fichero": "california_04.jpg",
+  "sitio": "california",
+  "nombre": "Sheldon_Rd_JNO_SAC99_SB_1",
+  "url": "https://wzmedia.dot.ca.gov/D3/99_Sheldon_Rd_JNO_SAC99_SB_1.stream/playlist.m3u8",
+  "dims": "1280,720",
+  "rafaga": false
+ },
+ {
+  "fichero": "california_05.jpg",
+  "sitio": "california",
+  "nombre": "Hwy 50 at Sunrise Blvd OC JWO WB 1",
+  "url": "https://wzmedia.dot.ca.gov/D3/50_Sunrise_Blvd_OC_JWO_SAC50_WB_1.stream/playlist.m3u8",
+  "dims": "720,480",
+  "rafaga": false
+ },
+ {
+  "fichero": "california_06.jpg",
+  "sitio": "california",
+  "nombre": "I-405 : (228) Westminster",
+  "url": "https://wzmedia.dot.ca.gov/D12/NB405Westminster.stream/playlist.m3u8",
+  "dims": "720,480",
+  "rafaga": false
+ },
+ {
+  "fichero": "california_07.jpg",
+  "sitio": "california",
+  "nombre": "SR-57 : (183) North of Birch",
+  "url": "https://wzmedia.dot.ca.gov/D12/NB57NOBirchSt.stream/playlist.m3u8",
+  "dims": "1280,720",
+  "rafaga": false
+ },
+ {
+  "fichero": "california_08.jpg",
+  "sitio": "california",
+  "nombre": "Hwy 99 at Hwy 162",
+  "url": "https://wzmedia.dot.ca.gov/D3/99_JCT162E_BUT99_NB.stream/playlist.m3u8",
+  "dims": "720,480",
+  "rafaga": false
+ },
+ {
+  "fichero": "california_09.jpg",
+  "sitio": "california",
+  "nombre": "Hwy 50 at Zinfandel Dr EB 3",
+  "url": "https://wzmedia.dot.ca.gov/D3/50_Zinfandel_Dr_SAC50_EB_3.stream/playlist.m3u8",
+  "dims": "1280,720",
+  "rafaga": false
+ },
+ {
+  "fichero": "minnesota_00.jpg",
+  "sitio": "minnesota",
+  "nombre": "T.H.61 NB @ Buffalo St (MP 148.7)",
+  "url": "https://video.dot.state.mn.us/public/C1730.stream/playlist.m3u8",
+  "dims": "720,480",
+  "rafaga": true
+ },
+ {
+  "fichero": "minnesota_01.jpg",
+  "sitio": "minnesota",
+  "nombre": "T.H.55 WB @ Meadow Ln",
+  "url": "https://video.dot.state.mn.us/public/C1545.stream/playlist.m3u8",
+  "dims": "720,480",
+  "rafaga": true
+ },
+ {
+  "fichero": "minnesota_02.jpg",
+  "sitio": "minnesota",
+  "nombre": "T.H.61 @ Fallbrook Ave",
+  "url": "https://video.dot.state.mn.us/public/C30206.stream/playlist.m3u8",
+  "dims": "720,480",
+  "rafaga": true
+ },
+ {
+  "fichero": "minnesota_03.jpg",
+  "sitio": "minnesota",
+  "nombre": "T.H.13 NB @ Pilot Knob Rd",
+  "url": "https://video.dot.state.mn.us/public/C1300.stream/playlist.m3u8",
+  "dims": "720,480",
+  "rafaga": false
+ },
+ {
+  "fichero": "minnesota_04.jpg",
+  "sitio": "minnesota",
+  "nombre": "T.H.212 WB W of Wallace Rd",
+  "url": "https://video.dot.state.mn.us/public/C391.stream/playlist.m3u8",
+  "dims": "720,480",
+  "rafaga": false
+ },
+ {
+  "fichero": "minnesota_05.jpg",
+  "sitio": "minnesota",
+  "nombre": "T.H.61 SB @ T.H.55 EB",
+  "url": "https://video.dot.state.mn.us/public/C30094.stream/playlist.m3u8",
+  "dims": "720,480",
+  "rafaga": false
+ },
+ {
+  "fichero": "minnesota_06.jpg",
+  "sitio": "minnesota",
+  "nombre": "T.H.13 SB @ Mendota Heights Rd",
+  "url": "https://video.dot.state.mn.us/public/C1301.stream/playlist.m3u8",
+  "dims": "720,480",
+  "rafaga": false
+ },
+ {
+  "fichero": "minnesota_07.jpg",
+  "sitio": "minnesota",
+  "nombre": "T.H.610 WB @ Elm Creek Blvd",
+  "url": "https://video.dot.state.mn.us/public/C685.stream/playlist.m3u8",
+  "dims": "720,480",
+  "rafaga": false
+ },
+ {
+  "fichero": "minnesota_08.jpg",
+  "sitio": "minnesota",
+  "nombre": "T.H.52 NB @ Goodwin Ave (MP 102.5)",
+  "url": "https://video.dot.state.mn.us/public/C30124.stream/playlist.m3u8",
+  "dims": "720,480",
+  "rafaga": false
+ },
+ {
+  "fichero": "minnesota_09.jpg",
+  "sitio": "minnesota",
+  "nombre": "I-94 WB @ T.H.23 EB",
+  "url": "https://video.dot.state.mn.us/public/C30667.stream/playlist.m3u8",
+  "dims": "720,480",
+  "rafaga": false
+ },
+ {
+  "fichero": "iowa_00.jpg",
+  "sitio": "iowa",
+  "nombre": "SC - I-29 @ MM 144.5 (US 20/75)",
+  "url": "https://video2.iowadot.gov:8888/siouxcity/sctv05lb/playlist.m3u8",
+  "dims": "480,270",
+  "rafaga": true
+ },
+ {
+  "fichero": "iowa_01.jpg",
+  "sitio": "iowa",
+  "nombre": "CB - I-80 @ MM 27.3 (I-880 Interchange)",
+  "url": "https://video2.iowadot.gov:8888/councilbluffs/cbtv38lb/playlist.m3u8",
+  "dims": "480,270",
+  "rafaga": true
+ },
+ {
+  "fichero": "iowa_02.jpg",
+  "sitio": "iowa",
+  "nombre": "CB - I-29 @ MM 61.9 (I-680 Interchange)-Q",
+  "url": "https://video2.iowadot.gov:8888/councilbluffs/cbtv36qlb/playlist.m3u8",
+  "dims": "960,720",
+  "rafaga": true
+ },
+ {
+  "fichero": "iowa_03.jpg",
+  "sitio": "iowa",
+  "nombre": "CR - IA 100 @ MM 3.1 (Ellis Rd)",
+  "url": "https://video2.iowadot.gov:8888/cedarrapids/crtv58lb/playlist.m3u8",
+  "dims": "480,270",
+  "rafaga": false
+ },
+ {
+  "fichero": "iowa_04.jpg",
+  "sitio": "iowa",
+  "nombre": "AM - US 30 @ MM 151.1 (E of I-35)",
+  "url": "https://video4.iowadot.gov:8888/ames/amtv19lb/playlist.m3u8",
+  "dims": "480,270",
+  "rafaga": false
+ },
+ {
+  "fichero": "iowa_05.jpg",
+  "sitio": "iowa",
+  "nombre": "CR - IA 100 @ MM 6.1 (E of Cedar River)",
+  "url": "https://video2.iowadot.gov:8888/cedarrapids/crtv55lb/playlist.m3u8",
+  "dims": "480,270",
+  "rafaga": false
+ },
+ {
+  "fichero": "iowa_06.jpg",
+  "sitio": "iowa",
+  "nombre": "DM - US 65 @ MM 81.6 (8th St)",
+  "url": "https://video3.iowadot.gov:8888/ankeny/dmtv027lb/playlist.m3u8",
+  "dims": "480,270",
+  "rafaga": false
+ },
+ {
+  "fichero": "iowa_07.jpg",
+  "sitio": "iowa",
+  "nombre": "CR - I-380 @ MM 19.1 (Diagonal Dr SW)",
+  "url": "https://video2.iowadot.gov:8888/cedarrapids/crtv08lb/playlist.m3u8",
+  "dims": "480,270",
+  "rafaga": false
+ },
+ {
+  "fichero": "iowa_08.jpg",
+  "sitio": "iowa",
+  "nombre": "DM - I-235 @ MM 9.2 (Penn Ave)",
+  "url": "https://video4.iowadot.gov:8888/ankeny/dmtv115lb/playlist.m3u8",
+  "dims": "480,270",
+  "rafaga": false
+ },
+ {
+  "fichero": "iowa_09.jpg",
+  "sitio": "iowa",
+  "nombre": "IC - US 218 @ MM 96.6 (S of I-80)",
+  "url": "https://video3.iowadot.gov:8888/cedarrapids/ictv34lb/playlist.m3u8",
+  "dims": "480,270",
+  "rafaga": false
+ },
+ {
+  "fichero": "indiana_00.jpg",
+  "sitio": "indiana",
+  "nombre": "1-094-000-9-_-_-cam-1 I-80-94/0.9 US 41 N CALUMET AVE",
+  "url": "https://skysfs4.trafficwise.org/preroll/INDOT_412_hLtLAIKFvY5gAloV/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": true
+ },
+ {
+  "fichero": "indiana_01.jpg",
+  "sitio": "indiana",
+  "nombre": "1-069-207-2-1 S OF 126TH ST",
+  "url": "https://skysfs4.trafficwise.org/preroll/INDOT_207_TQDLCcmJAwqJ_kC3/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": true
+ },
+ {
+  "fichero": "indiana_02.jpg",
+  "sitio": "indiana",
+  "nombre": "1-069-013-6-1-rwis EVANSVILLE",
+  "url": "https://skysfs3.trafficwise.org/preroll/INDOT_720_TbdraTblYsf3p2nJ/playlist.m3u8",
+  "dims": "320,240",
+  "rafaga": true
+ },
+ {
+  "fichero": "indiana_03.jpg",
+  "sitio": "indiana",
+  "nombre": "1-065-259-7-1-rwis I-94 @ I-65",
+  "url": "https://skysfs3.trafficwise.org/preroll/INDOT_738_m9exUdhLUw3Rxl2g/playlist.m3u8",
+  "dims": "320,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "indiana_04.jpg",
+  "sitio": "indiana",
+  "nombre": "01-071-109-cam1 SR23 @ SR933",
+  "url": "https://skysfs3.trafficwise.org/preroll/INDOT_778_ab0BRPvvEnzFI8LZ/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "indiana_05.jpg",
+  "sitio": "indiana",
+  "nombre": "1-069-231-4-1 CR 750S",
+  "url": "https://skysfs4.trafficwise.org/preroll/INDOT_6_qVIVQEiKiXUXNqa5/playlist.m3u8",
+  "dims": "320,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "indiana_06.jpg",
+  "sitio": "indiana",
+  "nombre": "1-070-062-5-2 CR 525 E",
+  "url": "https://skysfs4.trafficwise.org/preroll/INDOT_60_64bmE8MY7dgNhpac/playlist.m3u8",
+  "dims": "320,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "indiana_07.jpg",
+  "sitio": "indiana",
+  "nombre": "1-065-247-1-1 US 231",
+  "url": "https://skysfs4.trafficwise.org/preroll/INDOT_466_txFesbRlfercQLsJ/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "indiana_08.jpg",
+  "sitio": "indiana",
+  "nombre": "1-069-315-1-3 I-469 N JCT",
+  "url": "https://skysfs3.trafficwise.org/preroll/INDOT_616_XwRX9n6bq-3eSKPB/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "indiana_09.jpg",
+  "sitio": "indiana",
+  "nombre": "1-465-051-8-1 EMERSON AVE",
+  "url": "https://skysfs4.trafficwise.org/preroll/INDOT_51_pvsUvH6kcDIWlBdj/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "kansas_00.jpg",
+  "sitio": "kansas",
+  "nombre": "I-70 at Manhattan Exit 313",
+  "url": "https://kdot-sfs3.us-east-1.skyvdn.com/rtplive/1-070-3130-2/playlist.m3u8?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3OTI3NDEzNTQsImV4cCI6MTc5Mjc0MTY1NH0.NJfmArnR_Kh9Szgog-yvimxZwbxlUnM2C9VSGE-WwFE",
+  "dims": "1280,720",
+  "rafaga": true
+ },
+ {
+  "fichero": "kansas_01.jpg",
+  "sitio": "kansas",
+  "nombre": "I-235 at 25th",
+  "url": "https://kdot-sfs2.us-east-1.skyvdn.com/rtplive/5-235-0122-2/playlist.m3u8?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3OTI3NDEzNDMsImV4cCI6MTc5Mjc0MTY0M30.dVROud8ZkVVjiYKxqeKOCrvcM8SCg96_8Rk2-JO7D7I",
+  "dims": "1280,720",
+  "rafaga": true
+ },
+ {
+  "fichero": "kansas_02.jpg",
+  "sitio": "kansas",
+  "nombre": "K-96 at Greenwich",
+  "url": "https://kdot-sfs2.us-east-1.skyvdn.com/rtplive/5-096-2970-2/playlist.m3u8?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3OTI3NDEzNDgsImV4cCI6MTc5Mjc0MTY0OH0.tMtP9sQWc_u7oUxVtS2VK_uR8_n7Zch8lxtCXZH0Pv4",
+  "dims": "720,480",
+  "rafaga": true
+ },
+ {
+  "fichero": "kansas_03.jpg",
+  "sitio": "kansas",
+  "nombre": "I-70 east of Colby MM 59",
+  "url": "https://kdot-sfs2.us-east-1.skyvdn.com/rtplive/3-070-0580-2/playlist.m3u8?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3OTI3NDEzNDAsImV4cCI6MTc5Mjc0MTY0MH0.xe4xrES29hTsh-R1D5jU-v34BguyPY15u_ivpdnG150",
+  "dims": "1280,720",
+  "rafaga": false
+ },
+ {
+  "fichero": "kansas_04.jpg",
+  "sitio": "kansas",
+  "nombre": "K-15 & PATRIOT AVE. / 63RD ST.",
+  "url": "https://kdot-sfs3.us-east-1.skyvdn.com/rtplive/5-015-0700-2/playlist.m3u8?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3OTI3NDEzNTUsImV4cCI6MTc5Mjc0MTY1NX0.ZV1uMfdph06RkjoeWljFDzK7fUdBzTqhKxvmQJGV29Y",
+  "dims": "720,480",
+  "rafaga": false
+ },
+ {
+  "fichero": "kansas_05.jpg",
+  "sitio": "kansas",
+  "nombre": "I-35 and Burlingame Road Exit 131",
+  "url": "https://kdot-sfs2.us-east-1.skyvdn.com/rtplive/1-035-1310-2/playlist.m3u8?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3OTI3NDEzNDEsImV4cCI6MTc5Mjc0MTY0MX0.9E0zJWtKc9F03O32hjQFK-YE6VF_saYpfLBFbWsLstE",
+  "dims": "1280,720",
+  "rafaga": false
+ },
+ {
+  "fichero": "kansas_06.jpg",
+  "sitio": "kansas",
+  "nombre": "K-96 WO Greenwich",
+  "url": "https://kdot-sfs3.us-east-1.skyvdn.com/rtplive/5-096-2966-2/playlist.m3u8?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3OTI3NDEzNjEsImV4cCI6MTc5Mjc0MTY2MX0.4OL7FAo1RJ8xapGJ6xPKIZ0GrKrIf_eheteDDPy5qQI",
+  "dims": "1280,720",
+  "rafaga": false
+ },
+ {
+  "fichero": "kansas_07.jpg",
+  "sitio": "kansas",
+  "nombre": "I-135 at 2nd",
+  "url": "https://kdot-sfs3.us-east-1.skyvdn.com/rtplive/5-135-0068-2/playlist.m3u8?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3OTI3NDEzNjAsImV4cCI6MTc5Mjc0MTY2MH0.F0u0WlC1UkmINSW1lf9Hz4bSkb_U7dQNP2QU8wOUPxQ",
+  "dims": "1280,720",
+  "rafaga": false
+ },
+ {
+  "fichero": "kansas_08.jpg",
+  "sitio": "kansas",
+  "nombre": "I-70 at Russell Exit 184",
+  "url": "https://kdot-sfs3.us-east-1.skyvdn.com/rtplive/3-070-1840-2/playlist.m3u8?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3OTI3NDEzNTIsImV4cCI6MTc5Mjc0MTY1Mn0.C9Uq0QFyLf8xEAOUIKD-8gKSf2W0yV8C0NW_0d6VjB8",
+  "dims": "1280,720",
+  "rafaga": false
+ },
+ {
+  "fichero": "kansas_09.jpg",
+  "sitio": "kansas",
+  "nombre": "I-135 N of 45th St",
+  "url": "https://kdot-sfs3.us-east-1.skyvdn.com/rtplive/5-135-0125-2/playlist.m3u8?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3OTI3NDEzNjQsImV4cCI6MTc5Mjc0MTY2NH0.wu9WllfUxvu4_fMlwq8CLt0Dkb_9a0JdPK_hBbuwc6Y",
+  "dims": "1280,720",
+  "rafaga": false
+ },
+ {
+  "fichero": "misuri_00.jpg",
+  "sitio": "misuri",
+  "nombre": "Campbell and Sunset",
+  "url": "https://s2.ozarkstrafficoneview.com/rtplive/CAM87/playlist.m3u8",
+  "dims": "320,240",
+  "rafaga": true
+ },
+ {
+  "fichero": "misuri_01.jpg",
+  "sitio": "misuri",
+  "nombre": "64 AT 55, MM 40.3",
+  "url": "https://sfs02-traveler.modot.mo.gov/rtplive/MODOT_CAM_101/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": true
+ },
+ {
+  "fichero": "misuri_02.jpg",
+  "sitio": "misuri",
+  "nombre": "44 AT LACLEDE STATION, MM 282.6",
+  "url": "https://sfs03-traveler.modot.mo.gov/rtplive/MODOT_CAM_027/playlist.m3u8",
+  "dims": "320,240",
+  "rafaga": true
+ },
+ {
+  "fichero": "misuri_03.jpg",
+  "sitio": "misuri",
+  "nombre": "44 at Conway, MM 113",
+  "url": "https://sfs01-traveler.modot.mo.gov/rtplive/MODOT_CAM_282/playlist.m3u8",
+  "dims": "320,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "misuri_04.jpg",
+  "sitio": "misuri",
+  "nombre": "44 and 50 at Union, MM 247",
+  "url": "https://sfs02-traveler.modot.mo.gov/rtplive/MODOT_CAM_368/playlist.m3u8",
+  "dims": "320,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "misuri_05.jpg",
+  "sitio": "misuri",
+  "nombre": "370 E/O MISSOURI RIVER, MM 15.9",
+  "url": "https://sfs03-traveler.modot.mo.gov/rtplive/MODOT_CAM_219/playlist.m3u8",
+  "dims": "320,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "misuri_06.jpg",
+  "sitio": "misuri",
+  "nombre": "70 AT RIVERVIEW, MM 243.6",
+  "url": "https://sfs02-traveler.modot.mo.gov/rtplive/MODOT_CAM_140/playlist.m3u8",
+  "dims": "320,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "misuri_07.jpg",
+  "sitio": "misuri",
+  "nombre": "Kimbrough and Walnut",
+  "url": "https://s2.ozarkstrafficoneview.com/rtplive/CAM86/playlist.m3u8",
+  "dims": "320,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "misuri_08.jpg",
+  "sitio": "misuri",
+  "nombre": "Campbell and JRF",
+  "url": "https://s2.ozarkstrafficoneview.com/rtplive/CAM68/playlist.m3u8",
+  "dims": "320,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "misuri_09.jpg",
+  "sitio": "misuri",
+  "nombre": "55 AT A, MM 175.7",
+  "url": "https://sfs02-traveler.modot.mo.gov/rtplive/MODOT_CAM_260/playlist.m3u8",
+  "dims": "480,270",
+  "rafaga": false
+ },
+ {
+  "fichero": "delaware_00.jpg",
+  "sitio": "delaware",
+  "nombre": "MALL RD @ W CENTER BLVD",
+  "url": "https://video.deldot.gov:443/live/NCAM175.stream/playlist.m3u8",
+  "dims": "1280,720",
+  "rafaga": true
+ },
+ {
+  "fichero": "delaware_01.jpg",
+  "sitio": "delaware",
+  "nombre": "US 13 @ RD 315 (TOWER HILL RD)",
+  "url": "https://video.deldot.gov:443/live/KCAM021.stream/playlist.m3u8",
+  "dims": "800,450",
+  "rafaga": true
+ },
+ {
+  "fichero": "delaware_02.jpg",
+  "sitio": "delaware",
+  "nombre": "RAMP FROM SB I-495 AND I-95 @ NB",
+  "url": "https://video.deldot.gov:443/live/NCAM258.stream/playlist.m3u8",
+  "dims": "1920,1080",
+  "rafaga": true
+ },
+ {
+  "fichero": "delaware_03.jpg",
+  "sitio": "delaware",
+  "nombre": "DE 1 @ DE 1A",
+  "url": "https://video.deldot.gov:443/live/SCAM009.stream/playlist.m3u8",
+  "dims": "1280,720",
+  "rafaga": false
+ },
+ {
+  "fichero": "delaware_04.jpg",
+  "sitio": "delaware",
+  "nombre": "US 13 @ RD 381",
+  "url": "https://video.deldot.gov:443/live/NCAM096.stream/playlist.m3u8",
+  "dims": "1920,1080",
+  "rafaga": false
+ },
+ {
+  "fichero": "delaware_05.jpg",
+  "sitio": "delaware",
+  "nombre": "DE 26 @ RD 334",
+  "url": "https://video.deldot.gov:443/live/SCAM160.stream/playlist.m3u8",
+  "dims": "800,450",
+  "rafaga": false
+ },
+ {
+  "fichero": "delaware_06.jpg",
+  "sitio": "delaware",
+  "nombre": "US 13 @ DE 72",
+  "url": "https://video.deldot.gov:443/live/NCAM195.stream/playlist.m3u8",
+  "dims": "1280,720",
+  "rafaga": false
+ },
+ {
+  "fichero": "delaware_07.jpg",
+  "sitio": "delaware",
+  "nombre": "DE 7 @ VALLEY RD",
+  "url": "https://video.deldot.gov:443/live/NCAM149.stream/playlist.m3u8",
+  "dims": "800,450",
+  "rafaga": false
+ },
+ {
+  "fichero": "delaware_08.jpg",
+  "sitio": "delaware",
+  "nombre": "I 495 @ 12TH STREET / BRANDYWINE",
+  "url": "https://video.deldot.gov:443/live/NCAM054.stream/playlist.m3u8",
+  "dims": "1280,720",
+  "rafaga": false
+ },
+ {
+  "fichero": "delaware_09.jpg",
+  "sitio": "delaware",
+  "nombre": "DE 1 @ SCARBOROUGH RD",
+  "url": "https://video.deldot.gov:443/live/KCAM109.stream/playlist.m3u8",
+  "dims": "800,450",
+  "rafaga": false
+ },
+ {
+  "fichero": "nevada_00.jpg",
+  "sitio": "nevada",
+  "nombre": "Sahara Ave & Decatur Blvd",
+  "url": "https://d1wse1.its.nv.gov:443/vegasxcd01/c87478a0-0f9c-453d-a8dd-756dd24422a9_lvflirxcd01_public.stream/playlist.m3u8",
+  "dims": "360,240",
+  "rafaga": true
+ },
+ {
+  "fichero": "nevada_01.jpg",
+  "sitio": "nevada",
+  "nombre": "Blue Diamond Rd & Jones Blvd",
+  "url": "https://d1wse1.its.nv.gov:443/vegasxcd01/92c3642d-de4f-4ef3-b329-fc2ffd25e82b_lvflirxcd01_public.stream/playlist.m3u8",
+  "dims": "360,240",
+  "rafaga": true
+ },
+ {
+  "fichero": "nevada_02.jpg",
+  "sitio": "nevada",
+  "nombre": "SR445 @ Los Altos",
+  "url": "https://d2wse2.its.nv.gov:443/renoxcd03/0258012f-28cb-4691-a783-a797b49acff4_hspflirxcd03_public.stream/playlist.m3u8",
+  "dims": "1920,1080",
+  "rafaga": true
+ },
+ {
+  "fichero": "nevada_03.jpg",
+  "sitio": "nevada",
+  "nombre": "I580 NB Bowers Mansion Highmast",
+  "url": "https://d2wse2.its.nv.gov:443/renoxcd03/9f56a5fa-30af-4939-abe8-584242a1cd30_hspflirxcd03_public.stream/playlist.m3u8",
+  "dims": "1920,1080",
+  "rafaga": false
+ },
+ {
+  "fichero": "nevada_04.jpg",
+  "sitio": "nevada",
+  "nombre": "Charleston Blvd & Fremont St",
+  "url": "https://d1wse2.its.nv.gov:443/vegasxcd02/4af1c23c-788a-46f2-b70b-31b713ba6281_lvflirxcd03_public.stream/playlist.m3u8",
+  "dims": "640,360",
+  "rafaga": false
+ },
+ {
+  "fichero": "nevada_05.jpg",
+  "sitio": "nevada",
+  "nombre": "I-15 SB between Cheyenne and Carey",
+  "url": "https://d1wse1.its.nv.gov:443/vegasxcd01/c9139e20-135b-4630-af34-9e1f0947e9c1_lvflirxcd01_public.stream/playlist.m3u8",
+  "dims": "360,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "nevada_06.jpg",
+  "sitio": "nevada",
+  "nombre": "Durango Dr & North CC 215 WB Ramp",
+  "url": "https://d1wse1.its.nv.gov:443/vegasxcd01/fbb10712-4f0b-4efb-919d-168c1506e1d0_lvflirxcd01_public.stream/playlist.m3u8",
+  "dims": "640,360",
+  "rafaga": false
+ },
+ {
+  "fichero": "nevada_07.jpg",
+  "sitio": "nevada",
+  "nombre": "Blue DIamond Rd & Rainbow Blvd",
+  "url": "https://d1wse1.its.nv.gov:443/vegasxcd01/388bf648-c3ea-4b4e-9e3c-95a42df0610a_lvflirxcd01_public.stream/playlist.m3u8",
+  "dims": "360,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "nevada_08.jpg",
+  "sitio": "nevada",
+  "nombre": "US93 Connors WP MM24",
+  "url": "https://d3wse1.its.nv.gov:443/elkoxcd01/6953bb66-583b-40b5-aa41-6211f50c493f_hspflirxcd04_public.stream/playlist.m3u8",
+  "dims": "800,450",
+  "rafaga": false
+ },
+ {
+  "fichero": "nevada_09.jpg",
+  "sitio": "nevada",
+  "nombre": "Russell Rd & CC 215 NB Ramp",
+  "url": "https://d1wse2.its.nv.gov:443/vegasxcd02/3a970a89-469f-4f7c-b436-5026aa2b42fe_lvflirxcd02_public.stream/playlist.m3u8",
+  "dims": "360,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "luisiana_00.jpg",
+  "sitio": "luisiana",
+  "nombre": "US 61 at Prescott",
+  "url": "https://ITSStreamingBR.dotd.la.gov/public/br-cam-185.streams/playlist.m3u8",
+  "dims": "320,240",
+  "rafaga": true
+ },
+ {
+  "fichero": "luisiana_01.jpg",
+  "sitio": "luisiana",
+  "nombre": "US 190 at Choctaw/O Neal",
+  "url": "https://ITSStreamingBR.dotd.la.gov/public/br-cam-032.streams/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": true
+ },
+ {
+  "fichero": "luisiana_02.jpg",
+  "sitio": "luisiana",
+  "nombre": "I-20 at Spring Street",
+  "url": "https://ITSStreamingBR2.dotd.la.gov/public/shr-cam-011.streams/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": true
+ },
+ {
+  "fichero": "luisiana_03.jpg",
+  "sitio": "luisiana",
+  "nombre": "US 61 at Scenic",
+  "url": "https://ITSStreamingBR.dotd.la.gov/public/br-cam-188.streams/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "luisiana_04.jpg",
+  "sitio": "luisiana",
+  "nombre": "LA 3040 at St. Charles Ave.",
+  "url": "https://ITSStreamingNO.dotd.la.gov/public/hou-cam-008.streams/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "luisiana_05.jpg",
+  "sitio": "luisiana",
+  "nombre": "US 61 at Sherwood Commons",
+  "url": "https://ITSStreamingBR.dotd.la.gov/public/br-cam-189.streams/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "luisiana_06.jpg",
+  "sitio": "luisiana",
+  "nombre": "US 61 at Plank Rd",
+  "url": "https://ITSStreamingBR.dotd.la.gov/public/br-cam-184.streams/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "luisiana_07.jpg",
+  "sitio": "luisiana",
+  "nombre": "I-10 at LA 73",
+  "url": "https://ITSStreamingBR.dotd.la.gov/public/br-cam-120.streams/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "luisiana_08.jpg",
+  "sitio": "luisiana",
+  "nombre": "I-220 at Jefferson Paige Rd",
+  "url": "https://ITSStreamingBR2.dotd.la.gov/public/shr-cam-023.streams/playlist.m3u8",
+  "dims": "480,270",
+  "rafaga": false
+ },
+ {
+  "fichero": "luisiana_09.jpg",
+  "sitio": "luisiana",
+  "nombre": "US 190 N of I-12",
+  "url": "https://ITSStreamingNO.dotd.la.gov/public/ns-cam-024.streams/playlist.m3u8",
+  "dims": "704,480",
+  "rafaga": false
+ },
+ {
+  "fichero": "wisconsin_00.jpg",
+  "sitio": "wisconsin",
+  "nombre": "I-41/94 at Ryan Rd",
+  "url": "https://cctv2.dot.wi.gov/rtplive/CCTV-40-0061/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": true
+ },
+ {
+  "fichero": "wisconsin_01.jpg",
+  "sitio": "wisconsin",
+  "nombre": "I-94 at WIS 95 Hixton",
+  "url": "https://cctv1.dot.wi.gov/rtplive/CCTV-27-0015/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": true
+ },
+ {
+  "fichero": "wisconsin_02.jpg",
+  "sitio": "wisconsin",
+  "nombre": "E Washington Ave at Stoughton Rd",
+  "url": "https://cctv2.dot.wi.gov/rtplive/CCTV-13-0017/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": true
+ },
+ {
+  "fichero": "wisconsin_03.jpg",
+  "sitio": "wisconsin",
+  "nombre": "84th St at N of I-94",
+  "url": "https://cctv2.dot.wi.gov/rtplive/CCTV-40-0210/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "wisconsin_04.jpg",
+  "sitio": "wisconsin",
+  "nombre": "US 53 at Golf Rd",
+  "url": "https://cctv1.dot.wi.gov/rtplive/CCTV-18-0042/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "wisconsin_05.jpg",
+  "sitio": "wisconsin",
+  "nombre": "I-94 at WIS 54",
+  "url": "https://cctv1.dot.wi.gov/rtplive/CCTV-27-0024/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "wisconsin_06.jpg",
+  "sitio": "wisconsin",
+  "nombre": "US 53 at River Prairie Dr",
+  "url": "https://cctv1.dot.wi.gov/rtplive/CCTV-18-0034/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "wisconsin_07.jpg",
+  "sitio": "wisconsin",
+  "nombre": "I-43/94 at National Ave",
+  "url": "https://cctv2.dot.wi.gov/rtplive/CCTV-40-0017/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "wisconsin_08.jpg",
+  "sitio": "wisconsin",
+  "nombre": "I-39 at WIS 16",
+  "url": "https://cctv2.dot.wi.gov/rtplive/CCTV-11-0131/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "wisconsin_09.jpg",
+  "sitio": "wisconsin",
+  "nombre": "I-41/94 at Oakwood Rd",
+  "url": "https://cctv2.dot.wi.gov/rtplive/CCTV-40-0143/playlist.m3u8",
+  "dims": "352,240",
+  "rafaga": false
+ },
+ {
+  "fichero": "londres_00.jpg",
+  "sitio": "londres",
+  "nombre": "A12 Eastern Av/Brook Rd",
+  "url": "https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/00001.02418.mp4",
+  "dims": "352,288",
+  "rafaga": true
+ },
+ {
+  "fichero": "londres_01.jpg",
+  "sitio": "londres",
+  "nombre": "Tower Bridge App./East Smithfield",
+  "url": "https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/00001.03500.mp4",
+  "dims": "352,288",
+  "rafaga": true
+ },
+ {
+  "fichero": "londres_02.jpg",
+  "sitio": "londres",
+  "nombre": "Waterworks W/B Off-Slip",
+  "url": "https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/00002.00860.mp4",
+  "dims": "352,288",
+  "rafaga": true
+ },
+ {
+  "fichero": "londres_03.jpg",
+  "sitio": "londres",
+  "nombre": "John Wilson St/New Ferry Approach",
+  "url": "https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/00001.09055.mp4",
+  "dims": "352,288",
+  "rafaga": false
+ },
+ {
+  "fichero": "londres_04.jpg",
+  "sitio": "londres",
+  "nombre": "Camden Rd/St Pancras Way",
+  "url": "https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/00001.09560.mp4",
+  "dims": "352,288",
+  "rafaga": false
+ },
+ {
+  "fichero": "londres_05.jpg",
+  "sitio": "londres",
+  "nombre": "A3 Clapham Road/B221 Bedford Road",
+  "url": "https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/00001.04620.mp4",
+  "dims": "352,288",
+  "rafaga": false
+ },
+ {
+  "fichero": "londres_06.jpg",
+  "sitio": "londres",
+  "nombre": "Camden Rd N Of Camden Pk Rd",
+  "url": "https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/00001.09619.mp4",
+  "dims": "352,288",
+  "rafaga": false
+ },
+ {
+  "fichero": "londres_07.jpg",
+  "sitio": "londres",
+  "nombre": "Southampton Row/Vernon Place",
+  "url": "https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/00001.07590.mp4",
+  "dims": "352,288",
+  "rafaga": false
+ },
+ {
+  "fichero": "londres_08.jpg",
+  "sitio": "londres",
+  "nombre": "Cromwell Rd/Earls Court Rd",
+  "url": "https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/00001.06600.mp4",
+  "dims": "352,288",
+  "rafaga": false
+ },
+ {
+  "fichero": "londres_09.jpg",
+  "sitio": "londres",
+  "nombre": "Stonecot Hill/Hill Top",
+  "url": "https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/00001.04675.mp4",
+  "dims": "352,288",
+  "rafaga": false
+ }
+]
