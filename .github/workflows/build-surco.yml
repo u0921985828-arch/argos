@@ -1,0 +1,77 @@
+name: Build Surco
+
+# Surco (surco/): reproductor de música que organiza por etiquetas. Proyecto
+# aparte de ARGOS; vive aquí porque es donde hay un ejecutor con Android SDK
+# y Google Maven, que el contenedor de desarrollo no alcanza.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'surco/**'
+      - '.github/workflows/build-surco.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # Paquetes explícitos: el de serie pide `tools`, retirado, y tumba el job.
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-35 build-tools;35.0.0'
+
+      # Release minificado (R8) y firmado con la clave de depuración del
+      # ejecutor; el debug, por si R8 rompe algo de jaudiotagger.
+      - name: Build APKs
+        working-directory: surco
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug assembleRelease
+
+      - name: Collect APKs
+        run: |
+          set -e
+          cp surco/app/build/outputs/apk/release/app-release.apk Surco.apk
+          cp surco/app/build/outputs/apk/debug/app-debug.apk Surco-debug.apk
+          AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt | sort -V | tail -1)
+          "$AAPT" dump badging Surco.apk | head -3
+          ls -l Surco.apk Surco-debug.apk
+          sha256sum Surco.apk Surco-debug.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: surco-apk
+          path: |
+            Surco.apk
+            Surco-debug.apk
+          if-no-files-found: error
+
+      # Rama `apk-surco` de un solo commit, para recoger el APK con git desde
+      # donde el almacén de artifacts no llega. Se reescribe en cada compilación.
+      - name: Publish APK to the `apk-surco` branch
+        run: |
+          set -e
+          work=$(mktemp -d)
+          cp Surco.apk Surco-debug.apk "$work/"
+          cd "$work"
+          sha256sum Surco.apk Surco-debug.apk > SHA256SUMS
+          git init -q -b apk-surco
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add Surco.apk Surco-debug.apk SHA256SUMS
+          git commit -q -m "APK de Surco de ${GITHUB_SHA::8}"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" apk-surco
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

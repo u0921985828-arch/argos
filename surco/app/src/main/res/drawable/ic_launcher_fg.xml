@@ -1,0 +1,12 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- disco de vinilo con surcos y etiqueta cobre -->
+    <path android:fillColor="#FF2A2F38" android:pathData="M54,24a30,30 0 1,0 0.01,0z"/>
+    <path android:strokeColor="#FF3D4450" android:strokeWidth="1.2" android:pathData="M54,29a25,25 0 1,0 0.01,0z"/>
+    <path android:strokeColor="#FF3D4450" android:strokeWidth="1.2" android:pathData="M54,34a20,20 0 1,0 0.01,0z"/>
+    <path android:strokeColor="#FF3D4450" android:strokeWidth="1.2" android:pathData="M54,39a15,15 0 1,0 0.01,0z"/>
+    <path android:fillColor="#FFE08A4B" android:pathData="M54,44a10,10 0 1,0 0.01,0z"/>
+    <path android:fillColor="#FF16191F" android:pathData="M54,51.5a2.5,2.5 0 1,0 0.01,0z"/>
+    <path android:strokeColor="#FF6FB3A8" android:strokeWidth="2.2" android:strokeLineCap="round" android:pathData="M60,30 A25,25 0 0,1 77,47"/>
+</vector>

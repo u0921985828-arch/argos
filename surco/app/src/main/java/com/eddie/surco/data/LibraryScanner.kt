@@ -1,0 +1,205 @@
+package com.eddie.surco.data
+
+import android.content.Context
+import android.media.MediaMetadataRetriever
+import android.os.Build
+import android.provider.MediaStore
+import org.jaudiotagger.audio.AudioFileIO
+import org.jaudiotagger.tag.FieldKey
+import org.jaudiotagger.tag.Tag
+import org.jaudiotagger.tag.reference.GenreTypes
+import org.json.JSONArray
+import java.io.File
+import java.util.logging.Level
+import java.util.logging.Logger
+
+class LibraryScanner(private val ctx: Context) {
+
+    init {
+        Logger.getLogger("org.jaudiotagger").level = Level.OFF
+    }
+
+    /** Lectura rápida desde la base de datos multimedia de Android. */
+    fun queryMediaStore(): List<Track> {
+        val cols = mutableListOf(
+            MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST,
+            MediaStore.Audio.Media.ALBUM, MediaStore.Audio.Media.ALBUM_ID, MediaStore.Audio.Media.DURATION,
+            MediaStore.Audio.Media.DATA, MediaStore.Audio.Media.YEAR, MediaStore.Audio.Media.COMPOSER,
+            MediaStore.Audio.Media.TRACK, MediaStore.Audio.Media.MIME_TYPE, MediaStore.Audio.Media.SIZE,
+            MediaStore.Audio.Media.DATE_ADDED, MediaStore.Audio.Media.DATE_MODIFIED,
+        )
+        val modern = Build.VERSION.SDK_INT >= 30
+        if (modern) cols += listOf(
+            MediaStore.Audio.Media.ALBUM_ARTIST, MediaStore.Audio.Media.GENRE, MediaStore.Audio.Media.BITRATE,
+        )
+        val out = ArrayList<Track>()
+        ctx.contentResolver.query(
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, cols.toTypedArray(),
+            "${MediaStore.Audio.Media.IS_MUSIC} != 0", null, null,
+        )?.use { c ->
+            fun s(n: String) = c.getColumnIndex(n).let { if (it < 0) "" else c.getString(it).orEmpty() }
+            fun l(n: String) = c.getColumnIndex(n).let { if (it < 0) 0L else c.getLong(it) }
+            while (c.moveToNext()) {
+                val trk = l(MediaStore.Audio.Media.TRACK).toInt()
+                val path = s(MediaStore.Audio.Media.DATA)
+                out += Track(
+                    id = l(MediaStore.Audio.Media._ID),
+                    path = path,
+                    title = s(MediaStore.Audio.Media.TITLE).ifBlank { File(path).nameWithoutExtension },
+                    artist = clean(s(MediaStore.Audio.Media.ARTIST)),
+                    album = clean(s(MediaStore.Audio.Media.ALBUM)),
+                    albumArtist = if (modern) clean(s(MediaStore.Audio.Media.ALBUM_ARTIST)) else "",
+                    albumId = l(MediaStore.Audio.Media.ALBUM_ID),
+                    genre = if (modern) cleanGenre(s(MediaStore.Audio.Media.GENRE)) else "",
+                    year = l(MediaStore.Audio.Media.YEAR).toInt(),
+                    composer = clean(s(MediaStore.Audio.Media.COMPOSER)),
+                    trackNo = if (trk >= 1000) trk % 1000 else trk,
+                    discNo = if (trk >= 1000) trk / 1000 else 0,
+                    durationMs = l(MediaStore.Audio.Media.DURATION),
+                    bitrate = if (modern) (l(MediaStore.Audio.Media.BITRATE) / 1000).toInt() else 0,
+                    sampleRate = 0,
+                    format = formatFromMime(s(MediaStore.Audio.Media.MIME_TYPE), path),
+                    size = l(MediaStore.Audio.Media.SIZE),
+                    dateAdded = l(MediaStore.Audio.Media.DATE_ADDED),
+                    dateModified = l(MediaStore.Audio.Media.DATE_MODIFIED),
+                )
+            }
+        }
+        return out
+    }
+
+    /** Lectura profunda del archivo: todas las etiquetas que soporte el formato. */
+    fun enrich(t: Track): Track {
+        val viaTagger = runCatching { readWithTagger(t) }.getOrNull()
+        val base = viaTagger ?: runCatching { readWithRetriever(t) }.getOrDefault(t)
+        return base.copy(enriched = true)
+    }
+
+    private fun readWithTagger(t: Track): Track? {
+        val f = File(t.path)
+        if (!f.canRead()) return null
+        val af = AudioFileIO.read(f)
+        val h = af.audioHeader
+        val tag: Tag? = af.tag
+        fun g(k: FieldKey): String = try { tag?.getFirst(k)?.trim().orEmpty() } catch (_: Throwable) { "" }
+        fun all(k: FieldKey): String = try {
+            tag?.getAll(k)?.map { it.trim() }?.filter { it.isNotEmpty() }?.distinct()?.joinToString("; ").orEmpty()
+        } catch (_: Throwable) { g(k) }
+
+        val extra = LinkedHashMap<String, String>()
+        fun put(key: String, v: String) { if (v.isNotBlank()) extra[key] = v }
+        put("bpm", g(FieldKey.BPM))
+        put("key", g(FieldKey.KEY))
+        put("mood", all(FieldKey.MOOD))
+        put("label", g(FieldKey.RECORD_LABEL))
+        put("lyricist", all(FieldKey.LYRICIST))
+        put("producer", all(FieldKey.PRODUCER))
+        put("remixer", all(FieldKey.REMIXER))
+        put("conductor", g(FieldKey.CONDUCTOR))
+        put("grouping", g(FieldKey.GROUPING))
+        put("language", g(FieldKey.LANGUAGE))
+        put("country", g(FieldKey.COUNTRY))
+        put("media", g(FieldKey.MEDIA))
+        put("encoder", g(FieldKey.ENCODER))
+        put("comment", g(FieldKey.COMMENT))
+        put("isrc", g(FieldKey.ISRC))
+        put("catalog", g(FieldKey.CATALOG_NO))
+        put("original_year", g(FieldKey.ORIGINAL_YEAR).take(4))
+        put("rating", g(FieldKey.RATING))
+        put("subtitle", g(FieldKey.SUBTITLE))
+        put("disc_total", g(FieldKey.DISC_TOTAL))
+        put("track_total", g(FieldKey.TRACK_TOTAL))
+        if (g(FieldKey.LYRICS).isNotBlank()) extra["lyrics"] = "Sí"
+        runCatching { put("channels", h.channels.orEmpty()) }
+        runCatching { if (h.bitsPerSample > 0) put("bits", "${h.bitsPerSample} bits") }
+        runCatching { put("codec", h.encodingType.orEmpty()) }
+        runCatching { put("lossless", if (h.isLossless) "Sí" else "No") }
+
+        val year = g(FieldKey.YEAR).take(4).toIntOrNull() ?: 0
+        return t.copy(
+            title = g(FieldKey.TITLE).ifBlank { t.title },
+            artist = all(FieldKey.ARTIST).ifBlank { t.artist },
+            album = g(FieldKey.ALBUM).ifBlank { t.album },
+            albumArtist = g(FieldKey.ALBUM_ARTIST).ifBlank { t.albumArtist },
+            genre = cleanGenre(all(FieldKey.GENRE)).ifBlank { t.genre },
+            year = if (year > 0) year else t.year,
+            composer = all(FieldKey.COMPOSER).ifBlank { t.composer },
+            trackNo = g(FieldKey.TRACK).substringBefore('/').toIntOrNull() ?: t.trackNo,
+            discNo = g(FieldKey.DISC_NO).substringBefore('/').toIntOrNull() ?: t.discNo,
+            bitrate = (runCatching { h.bitRateAsNumber.toInt() }.getOrNull() ?: 0).takeIf { it > 0 } ?: t.bitrate,
+            sampleRate = runCatching { h.sampleRateAsNumber }.getOrDefault(0),
+            format = runCatching { h.format }.getOrNull()?.takeIf { it.isNotBlank() }?.let { shortFormat(it) } ?: t.format,
+            extra = extra,
+        )
+    }
+
+    private fun readWithRetriever(t: Track): Track {
+        val r = MediaMetadataRetriever()
+        try {
+            r.setDataSource(ctx, t.uri)
+            fun m(k: Int) = r.extractMetadata(k)?.trim().orEmpty()
+            val sr = if (Build.VERSION.SDK_INT >= 31) m(MediaMetadataRetriever.METADATA_KEY_SAMPLERATE).toIntOrNull() ?: 0 else 0
+            val bits = if (Build.VERSION.SDK_INT >= 31) m(MediaMetadataRetriever.METADATA_KEY_BITS_PER_SAMPLE) else ""
+            return t.copy(
+                genre = t.genre.ifBlank { cleanGenre(m(MediaMetadataRetriever.METADATA_KEY_GENRE)) },
+                albumArtist = t.albumArtist.ifBlank { m(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST) },
+                composer = t.composer.ifBlank { m(MediaMetadataRetriever.METADATA_KEY_COMPOSER) },
+                year = if (t.year > 0) t.year else m(MediaMetadataRetriever.METADATA_KEY_YEAR).take(4).toIntOrNull() ?: 0,
+                discNo = if (t.discNo > 0) t.discNo else m(MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER).substringBefore('/').toIntOrNull() ?: 0,
+                bitrate = if (t.bitrate > 0) t.bitrate else (m(MediaMetadataRetriever.METADATA_KEY_BITRATE).toIntOrNull() ?: 0) / 1000,
+                sampleRate = sr,
+                extra = if (bits.isNotBlank() && bits != "0") mapOf("bits" to "$bits bits") else emptyMap(),
+            )
+        } finally {
+            runCatching { r.release() }
+        }
+    }
+
+    // ----- caché en disco -----
+    private val cacheFile get() = File(ctx.filesDir, "library.json")
+
+    fun loadCache(): List<Track> = runCatching {
+        val arr = JSONArray(cacheFile.readText())
+        List(arr.length()) { Track.fromJson(arr.getJSONObject(it)) }
+    }.getOrDefault(emptyList())
+
+    fun saveCache(list: List<Track>) {
+        runCatching {
+            val arr = JSONArray(); list.forEach { arr.put(it.toJson()) }
+            val tmp = File(ctx.filesDir, "library.json.tmp")
+            tmp.writeText(arr.toString()); tmp.renameTo(cacheFile)
+        }
+    }
+
+    companion object {
+        private val ID3_NUM = Regex("""^\(?(\d{1,3})\)?$""")
+
+        fun clean(s: String) = s.trim().let { if (it.equals("<unknown>", true)) "" else it }
+
+        /** Convierte géneros ID3v1 numéricos ("(17)", "17") en su nombre. */
+        fun cleanGenre(raw: String): String = raw.split(';').map { it.trim() }.filter { it.isNotEmpty() }
+            .map { g ->
+                ID3_NUM.matchEntire(g)?.groupValues?.get(1)?.toIntOrNull()
+                    ?.let { runCatching { GenreTypes.getInstanceOf().getValueForId(it) }.getOrNull() } ?: g
+            }.distinct().joinToString("; ")
+
+        fun formatFromMime(mime: String, path: String): String {
+            val ext = path.substringAfterLast('.', "").uppercase()
+            return when {
+                ext.isNotEmpty() && ext.length <= 4 -> ext
+                else -> mime.substringAfter('/').uppercase()
+            }
+        }
+
+        private fun shortFormat(f: String): String {
+            val u = f.uppercase()
+            return when {
+                "FLAC" in u -> "FLAC"; "MPEG" in u || "MP3" in u -> "MP3"; "AAC" in u -> "AAC"
+                "ALAC" in u -> "ALAC"; "VORBIS" in u || "OGG" in u -> "OGG"; "OPUS" in u -> "OPUS"
+                "WAV" in u -> "WAV"; "AIFF" in u -> "AIFF"; "WMA" in u || "ASF" in u -> "WMA"
+                "DSF" in u || "DSD" in u -> "DSD"; "MP4" in u || "M4A" in u -> "AAC"
+                else -> f.take(12)
+            }
+        }
+    }
+}
