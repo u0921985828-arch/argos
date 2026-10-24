@@ -10,6 +10,7 @@ on:
     paths:
       - 'surco/**'
       - '.github/workflows/build-surco.yml'
+      - '.github/scripts/smoke-surco.sh'
 
 permissions:
   contents: read
@@ -75,3 +76,52 @@ jobs:
           git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" apk-surco
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  smoke:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: surco-apk }
+
+      # Dos canciones con etiquetas que MediaStore no lee: un MP3 (ID3v2.4) y
+      # un FLAC (Vorbis). Valores en ASCII: `adb shell input text` no escribe tildes.
+      - name: Make test music
+        run: |
+          sudo apt-get install -y -qq ffmpeg >/dev/null
+          mkdir musica
+          ffmpeg -loglevel error -f lavfi -i "sine=frequency=440:duration=20" -c:a libmp3lame -b:a 192k \
+            -id3v2_version 4 -metadata title="Prueba Uno" -metadata artist="Banda Surco" \
+            -metadata album="Disco de Prueba" -metadata genre="Rock" -metadata date=2019 \
+            -metadata TBPM=128 -metadata TMOO=zorzal musica/uno.mp3
+          ffmpeg -loglevel error -f lavfi -i "sine=frequency=330:duration=20" -c:a flac \
+            -metadata TITLE="Prueba Dos" -metadata ARTIST="Otra Banda" -metadata ALBUM="Disco de Prueba" \
+            -metadata GENRE="Jazz" -metadata DATE=1987 -metadata BPM=95 -metadata LABEL=sellonorte \
+            musica/dos.flac
+          ls -l musica
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: bash .github/scripts/smoke-surco.sh Surco.apk
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-surco
+          path: |
+            *.png
+            ui.xml
+            logcat.txt
+            crash.txt
