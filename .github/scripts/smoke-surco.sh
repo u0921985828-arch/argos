@@ -18,7 +18,19 @@ set -euo pipefail
 APK=${1:-Surco.apk}
 PKG=com.eddie.surco
 
-ui() { adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || true; adb exec-out cat /sdcard/ui.xml > ui.xml || true; }
+# uiautomator no vuelca mientras la interfaz no está quieta (con música sonando, la barra de
+# progreso se mueve) y deja el volcado ANTERIOR: se borra antes y se reintenta.
+ui() {
+    : > ui.xml
+    for _ in 1 2 3; do
+        adb shell rm -f /sdcard/ui.xml
+        adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || true
+        adb exec-out cat /sdcard/ui.xml > ui.xml 2>/dev/null || true
+        grep -q '<hierarchy' ui.xml && return 0
+        sleep 1
+    done
+    echo "(volcado de interfaz vacío)"
+}
 tap() {  # pulsa el centro del primer nodo cuyo texto (o descripción) es $1
     local xy
     xy=$(python3 - "$1" <<'PY'
@@ -121,7 +133,10 @@ estado() { adb shell dumpsys media_session | grep -m1 -oE 'state=PlaybackState \
 cayo "al reproducir"
 echo "sesión multimedia: $(estado) (3 = sonando)"
 
-# --- Surco 2 ---
+# --- Surco 2 --- (en pausa para poder volcar la interfaz; la tecla multimedia
+# pasa por la sesión, así que también prueba el fundido de pausa)
+adb shell input keyevent KEYCODE_MEDIA_PAUSE
+sleep 2
 ui
 tap "Favorita" || fallo "no hay corazón de favorita en el minirreproductor"
 sleep 1
@@ -142,11 +157,14 @@ tap "EQ" || fallo "no encuentro el botón del ecualizador"
 sleep 2; ui
 grep -q 'text="Preamplificación"' ui.xml || fallo "no se abrió el ecualizador"
 tap "Graves" || fallo "no encuentro el preajuste Graves"
+sleep 1
+adb shell input keyevent KEYCODE_MEDIA_PLAY
 sleep 4
 adb exec-out screencap -p > ecualizador.png
 cayo "con el ecualizador puesto"
 e=$(estado); echo "con Graves: $e"
 echo "$e" | grep -qE 'state=(PLAYING|3)|\(3\)' || fallo "dejó de sonar al poner el ecualizador ($e)"
+adb shell input keyevent KEYCODE_MEDIA_PAUSE
 
 # Cerrar del todo y volver: favorita y preajuste tienen que seguir.
 sleep 2
