@@ -52,6 +52,7 @@ import com.eddie.surco.audio.SurcoSettings
 import com.eddie.surco.data.SmartList
 import com.eddie.surco.data.Track
 import com.eddie.surco.data.UserStore
+import com.eddie.surco.player.RG_HEADROOM_DB
 
 private fun SmartList.icon(): ImageVector = when (this) {
     SmartList.FAVORITES -> Icons.Default.Favorite
@@ -123,8 +124,17 @@ fun SettingsScreen(vm: LibraryViewModel) {
                 if (prefs.dsp.eqOn) "${prefs.preset} · tono, balance, crossfeed, limitador" else "Apagado",
             ) { vm.push(Screen.Equalizer) }
             Text("Normalizar volumen (ReplayGain)", fontSize = 15.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
-            Text("Iguala el volumen entre canciones con las etiquetas REPLAYGAIN del archivo. «Por álbum» respeta las diferencias dentro de un disco.",
+            val all by vm.tracks.collectAsState()
+            val withRg = remember(all) { all.count { it.x("rg_track").isNotBlank() } }
+            Text("Iguala el volumen entre canciones con las etiquetas REPLAYGAIN del archivo. «Por álbum» respeta las diferencias dentro de un disco. " +
+                "Para poder subir las canciones flojas sin saturar, con ReplayGain todo suena ${RG_HEADROOM_DB.toInt()} dB más bajo.",
                 color = Muted, fontSize = 12.sp, lineHeight = 15.sp, modifier = Modifier.padding(horizontal = 20.dp))
+            Text(
+                if (withRg == 0) "Ninguna canción de la biblioteca trae ReplayGain: márcalo con un programa como foobar2000 o MusicBrainz Picard."
+                else "$withRg de ${all.size} canciones traen ReplayGain.",
+                color = if (withRg == 0) Copper else Teal, fontSize = 12.sp, lineHeight = 15.sp,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+            )
             Row(Modifier.padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ReplayGainMode.entries.forEach { m ->
                     FilterChip(

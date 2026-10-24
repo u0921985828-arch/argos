@@ -134,60 +134,37 @@ fun peakGainDb(p: DspParams): Double {
 }
 
 /**
- * Procesa audio intercalado en coma flotante (-1..1). Un objeto por flujo de audio;
- * no es seguro entre hilos: los parámetros se cambian desde el mismo hilo que procesa.
+ * Una configuración concreta de la cadena con su estado. Estructura fija: 10 bandas, graves y
+ * agudos siempre en el mismo hueco, así el estado de cada filtro se puede pasar a la
+ * configuración siguiente sin mezclar el de una banda con el de otra.
  */
-class DspEngine {
-    private var fs = 48_000
-    private var ch = 2
-    private var params = DspParams()
-    private var filters: Array<Biquad> = emptyArray()
-    // Estado de cada filtro por canal: z1, z2.
-    private var z1 = DoubleArray(0)
-    private var z2 = DoubleArray(0)
-    private var preamp = 1.0
+private class Chain(val p: DspParams, private val fs: Int, private val ch: Int) {
+    private val slots: Array<Biquad?> = arrayOfNulls(EQ_FREQS.size + 2)
+    private val z1 = DoubleArray(slots.size * ch)
+    private val z2 = DoubleArray(slots.size * ch)
+    private val active: IntArray
+    private val preamp = if (p.eqOn) 10.0.pow(p.preampDb / 20.0) else 1.0
 
-    // Crossfeed (bs2b)
     private var cfOn = false
     private var cfA0Lo = 0.0; private var cfB1Lo = 0.0
     private var cfA0Hi = 0.0; private var cfA1Hi = 0.0; private var cfB1Hi = 0.0
     private var cfGain = 1.0
     private val cfLo = DoubleArray(2); private val cfHi = DoubleArray(2); private val cfAsis = DoubleArray(2)
 
-    // Limitador
     private var env = 0.0
-    private var release = 0.0
+    private val release = exp(-1.0 / (0.12 * fs)) // 120 ms
 
-    val isNeutral: Boolean get() = params.neutral
-
-    fun configure(sampleRate: Int, channels: Int) {
-        fs = sampleRate; ch = channels
-        release = exp(-1.0 / (0.12 * fs)) // 120 ms
-        rebuild(resetState = true)
-    }
-
-    fun setParams(p: DspParams) {
-        if (p == params) return
-        params = p
-        rebuild(resetState = false)
-    }
-
-    fun reset() {
-        z1.fill(0.0); z2.fill(0.0)
-        cfLo.fill(0.0); cfHi.fill(0.0); cfAsis.fill(0.0)
-        env = 0.0
-    }
-
-    private fun rebuild(resetState: Boolean) {
-        val nf = buildFilters(params, fs.toDouble()).toTypedArray()
-        // Si el número de filtros no cambia se conserva su estado: mover un deslizador no chasquea.
-        if (resetState || nf.size != filters.size || z1.size != nf.size * ch) {
-            z1 = DoubleArray(nf.size * ch); z2 = DoubleArray(nf.size * ch)
+    init {
+        val f = fs.toDouble()
+        if (p.eqOn) EQ_FREQS.forEachIndexed { i, fc ->
+            val g = p.bands.getOrElse(i) { 0f }.toDouble()
+            if (abs(g) > 0.01 && fc < f * 0.45) slots[i] = Biquad.peaking(fc.toDouble(), EQ_Q, g, f)
         }
-        filters = nf
-        preamp = if (params.eqOn) 10.0.pow(params.preampDb / 20.0) else 1.0
+        if (abs(p.bassDb) > 0.01f) slots[EQ_FREQS.size] = Biquad.lowShelf(BASS_FREQ, p.bassDb.toDouble(), f)
+        if (abs(p.trebleDb) > 0.01f && TREBLE_FREQ < f * 0.45) slots[EQ_FREQS.size + 1] = Biquad.highShelf(TREBLE_FREQ, p.trebleDb.toDouble(), f)
+        active = slots.indices.filter { slots[it] != null }.toIntArray()
 
-        val (fc, feed) = CROSSFEED_LEVELS[params.crossfeed.coerceIn(0, CROSSFEED_LEVELS.lastIndex)]
+        val (fc, feed) = CROSSFEED_LEVELS[p.crossfeed.coerceIn(0, CROSSFEED_LEVELS.lastIndex)]
         cfOn = ch == 2 && fc > 0
         if (cfOn) {
             val gbLo = feed * -5.0 / 6.0 - 3.0
@@ -201,14 +178,29 @@ class DspEngine {
             cfB1Hi = x; cfA0Hi = 1 - gHi * (1 - x); cfA1Hi = -x
             cfGain = 1.0 / (1.0 - gHi + gLo)
         }
-        if (resetState) reset()
     }
 
-    /** Procesa [frames] tramas de [buf] en su sitio. */
+    /** Hereda el estado de [src] en los huecos que allí estaban activos; los demás, a cero. */
+    fun inheritFrom(src: Chain) {
+        for (k in slots.indices) {
+            val live = src.slots[k] != null
+            for (c in 0 until ch) {
+                val i = k * ch + c
+                z1[i] = if (live) src.z1[i] else 0.0
+                z2[i] = if (live) src.z2[i] else 0.0
+            }
+        }
+        if (src.cfOn && cfOn) { src.cfLo.copyInto(cfLo); src.cfHi.copyInto(cfHi); src.cfAsis.copyInto(cfAsis) }
+        env = src.env
+    }
+
+    fun reset() {
+        z1.fill(0.0); z2.fill(0.0)
+        cfLo.fill(0.0); cfHi.fill(0.0); cfAsis.fill(0.0)
+        env = 0.0
+    }
+
     fun process(buf: FloatArray, frames: Int) {
-        if (params.neutral) return
-        val p = params
-        val nf = filters.size
         val stereo = ch == 2
         val balL = if (stereo) min(1.0, 1.0 - p.balance) else 1.0
         val balR = if (stereo) min(1.0, 1.0 + p.balance) else 1.0
@@ -216,12 +208,11 @@ class DspEngine {
         val thr = 0.98
         var i = 0
         for (f in 0 until frames) {
-            // Preamplificación y filtros, canal a canal
             for (c in 0 until ch) {
                 var x = buf[i + c] * preamp
-                for (n in 0 until nf) {
-                    val q = filters[n]
-                    val idx = n * ch + c
+                for (k in active) {
+                    val q = slots[k]!!
+                    val idx = k * ch + c
                     val y = q.b0 * x + z1[idx]
                     z1[idx] = q.b1 * x - q.a1 * y + z2[idx]
                     z2[idx] = q.b2 * x - q.a2 * y
@@ -261,6 +252,62 @@ class DspEngine {
             }
             i += ch
         }
+    }
+}
+
+/**
+ * Procesa audio intercalado en coma flotante (-1..1). Un objeto por flujo de audio;
+ * no es seguro entre hilos: los parámetros se cambian desde el mismo hilo que procesa.
+ *
+ * Un cambio de parámetros no se aplica de golpe: el siguiente bloque se procesa con la
+ * configuración vieja y con la nueva y se funde de una a otra (también al encender o apagar
+ * el ecualizador). Sin eso, mover un deslizador o cambiar de preajuste da un chasquido.
+ */
+private const val FADE_FRAMES = 1024
+
+class DspEngine {
+    private var fs = 48_000
+    private var ch = 2
+    private var cur = Chain(DspParams(), fs, ch)
+    private var pending: Chain? = null
+    private var dry = FloatArray(0)
+
+    val isNeutral: Boolean get() = pending == null && cur.p.neutral
+
+    fun configure(sampleRate: Int, channels: Int) {
+        fs = sampleRate; ch = channels
+        cur = Chain((pending ?: cur).p, fs, ch)
+        pending = null
+    }
+
+    fun setParams(p: DspParams) {
+        if (p == (pending ?: cur).p) return
+        pending = Chain(p, fs, ch).also { it.inheritFrom(cur) }
+    }
+
+    fun reset() { cur.reset(); pending = null }
+
+    /** Procesa [frames] tramas de [buf] en su sitio. */
+    fun process(buf: FloatArray, frames: Int) {
+        val next = pending
+        if (next == null) {
+            if (!cur.p.neutral) cur.process(buf, frames)
+            return
+        }
+        pending = null
+        val n = frames * ch
+        if (dry.size < n) dry = FloatArray(n)
+        System.arraycopy(buf, 0, dry, 0, n)
+        if (!cur.p.neutral) cur.process(dry, frames)          // salida con lo viejo
+        if (next.p.neutral) next.reset() else next.process(buf, frames) // salida con lo nuevo
+        // Fundido de ~20 ms (o lo que dure el bloque, si es más corto).
+        val fade = min(frames, FADE_FRAMES)
+        var i = 0
+        for (f in 0 until fade) {
+            val t = (f + 1).toFloat() / fade
+            for (c in 0 until ch) { buf[i] = dry[i] * (1 - t) + buf[i] * t; i++ }
+        }
+        cur = next
     }
 }
 

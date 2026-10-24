@@ -1,10 +1,12 @@
 package com.eddie.surco.player
 
 import android.app.PendingIntent
+import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.provider.MediaStore
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -38,6 +40,9 @@ import kotlin.math.pow
  * Servicio de reproducción: ExoPlayer con el motor de sonido de Surco, ReplayGain,
  * fundidos al pausar, temporizador de apagado, conteo de escuchas y cola que se reanuda.
  */
+/** Margen para poder subir canciones con ReplayGain positivo sin pasar del volumen máximo. */
+const val RG_HEADROOM_DB = 6f
+
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaSessionService() {
     private var session: MediaSession? = null
@@ -107,7 +112,13 @@ class PlaybackService : MediaSessionService() {
                     controller: MediaSession.ControllerInfo,
                     mediaItems: MutableList<MediaItem>,
                 ): ListenableFuture<MutableList<MediaItem>> = Futures.immediateFuture(
-                    mediaItems.map { it.buildUpon().setUri(it.requestMetadata.mediaUri).build() }.toMutableList()
+                    // La URI no viaja por el controlador: se toma de requestMetadata o, si no, del
+                    // mediaId, que es el _ID de MediaStore. Lo que no tenga ninguna de las dos se descarta.
+                    mediaItems.mapNotNull { item ->
+                        val uri = item.requestMetadata.mediaUri
+                            ?: item.mediaId.toLongOrNull()?.let { ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, it) }
+                        uri?.let { item.buildUpon().setUri(it).build() }
+                    }.toMutableList()
                 )
 
                 // Reanudar desde la notificación, el Bluetooth o el sistema tras cerrar la app.
@@ -115,13 +126,10 @@ class PlaybackService : MediaSessionService() {
                     mediaSession: MediaSession,
                     controller: MediaSession.ControllerInfo,
                 ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
-                    val q = UserStore.state.value.queue
                     val byId = LibraryScanner(this@PlaybackService).loadCache().associateBy { it.id }
-                    val items = q.ids.mapNotNull { byId[it]?.toMediaItem() }
-                    if (items.isEmpty()) return Futures.immediateFailedFuture(UnsupportedOperationException())
-                    return Futures.immediateFuture(
-                        MediaSession.MediaItemsWithStartPosition(items, q.index.coerceIn(items.indices), q.positionMs)
-                    )
+                    val r = restoreQueue(UserStore.state.value.queue, byId)
+                        ?: return Futures.immediateFailedFuture(UnsupportedOperationException())
+                    return Futures.immediateFuture(r)
                 }
             })
             .build()
@@ -153,8 +161,9 @@ class PlaybackService : MediaSessionService() {
             ReplayGainMode.ALBUM -> ex?.getFloat(EXTRA_RG_ALBUM, Float.NaN)?.takeUnless { it.isNaN() }
                 ?: ex?.getFloat(EXTRA_RG_TRACK, Float.NaN)
         }?.takeUnless { it.isNaN() }
-        // Sin margen por encima de 0 dB: las ganancias positivas se quedan en 0 (no satura).
-        rgGain = if (db == null) 1f else 10f.pow(min(db, 0f) / 20f)
+        // El volumen no puede pasar de 1: con ReplayGain todo baja RG_HEADROOM_DB para que las
+        // canciones flojas (ganancia positiva) también se puedan subir. Sin etiqueta cuenta como 0 dB.
+        rgGain = if (mode == ReplayGainMode.OFF) 1f else 10f.pow((min(db ?: 0f, RG_HEADROOM_DB) - RG_HEADROOM_DB) / 20f)
         applyVolume()
     }
 

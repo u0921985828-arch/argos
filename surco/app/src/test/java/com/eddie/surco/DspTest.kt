@@ -40,6 +40,7 @@ class DspTest {
 
     private fun run(p: DspParams, buf: FloatArray): FloatArray {
         val e = DspEngine(); e.configure(fs, 2); e.setParams(p)
+        e.process(FloatArray(2048 * 2), 2048) // el cambio de parámetros se funde en el primer bloque
         val out = buf.copyOf(); e.process(out, out.size / 2); return out
     }
 
@@ -123,5 +124,70 @@ class DspTest {
             e.process(buf, 480) // procesa en trozos el principio, otra y otra vez
         }
         assertTrue(buf.all { it.isFinite() && abs(it) <= 1f })
+    }
+
+    // ---- Cambios mientras suena: sin chasquidos ----
+
+    private fun tone(freqs: List<Double>, amp: Float, frames: Int, sr: Int) = FloatArray(frames * 2) { i ->
+        val t = (i / 2).toDouble() / sr
+        (freqs.sumOf { sin(2 * PI * it * t) } * amp / freqs.size).toFloat()
+    }
+
+    /** Máximo de |x[n] - 2x[n-1] + x[n-2]| en el canal izquierdo, desde [from]. */
+    private fun d2(buf: FloatArray, from: Int): Double {
+        var m = 0.0
+        for (f in maxOf(from, 2) until buf.size / 2) {
+            m = maxOf(m, abs(buf[f * 2] - 2.0 * buf[(f - 1) * 2] + buf[(f - 2) * 2]))
+        }
+        return m
+    }
+
+    /** Procesa en bloques de 1024 cambiando a [steps][k] en el bloque 8 + 4k; devuelve salto / régimen. */
+    private fun clickRatio(sig: FloatArray, sr: Int, steps: List<DspParams>): Double {
+        val e = DspEngine(); e.configure(sr, 2); e.setParams(steps[0])
+        val out = sig.copyOf()
+        val block = 1024
+        val frames = out.size / 2
+        var b = 0
+        var k = 1
+        while (b * block < frames) {
+            if (k < steps.size && b == 8 + 4 * (k - 1)) { e.setParams(steps[k]); k++ }
+            val n = minOf(block, frames - b * block)
+            val chunk = out.copyOfRange(b * block * 2, (b * block + n) * 2)
+            e.process(chunk, n)
+            chunk.copyInto(out, b * block * 2)
+            b++
+        }
+        // Régimen: el mayor de procesar todo con cada configuración fija.
+        val steady = steps.maxOf { p ->
+            val o = sig.copyOf(); val en = DspEngine(); en.configure(sr, 2); en.setParams(p)
+            en.process(FloatArray(4096), 2048); en.process(o, frames); d2(o, 4096)
+        }
+        return d2(out, 4096) / steady
+    }
+
+    @Test fun moverUnaBandaPorCeroNoChasquea() {
+        val sr = 44_100
+        val sig = tone(listOf(100.0), 0.5f, 60_000, sr)
+        fun band(g: Float) = DspParams(bassDb = 3f, bands = List(10) { if (it == 2) g else 0f })
+        val r = clickRatio(sig, sr, listOf(band(0.5f), band(0f), band(-0.5f), band(0f), band(6f)))
+        assertTrue("salto ×$r", r < 3.0)
+    }
+
+    @Test fun cambiarDePreajusteNoChasquea() {
+        val sr = 44_100
+        val sig = tone(listOf(55.0, 440.0, 3000.0), 0.6f, 60_000, sr)
+        val presets = BUILTIN_PRESETS.toMap()
+        fun pr(n: String) = DspParams(bands = presets.getValue(n))
+        val r = clickRatio(sig, sr, listOf(pr("Graves"), pr("Rock"), pr("Agudos"), pr("Graves")))
+        assertTrue("salto ×$r", r < 3.0)
+    }
+
+    @Test fun apagarYEncenderNoChasquea() {
+        val sr = 44_100
+        val sig = tone(listOf(55.0, 440.0), 0.5f, 60_000, sr)
+        val g = DspParams(bands = BUILTIN_PRESETS.toMap().getValue("Graves"))
+        val r = clickRatio(sig, sr, listOf(g, g.copy(eqOn = false), g, DspParams(), g))
+        assertTrue("salto ×$r", r < 3.0)
     }
 }

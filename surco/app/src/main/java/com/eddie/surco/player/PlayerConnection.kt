@@ -113,10 +113,8 @@ class PlayerConnection(ctx: Context) {
     fun restoreIfEmpty(byId: Map<Long, Track>) {
         val c = controller ?: return
         if (c.mediaItemCount > 0) return
-        val q = UserStore.state.value.queue
-        val items = q.ids.mapNotNull { byId[it]?.toMediaItem() }
-        if (items.isEmpty()) return
-        c.setMediaItems(items, q.index.coerceIn(items.indices), q.positionMs)
+        val r = restoreQueue(UserStore.state.value.queue, byId) ?: return
+        c.setMediaItems(r.mediaItems, r.startIndex, r.startPositionMs)
         c.prepare()
     }
 

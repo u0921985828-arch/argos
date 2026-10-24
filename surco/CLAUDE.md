@@ -3,9 +3,16 @@
 App nativa Android (Kotlin + Jetpack Compose + Media3). Lee todas las etiquetas de los archivos de audio del móvil y permite navegar la biblioteca por cualquiera de ellas.
 
 ## Estado
-- **Compila y funciona**: la primera compilación salió sin errores de Kotlin ni de R8. El APK de release pasa una prueba de humo en emulador (API 34): arranca, MediaStore ve las canciones, el buscador encuentra etiquetas que solo lee jaudiotagger (estado de ánimo en ID3 TMOO, sello en Vorbis LABEL) y reproduce sin caerse.
-- Se compila en GitHub Actions (`.github/workflows/build-surco.yml` del repo `argos`, donde vive en `surco/`): el contenedor de desarrollo no llega a Google Maven ni al Android SDK. Cada push que toque `surco/` compila debug y release, pasa la prueba de humo (`.github/scripts/smoke-surco.sh`) y deja los APK en el artifact `surco-apk` y en la rama `apk-surco` (un solo commit, se reescribe).
+- **Surco 2** (reproductor completo). CI en verde: 25 pruebas JVM (motor, letras, ReplayGain, cola), debug + release, y prueba de humo en emulador con el APK de release: biblioteca, etiquetas profundas, favorita, «Sonando» con la calidad del archivo, cola, ecualizador con preajuste mientras suena, persistencia tras cerrar la app y un FLAC de 96 kHz/24 bits mono con EQ.
+- Se compila en GitHub Actions (`.github/workflows/build-surco.yml` del repo `argos`, donde vive en `surco/`): el contenedor de desarrollo no llega a Google Maven ni al Android SDK. Cada push que toque `surco/` deja los APK en el artifact `surco-apk` y en la rama `apk-surco` (un solo commit, se reescribe).
+- Las partes puras (motor, letras, ReplayGain, cola) se prueban también sin Android con `kotlinc` + JUnit (ver ESTADO.md).
 - El release va firmado con la clave de depuración del ejecutor, que cambia en cada compilación: para instalar uno nuevo encima hay que desinstalar el anterior. Una clave propia lo arregla.
+
+## Sonido (lo importante)
+- Motor propio (`audio/Dsp.kt`) en un `AudioProcessor` de Media3, no `android.media.audiofx`: mismas 10 bandas en todos los móviles, curva dibujable y probado en JVM. Recibe PCM 16 bits: **no activar la salida float**, con ella Media3 se salta los procesadores.
+- Estructura fija de filtros por hueco y **fundido cruzado de ~20 ms** al cambiar parámetros: sin eso, mover una banda por 0 dB o cambiar de preajuste chasqueaba (×828 la segunda diferencia; prueba `moverUnaBandaPorCeroNoChasquea`).
+- Con todo en neutro, bytes intactos (bit a bit).
+- ReplayGain va por `player.volume` al cambiar de pista (sin el desfase del búfer). Con RG activo todo baja 6 dB (`RG_HEADROOM_DB`) para poder subir las flojas.
 
 ## Compilar
 Requisitos: JDK 17 o superior y Android SDK (platform 35, build-tools 35). Crear `local.properties` con `sdk.dir=<ruta al SDK>` si no existe (en Windows: `sdk.dir=C\:\\Users\\<usuario>\\AppData\\Local\\Android\\Sdk`).
@@ -18,25 +25,24 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 Si el release falla en R8 por clases que faltan de jaudiotagger (java.awt, javax.imageio…), añadir `-dontwarn` en `app/proguard-rules.pro`.
 
 ## Versiones
-AGP 8.7.3 · Kotlin 2.0.21 · Gradle 8.14.3 · Compose BOM 2024.12.01 · Media3 1.5.1 · jaudiotagger 3.0.1 · minSdk 26 · targetSdk 35.
+AGP 8.7.3 · Kotlin 2.0.21 · Gradle 8.14.3 · Compose BOM 2024.12.01 · Media3 1.5.1 · jaudiotagger 3.0.1 · palette 1.0.0 · minSdk 26 · targetSdk 35.
 
 ## Estructura (`app/src/main/java/com/eddie/surco/`)
-- `MainActivity.kt` — permisos (READ_MEDIA_AUDIO / READ_EXTERNAL_STORAGE, POST_NOTIFICATIONS), navegación por pila, mini reproductor, pantalla de reproducción y ficha de etiquetas.
-- `LibraryViewModel.kt` — estado, pila de pantallas (`Screen.Home / Groups / Songs`) y escaneo: MediaStore primero (rápido), luego lectura profunda en paralelo con caché en `filesDir/library.json` (solo relee archivos con `dateModified` cambiado).
-- `data/Track.kt` — modelo de canción + JSON. Las etiquetas poco comunes van en `extra` (bpm, key, mood, label, lyricist, producer, remixer, conductor, grouping, language, country, media, encoder, comment, isrc, catalog, original_year, rating, channels, bits, codec, lossless, lyrics…).
-- `data/LibraryScanner.kt` — MediaStore + jaudiotagger (todas las etiquetas) con MediaMetadataRetriever como respaldo. Convierte géneros ID3v1 numéricos a nombre.
-- `data/TagField.kt` — los 30 campos por los que se agrupa (Personas, Obra, Tiempo, Archivo) y cómo se hacen los grupos: rangos de duración, BPM en decenas, décadas, bitrate, calidad (alta resolución / sin pérdida / con pérdida), mes de añadido, etc. Separa varios artistas (`;`, ` / `, feat.) y géneros (`; / , |`).
-- `player/PlaybackService.kt` — MediaSessionService con ExoPlayer (notificación, pantalla de bloqueo, pausa al desconectar auriculares). `onAddMediaItems` recupera la URI desde `requestMetadata.mediaUri`.
-- `player/PlayerConnection.kt` — MediaController expuesto como estado de Compose.
-- `ui/Theme.kt` — paleta oscura (tinta, cobre, verde azulado), carga de portadas con caché LRU, formateo de tiempos.
-- `ui/Screens.kt` — Inicio (buscador en todas las etiquetas, tarjetas por campo), Grupos (orden A–Z o por nº de canciones), Canciones (reproducir, aleatorio, 6 órdenes).
-- `ui/PlayerUi.kt` — mini reproductor, pantalla "Sonando", chips de etiquetas pulsables, ficha completa (pulsación larga en una canción).
+- `MainActivity.kt` — permisos, navegación por pila, minirreproductor, «Sonando», hojas y diálogos.
+- `LibraryViewModel.kt` — estado, pantallas (`Home / Groups / Songs / Smart / PlaylistView / Playlists / Settings / Equalizer`) y escaneo con caché `filesDir/library2.json`.
+- `audio/Dsp.kt` — ecualizador 10 bandas (RBJ), preamplificación, graves/agudos (estantes), crossfeed bs2b, mono, balance, limitador, curva de respuesta, preajustes. Kotlin puro.
+- `audio/SurcoAudioProcessor.kt` — el motor dentro de Media3 (16 bits ↔ float con dither TPDF).
+- `audio/SurcoSettings.kt` — ajustes (`ajustes.json`): sonido, ReplayGain, velocidad/tono, saltar silencios, fundidos, duración mínima.
+- `data/UserStore.kt` — favoritas, listas, escuchas, última escucha y cola (`usuario.json`); listas automáticas (`SmartList`).
+- `data/Lyrics.kt` — letras LRC sincronizadas (varias marcas, offset) o planas. `PureReplayGain.kt` — RG de ID3/Vorbis/MP4. `PureQueue.kt` — reanudar la cola aunque falten canciones.
+- `data/LibraryScanner.kt`, `TagField.kt`, `Track.kt` — como en la 1.0, más RG y letras.
+- `player/PlaybackService.kt` — ExoPlayer con el procesador, ReplayGain, fundido al pausar (ForwardingPlayer), temporizador, escuchas (mitad o 4 min), guardar y reanudar cola (`onPlaybackResumption` + `MediaButtonReceiver`).
+- `player/PlayerConnection.kt` — controlador y cola en orden de reproducción (también en aleatorio); a continuación, a la cola, mover, quitar.
+- `ui/` — `EqualizerScreen` (curva, 10 deslizadores verticales, preajustes propios), `PlayerUi` («Sonando» con color de la portada, letra, cola arrastrable, temporizador, velocidad, menú de canción), `Screens` (inicio, grupos, listas de canciones), `LibraryScreens` (listas y ajustes), `Controls`, `Theme`.
 
-## Posibles mejoras después de compilar
-- Cola de reproducción visible y editable.
-- Listas de reproducción y favoritos.
-- Edición de etiquetas (jaudiotagger puede escribir; requiere permiso de escritura con MediaStore.createWriteRequest).
-- Letras sincronizadas (la etiqueta LYRICS ya se detecta).
+## Pendiente
+- Fundido cruzado entre canciones (necesita dos reproductores), Android Auto, edición de etiquetas, salida float/hi-res con EQ (habría que procesar en float).
+- Probado en emulador; falta un móvil real (sonido real del EQ, Bluetooth con la app cerrada).
 
 ## Idioma
 La interfaz y los comentarios están en español.

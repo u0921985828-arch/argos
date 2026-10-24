@@ -149,7 +149,8 @@ adb exec-out screencap -p > sonando2.png
 
 tap "Cola" || fallo "no encuentro el botón de la cola"
 sleep 2; ui
-grep -q 'text="Cola"' ui.xml && grep -q 'text="Prueba Dos"' ui.xml || fallo "la cola no se abrió o no lleva la canción"
+# «Vaciar» solo existe en la hoja de la cola («Cola» y el título también están en «Sonando»).
+grep -q 'text="Vaciar"' ui.xml && grep -q 'text="1 canción · 0 min"' ui.xml && grep -q 'text="Prueba Dos"' ui.xml || fallo "la cola no se abrió o no lleva la canción"
 adb exec-out screencap -p > cola.png
 adb shell input keyevent KEYCODE_BACK; sleep 1; ui
 
@@ -175,7 +176,8 @@ for _ in $(seq 1 20); do sleep 2; ui; grep -q 'text="3 canciones' ui.xml && brea
 cayo "al volver a abrir"
 tap "Ecualizador" || fallo "no encuentro el ecualizador en Inicio"
 sleep 2; ui
-[ "$(grep -o 'text="Graves"' ui.xml | wc -l)" -ge 2 ] || fallo "el preajuste Graves no se guardó"
+# «Graves» sale siempre dos veces (chip y deslizador de tono); la tercera es el subtítulo con el preajuste activo.
+[ "$(grep -o 'text="Graves"' ui.xml | wc -l)" -ge 3 ] || fallo "el preajuste Graves no se guardó"
 adb shell input keyevent KEYCODE_BACK; sleep 1; ui
 tap "Favoritas" || fallo "no encuentro la lista Favoritas"
 sleep 2; ui

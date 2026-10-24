@@ -5,7 +5,10 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.session.MediaSession
+import com.eddie.surco.data.SavedQueue
 import com.eddie.surco.data.Track
+import com.eddie.surco.data.keptQueue
 
 const val EXTRA_RG_TRACK = "rg_track"
 const val EXTRA_RG_ALBUM = "rg_album"
@@ -29,4 +32,16 @@ fun Track.toMediaItem(): MediaItem {
                 .apply { if (year > 0) setRecordingYear(year) }
                 .build()
         ).build()
+}
+
+/**
+ * La cola guardada lista para el reproductor. Las canciones que ya no existen se quitan, y el
+ * índice y la posición se recolocan sobre lo que queda (si la que sonaba ya no está, se empieza
+ * por la siguiente desde el principio).
+ */
+fun restoreQueue(q: SavedQueue, byId: Map<Long, Track>): MediaSession.MediaItemsWithStartPosition? {
+    val (kept, start, same) = keptQueue(q.ids, q.index) { it in byId } ?: return null
+    return MediaSession.MediaItemsWithStartPosition(
+        kept.map { byId.getValue(q.ids[it]).toMediaItem() }, start, if (same) q.positionMs else 0L,
+    )
 }

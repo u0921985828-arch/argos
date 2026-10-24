@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eddie.surco.LibraryViewModel
+import com.eddie.surco.audio.BUILTIN_PRESETS
 import com.eddie.surco.audio.CROSSFEED_LEVELS
 import com.eddie.surco.audio.DspParams
 import com.eddie.surco.audio.EQ_FREQS
@@ -78,7 +79,10 @@ fun EqualizerScreen(vm: LibraryViewModel) {
             ResponseCurve(d, Modifier.fillMaxWidth().height(150.dp).padding(horizontal = 16.dp, vertical = 8.dp))
 
             LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(SurcoSettings.allPresets(prefs), key = { it.first }) { (name, bands) ->
+                itemsIndexed(
+                    SurcoSettings.allPresets(prefs),
+                    key = { i, it -> (if (i < BUILTIN_PRESETS.size) "fábrica:" else "propio:") + it.first },
+                ) { _, (name, bands) ->
                     FilterChip(
                         selected = prefs.preset == name && d.eqOn,
                         onClick = { SurcoSettings.update { it.copy(dsp = it.dsp.copy(bands = bands, eqOn = true), preset = name) } },
@@ -164,7 +168,9 @@ fun EqualizerScreen(vm: LibraryViewModel) {
         }
     }
 
-    if (saving) NameDialog("Guardar preajuste", onDismiss = { saving = false }) { name ->
+    if (saving) NameDialog("Guardar preajuste", onDismiss = { saving = false }) { typed ->
+        // Un nombre de fábrica repetido confundiría cuál está puesto: el propio lleva coletilla.
+        val name = if (BUILTIN_PRESETS.any { it.first.equals(typed, ignoreCase = true) } || typed == CUSTOM) "$typed (propio)" else typed
         SurcoSettings.update { it.copy(customPresets = it.customPresets + (name to it.dsp.bands), preset = name) }
         saving = false
     }

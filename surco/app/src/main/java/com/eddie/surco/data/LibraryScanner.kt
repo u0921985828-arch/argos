@@ -177,9 +177,12 @@ class LibraryScanner(private val ctx: Context) {
     }
 
     // ----- caché en disco -----
-    private val cacheFile get() = File(ctx.filesDir, "library.json")
+    // «2»: desde Surco 2 la lectura profunda guarda también ReplayGain. Con otro nombre, la
+    // caché de la versión anterior no vale y todo se vuelve a leer una vez.
+    private val cacheFile get() = File(ctx.filesDir, "library2.json")
 
     fun loadCache(): List<Track> = runCatching {
+        File(ctx.filesDir, "library.json").takeIf { it.exists() }?.delete()
         val arr = JSONArray(cacheFile.readText())
         List(arr.length()) { Track.fromJson(arr.getJSONObject(it)) }
     }.getOrDefault(emptyList())
@@ -187,7 +190,7 @@ class LibraryScanner(private val ctx: Context) {
     fun saveCache(list: List<Track>) {
         runCatching {
             val arr = JSONArray(); list.forEach { arr.put(it.toJson()) }
-            val tmp = File(ctx.filesDir, "library.json.tmp")
+            val tmp = File(ctx.filesDir, "library2.json.tmp")
             tmp.writeText(arr.toString()); tmp.renameTo(cacheFile)
         }
     }

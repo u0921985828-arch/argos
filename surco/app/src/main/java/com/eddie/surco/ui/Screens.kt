@@ -302,10 +302,14 @@ fun PlaylistScreen(vm: LibraryViewModel, id: Long, byId: Map<Long, Track>) {
     val user by UserStore.state.collectAsState()
     val pl = user.playlists.firstOrNull { it.id == id }
     if (pl == null) { LaunchedEffect(Unit) { vm.pop() }; return }
-    val list = remember(pl, byId) { pl.trackIds.mapNotNull { byId[it] } }
+    // Las que ya no están en el móvil no salen, pero se recuerda su posición real en la lista.
+    val entries = remember(pl, byId) { pl.trackIds.withIndex().mapNotNull { (i, id) -> byId[id]?.let { i to it } } }
+    val list = remember(entries) { entries.map { it.second } }
+    val sourceIndex = remember(entries) { entries.map { it.first } }
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     SongListScreen(vm, pl.name, "Lista · ${songs(list.size)}", list, SongSort.CUSTOM, custom = true, playlistId = id,
+        sourceIndex = sourceIndex,
         menu = { close ->
             DropdownMenuItem(text = { Text("Cambiar el nombre") }, onClick = { close(); renaming = true })
             DropdownMenuItem(text = { Text("Borrar la lista") }, onClick = { close(); deleting = true })
@@ -324,7 +328,8 @@ fun PlaylistScreen(vm: LibraryViewModel, id: Long, byId: Map<Long, Track>) {
 @Composable
 fun SongListScreen(
     vm: LibraryViewModel, title: String, subtitle: String, list: List<Track>, initialSort: SongSort,
-    custom: Boolean, playlistId: Long? = null, menu: (@Composable (close: () -> Unit) -> Unit)? = null,
+    custom: Boolean, playlistId: Long? = null, sourceIndex: List<Int>? = null,
+    menu: (@Composable (close: () -> Unit) -> Unit)? = null,
 ) {
     var sort by rememberSaveable(title, subtitle) { mutableStateOf(initialSort) }
     var sortMenu by remember { mutableStateOf(false) }
@@ -401,7 +406,7 @@ fun SongListScreen(
                 val t = iv.value
                 SongRow(t, if (sort == SongSort.ALBUM && t.trackNo > 0) t.trackNo else null, t.id == currentId,
                     onClick = { vm.player.play(tracksSorted, i) },
-                    onLong = { vm.sheet = SongSheetState(t, playlistId, if (playlistId != null) iv.index else -1) })
+                    onLong = { vm.sheet = SongSheetState(t, playlistId, if (playlistId != null) sourceIndex?.getOrNull(iv.index) ?: iv.index else -1) })
             }
         }
     }
