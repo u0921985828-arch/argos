@@ -34,8 +34,17 @@ PY
 crashed() { adb logcat -d -s AndroidRuntime:E > crash.txt || true; grep -q 'FATAL EXCEPTION' crash.txt; }
 
 # Música de prueba: la generó el paso anterior con ffmpeg.
-adb shell mkdir -p /sdcard/Music/surco
-adb push musica/*.mp3 musica/*.flac /sdcard/Music/surco/
+# Recién arrancado, el almacenamiento compartido tarda en montarse y `adb
+# push` falla con «Operation not permitted»: se espera y se reintenta.
+for f in musica/*; do
+    for i in $(seq 1 30); do
+        adb shell mkdir -p /sdcard/Music/surco 2>/dev/null \
+            && adb push "$f" /sdcard/Music/surco/ >/dev/null 2>&1 && break
+        [ "$i" = 30 ] && { echo "::error::no se pudo copiar $f al emulador"; exit 1; }
+        sleep 3
+    done
+done
+adb shell ls -l /sdcard/Music/surco
 adb shell content call --uri content://media/ --method scan_volume --arg external_primary >/dev/null 2>&1 || true
 for f in musica/*; do
     adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE \
