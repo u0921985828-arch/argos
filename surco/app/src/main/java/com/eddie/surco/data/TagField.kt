@@ -182,5 +182,7 @@ fun describe(t: Track): List<Pair<String, String>> = buildList {
     add("Comentario", t.x("comment")); add("ISRC", t.x("isrc")); add("Nº de catálogo", t.x("catalog"))
     add("Valoración", t.x("rating")); add("Letra incluida", t.x("lyrics")); add("Códec", t.x("codec"))
     add("Tamaño", "%.1f MB".format(Locale("es"), t.size / 1_048_576f).takeIf { t.size > 0 } ?: "")
+    t.x("rg_track").takeIf { it.isNotBlank() }?.let { add("ReplayGain pista", "$it dB") }
+    t.x("rg_album").takeIf { it.isNotBlank() }?.let { add("ReplayGain álbum", "$it dB") }
     add("Archivo", t.path)
 }

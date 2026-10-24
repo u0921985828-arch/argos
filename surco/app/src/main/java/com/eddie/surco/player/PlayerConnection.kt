@@ -1,32 +1,41 @@
 package com.eddie.surco.player
 
 import android.content.ComponentName
-import android.content.ContentUris
 import android.content.Context
-import android.net.Uri
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
+import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.eddie.surco.data.Track
+import com.eddie.surco.data.UserStore
 import com.google.common.util.concurrent.ListenableFuture
+
+/** Un hueco de la cola: [index] es la posición en la lista del reproductor. */
+data class QueueEntry(val index: Int, val trackId: Long)
 
 /** Conecta la interfaz con el servicio de reproducción. */
 class PlayerConnection(ctx: Context) {
     private val future: ListenableFuture<MediaController>
     var controller: MediaController? by mutableStateOf(null); private set
     var currentId by mutableStateOf<Long?>(null); private set
+    var currentIndex by mutableIntStateOf(C.INDEX_UNSET); private set
     var isPlaying by mutableStateOf(false); private set
     var shuffle by mutableStateOf(false); private set
-    var repeat by mutableStateOf(Player.REPEAT_MODE_OFF); private set
+    var repeat by mutableIntStateOf(Player.REPEAT_MODE_OFF); private set
+    var speed by mutableFloatStateOf(1f); private set
+    /** La cola en el orden en que va a sonar (con aleatorio, el orden aleatorio). */
+    var queue by mutableStateOf<List<QueueEntry>>(emptyList()); private set
 
     private val listener = object : Player.Listener {
-        override fun onEvents(player: Player, events: Player.Events) = sync(player)
+        override fun onEvents(player: Player, events: Player.Events) {
+            sync(player, events.containsAny(Player.EVENT_TIMELINE_CHANGED, Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED))
+        }
     }
 
     init {
@@ -34,16 +43,32 @@ class PlayerConnection(ctx: Context) {
         future = MediaController.Builder(ctx, token).buildAsync()
         future.addListener({
             runCatching { future.get() }.getOrNull()?.let { c ->
-                controller = c; c.addListener(listener); sync(c)
+                controller = c; c.addListener(listener); sync(c, true)
             }
         }, ContextCompat.getMainExecutor(ctx))
     }
 
-    private fun sync(p: Player) {
+    private fun sync(p: Player, queueChanged: Boolean) {
         currentId = p.currentMediaItem?.mediaId?.toLongOrNull()
+        currentIndex = p.currentMediaItemIndex
         isPlaying = p.isPlaying
         shuffle = p.shuffleModeEnabled
         repeat = p.repeatMode
+        speed = p.playbackParameters.speed
+        if (queueChanged) queue = buildQueue(p)
+    }
+
+    private fun buildQueue(p: Player): List<QueueEntry> {
+        val n = p.mediaItemCount
+        if (n == 0) return emptyList()
+        val tl = p.currentTimeline
+        val out = ArrayList<QueueEntry>(n)
+        var i = tl.getFirstWindowIndex(p.shuffleModeEnabled)
+        while (i != C.INDEX_UNSET && out.size < n) {
+            out += QueueEntry(i, p.getMediaItemAt(i).mediaId.toLongOrNull() ?: -1L)
+            i = tl.getNextWindowIndex(i, Player.REPEAT_MODE_OFF, p.shuffleModeEnabled)
+        }
+        return out
     }
 
     val positionMs: Long get() = controller?.currentPosition ?: 0
@@ -56,6 +81,43 @@ class PlayerConnection(ctx: Context) {
         val idx = if (shuffled) list.indices.random() else start.coerceIn(list.indices)
         c.setMediaItems(list.map { it.toMediaItem() }, idx, 0)
         c.prepare(); c.play()
+    }
+
+    /** Detrás de la que suena. */
+    fun playNext(tracks: List<Track>) {
+        val c = controller ?: return
+        if (c.mediaItemCount == 0) return play(tracks, 0)
+        c.addMediaItems(c.currentMediaItemIndex + 1, tracks.map { it.toMediaItem() })
+    }
+
+    /** Al final de la cola. */
+    fun enqueue(tracks: List<Track>) {
+        val c = controller ?: return
+        if (c.mediaItemCount == 0) return play(tracks, 0)
+        c.addMediaItems(tracks.map { it.toMediaItem() })
+    }
+
+    fun jumpTo(index: Int) { controller?.let { it.seekToDefaultPosition(index); it.play() } }
+    fun removeAt(index: Int) { controller?.removeMediaItem(index) }
+    fun move(from: Int, to: Int) { if (from != to) controller?.moveMediaItem(from, to) }
+
+    /** Quita todo menos lo que suena. */
+    fun clearUpcoming() {
+        val c = controller ?: return
+        val cur = c.currentMediaItemIndex
+        if (cur + 1 < c.mediaItemCount) c.removeMediaItems(cur + 1, c.mediaItemCount)
+        if (cur > 0) c.removeMediaItems(0, cur)
+    }
+
+    /** Al abrir la app sin nada en la cola, deja preparada la última (en pausa). */
+    fun restoreIfEmpty(byId: Map<Long, Track>) {
+        val c = controller ?: return
+        if (c.mediaItemCount > 0) return
+        val q = UserStore.state.value.queue
+        val items = q.ids.mapNotNull { byId[it]?.toMediaItem() }
+        if (items.isEmpty()) return
+        c.setMediaItems(items, q.index.coerceIn(items.indices), q.positionMs)
+        c.prepare()
     }
 
     fun toggle() { controller?.let { if (it.isPlaying) it.pause() else { if (it.playbackState == Player.STATE_IDLE) it.prepare(); it.play() } } }
@@ -76,20 +138,5 @@ class PlayerConnection(ctx: Context) {
     fun release() {
         controller?.removeListener(listener)
         MediaController.releaseFuture(future)
-    }
-
-    private fun Track.toMediaItem(): MediaItem {
-        val art = if (albumId > 0) ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), albumId) else null
-        return MediaItem.Builder()
-            .setMediaId(id.toString())
-            .setUri(uri)
-            .setRequestMetadata(MediaItem.RequestMetadata.Builder().setMediaUri(uri).build())
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(title).setArtist(artist).setAlbumTitle(album).setAlbumArtist(albumArtist)
-                    .setGenre(genre).setArtworkUri(art)
-                    .apply { if (year > 0) setRecordingYear(year) }
-                    .build()
-            ).build()
     }
 }

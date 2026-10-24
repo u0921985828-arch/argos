@@ -1,6 +1,20 @@
 package com.eddie.surco.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.material.icons.filled.Equalizer
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import com.eddie.surco.SongSheetState
+import com.eddie.surco.data.SmartList
+import com.eddie.surco.data.UserStore
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -28,7 +42,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.automirrored.filled.Sort
@@ -87,7 +100,9 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, progress: Pair<Int, In
                         color = Muted, fontSize = 13.sp,
                     )
                 }
-                IconButton(onClick = { vm.scan(force = true) }) { Icon(Icons.Default.Refresh, "Volver a leer etiquetas", tint = Muted) }
+                IconButton(onClick = { vm.push(Screen.Playlists) }) { Icon(Icons.Default.QueueMusic, "Listas", tint = Paper) }
+                IconButton(onClick = { vm.push(Screen.Equalizer) }) { Icon(Icons.Default.Equalizer, "Ecualizador", tint = Paper) }
+                IconButton(onClick = { vm.push(Screen.Settings) }) { Icon(Icons.Default.Settings, "Ajustes", tint = Paper) }
             }
         }
         item {
@@ -100,6 +115,20 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, progress: Pair<Int, In
                 singleLine = true, shape = RoundedCornerShape(14.dp),
                 colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = Panel, focusedContainerColor = Panel, unfocusedBorderColor = Panel),
             )
+        }
+        if (vm.query.isBlank()) item {
+            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(SmartList.entries.toList()) { sl ->
+                    Row(
+                        Modifier.clip(RoundedCornerShape(12.dp)).background(Panel).clickable { vm.push(Screen.Smart(sl)) }
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (sl == SmartList.FAVORITES) { Icon(Icons.Default.Favorite, null, tint = Copper, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)) }
+                        Text(sl.label, fontSize = 14.sp)
+                    }
+                }
+            }
         }
         if (progress != null) item {
             Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
@@ -115,7 +144,7 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, progress: Pair<Int, In
         if (vm.query.isNotBlank()) {
             item { SectionLabel("${songs(results.size)} encontradas") }
             itemsIndexed(results, key = { _, t -> t.id }) { i, t ->
-                SongRow(t, null, t.id == currentId, onClick = { vm.player.play(results, i) }, onLong = { vm.sheetTrack = t })
+                SongRow(t, null, t.id == currentId, onClick = { vm.player.play(results, i) }, onLong = { vm.sheet = SongSheetState(t) })
             }
             return@LazyColumn
         }
@@ -242,7 +271,10 @@ private fun albumArtistOf(g: Group): String {
 private fun List<Track>.sortedForAlbum() = sortedWith(compareBy({ it.album.lowercase() }, { it.discNo }, { it.trackNo }, { it.title.lowercase() }))
 
 // ======================= CANCIONES =======================
-enum class SongSort(val label: String) { TITLE("Título"), ARTIST("Artista"), ALBUM("Álbum y pista"), YEAR("Año"), DURATION("Duración"), ADDED("Recientes") }
+enum class SongSort(val label: String) {
+    CUSTOM("Orden de la lista"), TITLE("Título"), ARTIST("Artista"), ALBUM("Álbum y pista"), YEAR("Año"),
+    DURATION("Duración"), ADDED("Recientes"), PLAYS("Más escuchadas"),
+}
 
 @Composable
 fun SongsScreen(vm: LibraryViewModel, s: Screen.Songs, tracks: List<Track>) {
@@ -250,50 +282,104 @@ fun SongsScreen(vm: LibraryViewModel, s: Screen.Songs, tracks: List<Track>) {
         if (s.field == null || s.key == null) tracks
         else tracks.filter { t -> s.field.buckets(t).any { it.key == s.key } }
     }
-    var sort by rememberSaveable(s) { mutableStateOf(if (s.field == TagField.ALBUM) SongSort.ALBUM else SongSort.TITLE) }
-    var menu by remember { mutableStateOf(false) }
-    val sorted = remember(list, sort) {
+    SongListScreen(vm, s.title, s.field?.label ?: "Biblioteca", list, if (s.field == TagField.ALBUM) SongSort.ALBUM else SongSort.TITLE, custom = false)
+}
+
+@Composable
+fun SmartScreen(vm: LibraryViewModel, sl: SmartList, tracks: List<Track>) {
+    val user by UserStore.state.collectAsState()
+    val list = remember(tracks, user, sl) { sl.tracks(tracks, user) }
+    SongListScreen(vm, sl.label, "Lista automática", list, if (sl == SmartList.FAVORITES || sl == SmartList.NEVER) SongSort.TITLE else SongSort.CUSTOM, custom = true)
+}
+
+@Composable
+fun PlaylistScreen(vm: LibraryViewModel, id: Long, byId: Map<Long, Track>) {
+    val user by UserStore.state.collectAsState()
+    val pl = user.playlists.firstOrNull { it.id == id }
+    if (pl == null) { LaunchedEffect(Unit) { vm.pop() }; return }
+    val list = remember(pl, byId) { pl.trackIds.mapNotNull { byId[it] } }
+    var renaming by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf(false) }
+    SongListScreen(vm, pl.name, "Lista · ${songs(list.size)}", list, SongSort.CUSTOM, custom = true, playlistId = id,
+        menu = { close ->
+            DropdownMenuItem(text = { Text("Cambiar el nombre") }, onClick = { close(); renaming = true })
+            DropdownMenuItem(text = { Text("Borrar la lista") }, onClick = { close(); deleting = true })
+        })
+    if (renaming) NameDialog("Nombre de la lista", initial = pl.name, onDismiss = { renaming = false }) { n -> UserStore.renamePlaylist(id, n); renaming = false }
+    if (deleting) AlertDialog(
+        onDismissRequest = { deleting = false }, containerColor = Panel,
+        title = { Text("¿Borrar «${pl.name}»?") },
+        text = { Text("Las canciones no se tocan; solo desaparece la lista.") },
+        confirmButton = { TextButton(onClick = { deleting = false; UserStore.deletePlaylist(id); vm.pop() }) { Text("Borrar") } },
+        dismissButton = { TextButton(onClick = { deleting = false }) { Text("Cancelar") } },
+    )
+}
+
+/** Lista de canciones con orden, reproducir, aleatorio, a la cola y a una lista. */
+@Composable
+fun SongListScreen(
+    vm: LibraryViewModel, title: String, subtitle: String, list: List<Track>, initialSort: SongSort,
+    custom: Boolean, playlistId: Long? = null, menu: (@Composable (close: () -> Unit) -> Unit)? = null,
+) {
+    var sort by rememberSaveable(title, subtitle) { mutableStateOf(initialSort) }
+    var sortMenu by remember { mutableStateOf(false) }
+    var moreMenu by remember { mutableStateOf(false) }
+    val user by UserStore.state.collectAsState()
+    val sorted: List<IndexedValue<Track>> = remember(list, sort, user.plays) {
+        val l = list.withIndex().toList()
         when (sort) {
-            SongSort.TITLE -> list.sortedBy { it.title.lowercase() }
-            SongSort.ARTIST -> list.sortedWith(compareBy({ it.artist.lowercase() }, { it.album.lowercase() }, { it.trackNo }))
-            SongSort.ALBUM -> list.sortedForAlbum()
-            SongSort.YEAR -> list.sortedWith(compareBy({ if (it.year == 0) 99999 else it.year }, { it.album.lowercase() }, { it.trackNo }))
-            SongSort.DURATION -> list.sortedByDescending { it.durationMs }
-            SongSort.ADDED -> list.sortedByDescending { it.dateAdded }
+            SongSort.CUSTOM -> l
+            SongSort.TITLE -> l.sortedBy { it.value.title.lowercase() }
+            SongSort.ARTIST -> l.sortedWith(compareBy({ it.value.artist.lowercase() }, { it.value.album.lowercase() }, { it.value.trackNo }))
+            SongSort.ALBUM -> l.sortedWith(compareBy({ it.value.album.lowercase() }, { it.value.discNo }, { it.value.trackNo }, { it.value.title.lowercase() }))
+            SongSort.YEAR -> l.sortedWith(compareBy({ if (it.value.year == 0) 99999 else it.value.year }, { it.value.album.lowercase() }, { it.value.trackNo }))
+            SongSort.DURATION -> l.sortedByDescending { it.value.durationMs }
+            SongSort.ADDED -> l.sortedByDescending { it.value.dateAdded }
+            SongSort.PLAYS -> l.sortedByDescending { user.plays[it.value.id] ?: 0 }
         }
     }
+    val tracksSorted = remember(sorted) { sorted.map { it.value } }
     val currentId = vm.player.currentId
     Column(Modifier.fillMaxSize()) {
-        TopBar(s.title, s.field?.label ?: "Biblioteca", onBack = { vm.pop() }) {
+        TopBar(title, subtitle, onBack = { vm.pop() }) {
             Box {
-                IconButton(onClick = { menu = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Ordenar") }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    SongSort.entries.forEach { o ->
+                IconButton(onClick = { sortMenu = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Ordenar") }
+                DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                    SongSort.entries.filter { custom || it != SongSort.CUSTOM }.forEach { o ->
                         DropdownMenuItem(
                             text = { Text(o.label, color = if (o == sort) Copper else Paper) },
-                            onClick = { sort = o; menu = false },
+                            onClick = { sort = o; sortMenu = false },
                         )
                     }
+                }
+            }
+            Box {
+                IconButton(onClick = { moreMenu = true }) { Icon(Icons.Default.MoreVert, "Más") }
+                DropdownMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
+                    DropdownMenuItem(text = { Text("Todo a la cola") }, onClick = { moreMenu = false; vm.player.enqueue(tracksSorted) }, enabled = list.isNotEmpty())
+                    DropdownMenuItem(text = { Text("Todo a una lista") }, onClick = { moreMenu = false; vm.addTo = tracksSorted }, enabled = list.isNotEmpty())
+                    menu?.invoke { moreMenu = false }
                 }
             }
         }
         LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
             item {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Art(sorted.firstOrNull(), 96.dp, corner = 10.dp, modifier = Modifier.size(96.dp))
+                    Art(tracksSorted.firstOrNull(), 96.dp, corner = 10.dp, modifier = Modifier.size(96.dp))
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
                         Text("${songs(list.size)} · ${fmtTotal(list.sumOf { it.durationMs })}", color = Muted, fontSize = 13.sp)
                         val artists = remember(list) { list.map { it.artist }.filter { it.isNotBlank() }.distinct() }
-                        if (s.field != TagField.ARTIST && artists.isNotEmpty())
+                        if (artists.isNotEmpty())
                             Text(artists.take(4).joinToString(", ") + if (artists.size > 4) " y ${artists.size - 4} más" else "",
                                 fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Spacer(Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { vm.player.play(sorted, 0) }, contentPadding = PaddingValues(horizontal = 14.dp)) {
+                            Button(onClick = { vm.player.play(tracksSorted, 0) }, enabled = list.isNotEmpty(), contentPadding = PaddingValues(horizontal = 14.dp)) {
                                 Icon(Icons.Default.PlayArrow, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("Reproducir")
                             }
-                            OutlinedButton(onClick = { vm.player.play(sorted, 0, shuffled = true) }, contentPadding = PaddingValues(horizontal = 12.dp),
+                            OutlinedButton(onClick = { vm.player.play(tracksSorted, 0, shuffled = true) }, enabled = list.isNotEmpty(),
+                                contentPadding = PaddingValues(horizontal = 12.dp),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Copper)) {
                                 Icon(Icons.Default.Shuffle, "Aleatorio", Modifier.size(18.dp))
                             }
@@ -301,10 +387,16 @@ fun SongsScreen(vm: LibraryViewModel, s: Screen.Songs, tracks: List<Track>) {
                     }
                 }
                 HorizontalDivider(color = Panel2)
+                if (list.isEmpty()) Text(
+                    if (playlistId != null) "Lista vacía. Mantén pulsada una canción y elige «A una lista»." else "Nada por aquí todavía.",
+                    color = Muted, modifier = Modifier.padding(24.dp),
+                )
             }
-            itemsIndexed(sorted, key = { _, t -> t.id }) { i, t ->
+            itemsIndexed(sorted, key = { _, iv -> "${iv.index}-${iv.value.id}" }) { i, iv ->
+                val t = iv.value
                 SongRow(t, if (sort == SongSort.ALBUM && t.trackNo > 0) t.trackNo else null, t.id == currentId,
-                    onClick = { vm.player.play(sorted, i) }, onLong = { vm.sheetTrack = t })
+                    onClick = { vm.player.play(tracksSorted, i) },
+                    onLong = { vm.sheet = SongSheetState(t, playlistId, if (playlistId != null) iv.index else -1) })
             }
         }
     }
@@ -335,7 +427,7 @@ fun SongRow(t: Track, number: Int?, playing: Boolean, onClick: () -> Unit, onLon
 }
 
 @Composable
-fun TopBar(title: String, subtitle: String, onBack: () -> Unit, actions: @Composable () -> Unit = {}) {
+fun TopBar(title: String, subtitle: String, onBack: () -> Unit, actions: @Composable RowScope.() -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Atrás") }
         Column(Modifier.weight(1f)) {

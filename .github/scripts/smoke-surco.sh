@@ -7,13 +7,19 @@
 #      ánimo, sello): si R8 rompe la lectura profunda, la app no se cae, se
 #      queda sin ellos y nadie lo nota;
 #   3. que al pulsar una canción no se caiga. Que suene se informa, no se
-#      exige: el emulador va con -noaudio.
+#      exige: el emulador va con -noaudio;
+#   4. lo de Surco 2: favorita, «Sonando» con la calidad del archivo, cola,
+#      ecualizador con un preajuste aplicado mientras suena (el audio pasa por
+#      el procesador propio), y que favorita y preajuste sobrevivan a cerrar
+#      la app;
+#   5. caso reservado: un FLAC de 96 kHz, 24 bits y un canal suena con el
+#      ecualizador puesto (el procesador con otra frecuencia y otro nº de canales).
 set -euo pipefail
 APK=${1:-Surco.apk}
 PKG=com.eddie.surco
 
 ui() { adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || true; adb exec-out cat /sdcard/ui.xml > ui.xml || true; }
-tap() {  # pulsa el centro del primer nodo cuyo texto es $1
+tap() {  # pulsa el centro del primer nodo cuyo texto (o descripción) es $1
     local xy
     xy=$(python3 - "$1" <<'PY'
 import re, sys
@@ -21,8 +27,9 @@ xml = open("ui.xml", encoding="utf-8", errors="ignore").read()
 for m in re.finditer(r'<node [^>]*>', xml):
     n = m.group(0)
     t = re.search(r' text="([^"]*)"', n)
+    c = re.search(r' content-desc="([^"]*)"', n)
     b = re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n)
-    if t and b and t.group(1) == sys.argv[1]:
+    if b and ((t and t.group(1) == sys.argv[1]) or (c and c.group(1) == sys.argv[1])):
         x1, y1, x2, y2 = map(int, b.groups())
         print((x1 + x2) // 2, (y1 + y2) // 2)
         break
@@ -52,7 +59,7 @@ for f in musica/*; do
 done
 for _ in $(seq 1 30); do
     n=$(adb shell content query --uri content://media/external/audio/media --projection _display_name 2>/dev/null | grep -c 'Row:' || true)
-    [ "${n:-0}" -ge 2 ] && break
+    [ "${n:-0}" -ge 3 ] && break
     sleep 2
 done
 echo "MediaStore ve $n canciones"
@@ -68,7 +75,7 @@ for _ in $(seq 1 30); do
     sleep 2
     crashed && break
     ui
-    grep -q 'text="2 canciones' ui.xml && ! grep -q 'Leyendo etiquetas' ui.xml && break
+    grep -q 'text="3 canciones' ui.xml && ! grep -q 'Leyendo etiquetas' ui.xml && break
 done
 adb exec-out screencap -p > inicio.png
 if crashed; then
@@ -77,8 +84,8 @@ if crashed; then
     exit 1
 fi
 grep -o 'text="[^"]*"' ui.xml | sed 's/text=//' | grep -v '^""$' | head -40 || true
-if ! grep -q 'text="2 canciones' ui.xml; then
-    echo "::error::la biblioteca no muestra las 2 canciones de prueba"
+if ! grep -q 'text="3 canciones' ui.xml; then
+    echo "::error::la biblioteca no muestra las 3 canciones de prueba"
     exit 1
 fi
 
@@ -108,12 +115,65 @@ adb exec-out screencap -p > busqueda.png
 tap "Prueba Dos" || { echo "::error::no encuentro la canción «Prueba Dos»"; exit 1; }
 sleep 4
 adb exec-out screencap -p > sonando.png
-if crashed; then
-    echo "::error::Surco se cayó al reproducir"
-    sed -n '/FATAL EXCEPTION/,$p' crash.txt | head -60
-    exit 1
-fi
-estado=$(adb shell dumpsys media_session | grep -m1 -oE 'state=PlaybackState \{state=[A-Z_]*\(?[0-9]+\)?' || true)
-echo "sesión multimedia: ${estado:-sin sesión} (3 = sonando)"
+fallo() { echo "::error::$1"; grep -o 'text="[^"]*"\|content-desc="[^"]*"' ui.xml | head -60 || true; exit 1; }
+cayo() { if crashed; then echo "::error::Surco se cayó $1"; sed -n '/FATAL EXCEPTION/,$p' crash.txt | head -60; exit 1; fi; }
+estado() { adb shell dumpsys media_session | grep -m1 -oE 'state=PlaybackState \{state=[A-Z_]*\(?[0-9]+\)?' || true; }
+cayo "al reproducir"
+echo "sesión multimedia: $(estado) (3 = sonando)"
+
+# --- Surco 2 ---
+ui
+tap "Favorita" || fallo "no hay corazón de favorita en el minirreproductor"
+sleep 1
+tap "Otra Banda" || fallo "no encuentro el minirreproductor"
+sleep 2; ui
+grep -q 'text="SONANDO"' ui.xml || fallo "no se abrió «Sonando»"
+grep -q 'text="FLAC · 16 bits' ui.xml || fallo "«Sonando» no enseña la calidad del archivo"
+grep -q 'content-desc="Quitar de favoritas"' ui.xml || fallo "la favorita no quedó marcada"
+adb exec-out screencap -p > sonando2.png
+
+tap "Cola" || fallo "no encuentro el botón de la cola"
+sleep 2; ui
+grep -q 'text="Cola"' ui.xml && grep -q 'text="Prueba Dos"' ui.xml || fallo "la cola no se abrió o no lleva la canción"
+adb exec-out screencap -p > cola.png
+adb shell input keyevent KEYCODE_BACK; sleep 1; ui
+
+tap "EQ" || fallo "no encuentro el botón del ecualizador"
+sleep 2; ui
+grep -q 'text="Preamplificación"' ui.xml || fallo "no se abrió el ecualizador"
+tap "Graves" || fallo "no encuentro el preajuste Graves"
+sleep 4
+adb exec-out screencap -p > ecualizador.png
+cayo "con el ecualizador puesto"
+e=$(estado); echo "con Graves: $e"
+echo "$e" | grep -qE 'state=(PLAYING|3)|\(3\)' || fallo "dejó de sonar al poner el ecualizador ($e)"
+
+# Cerrar del todo y volver: favorita y preajuste tienen que seguir.
+sleep 2
+adb shell am force-stop "$PKG"
+adb logcat -c
+adb shell am start -n "$PKG/.MainActivity"
+for _ in $(seq 1 20); do sleep 2; ui; grep -q 'text="3 canciones' ui.xml && break; done
+cayo "al volver a abrir"
+tap "Ecualizador" || fallo "no encuentro el ecualizador en Inicio"
+sleep 2; ui
+[ "$(grep -o 'text="Graves"' ui.xml | wc -l)" -ge 2 ] || fallo "el preajuste Graves no se guardó"
+adb shell input keyevent KEYCODE_BACK; sleep 1; ui
+tap "Favoritas" || fallo "no encuentro la lista Favoritas"
+sleep 2; ui
+grep -q 'text="Prueba Dos"' ui.xml && ! grep -q 'text="Prueba Uno"' ui.xml || fallo "Favoritas no tiene justo la favorita"
+adb exec-out screencap -p > favoritas.png
+adb shell input keyevent KEYCODE_BACK; sleep 1
+
+# Caso reservado: FLAC 96 kHz / 24 bits / mono con el ecualizador Graves.
+ui
+busca tres96 "Prueba Tres"
+tap "Prueba Tres" || fallo "no encuentro «Prueba Tres»"
+sleep 5
+adb exec-out screencap -p > reservado.png
+cayo "con el FLAC de 96 kHz"
+e=$(estado); echo "reservado 96 kHz mono: $e"
+echo "$e" | grep -qE 'state=(PLAYING|3)|\(3\)' || fallo "el FLAC de 96 kHz no suena ($e)"
+
 adb logcat -d > logcat.txt || true
-echo "Surco: arranca, lee las etiquetas y reproduce sin caerse"
+echo "Surco 2: biblioteca, etiquetas, favorita, cola, ecualizador, persistencia y 96 kHz mono sin caerse"

@@ -21,7 +21,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.palette.graphics.Palette
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -68,6 +70,23 @@ private suspend fun loadArt(ctx: android.content.Context, t: Track, px: Int): Im
     val img = bmp?.asImageBitmap()
     artCache.put(key, img ?: NoArt)
     img
+}
+
+private val colorCache = LruCache<Long, Any>(200)
+
+/** Color dominante de la portada (para el fondo de «Sonando»), o null si no hay portada. */
+suspend fun artColor(ctx: android.content.Context, t: Track): Color? = withContext(Dispatchers.Default) {
+    colorCache.get(t.artKey)?.let { return@withContext it as? Color }
+    val c = runCatching {
+        val img = loadArt(ctx, t, 128) ?: return@runCatching null
+        var bmp = img.asAndroidBitmap()
+        if (bmp.config == Bitmap.Config.HARDWARE) bmp = bmp.copy(Bitmap.Config.ARGB_8888, false)
+        val p = Palette.from(bmp).maximumColorCount(16).generate()
+        val sw = p.darkVibrantSwatch ?: p.vibrantSwatch ?: p.darkMutedSwatch ?: p.dominantSwatch
+        sw?.let { Color(it.rgb) }
+    }.getOrNull()
+    colorCache.put(t.artKey, c ?: NoArt)
+    c
 }
 
 @Composable

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,6 +29,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.eddie.surco.audio.SurcoSettings
 import com.eddie.surco.ui.GroupsScreen
 import com.eddie.surco.ui.HomeScreen
 import com.eddie.surco.ui.Ink
@@ -36,7 +38,16 @@ import com.eddie.surco.ui.NowPlaying
 import com.eddie.surco.ui.PermissionScreen
 import com.eddie.surco.ui.SongsScreen
 import com.eddie.surco.ui.SurcoTheme
-import com.eddie.surco.ui.TagSheet
+import com.eddie.surco.ui.AddToPlaylistDialog
+import com.eddie.surco.ui.EqualizerScreen
+import com.eddie.surco.ui.PlaylistScreen
+import com.eddie.surco.ui.PlaylistsScreen
+import com.eddie.surco.ui.QueueSheet
+import com.eddie.surco.ui.SettingsScreen
+import com.eddie.surco.ui.SleepDialog
+import com.eddie.surco.ui.SmartScreen
+import com.eddie.surco.ui.SongSheet
+import com.eddie.surco.ui.SpeedDialog
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -64,10 +75,19 @@ private fun Root(vm: LibraryViewModel = viewModel()) {
 
 @Composable
 private fun App(vm: LibraryViewModel) {
-    val tracks by vm.tracks.collectAsStateWithLifecycle()
+    val all by vm.tracks.collectAsStateWithLifecycle()
     val progress by vm.progress.collectAsStateWithLifecycle()
-    val byId = remember(tracks) { tracks.associateBy { it.id } }
+    val prefs by SurcoSettings.state.collectAsState()
+    val tracks = remember(all, prefs.minDurationSec) {
+        if (prefs.minDurationSec <= 0) all else all.filter { it.durationMs <= 0 || it.durationMs >= prefs.minDurationSec * 1000L }
+    }
+    val byId = remember(all) { all.associateBy { it.id } }
     val current = vm.player.currentId?.let { byId[it] }
+
+    // Al abrir sin nada sonando, deja preparada la cola de la última vez.
+    LaunchedEffect(vm.player.controller, byId.isNotEmpty()) {
+        if (byId.isNotEmpty()) vm.player.restoreIfEmpty(byId)
+    }
 
     BackHandler(enabled = vm.nowPlayingOpen || vm.stack.size > 1 || vm.query.isNotEmpty()) {
         when {
@@ -84,6 +104,11 @@ private fun App(vm: LibraryViewModel) {
                     Screen.Home -> HomeScreen(vm, tracks, progress)
                     is Screen.Groups -> GroupsScreen(vm, s.field, tracks)
                     is Screen.Songs -> SongsScreen(vm, s, tracks)
+                    is Screen.Smart -> SmartScreen(vm, s.list, tracks)
+                    is Screen.PlaylistView -> PlaylistScreen(vm, s.id, byId)
+                    Screen.Playlists -> PlaylistsScreen(vm, tracks)
+                    Screen.Settings -> SettingsScreen(vm)
+                    Screen.Equalizer -> EqualizerScreen(vm)
                 }
             }
         }
@@ -93,6 +118,10 @@ private fun App(vm: LibraryViewModel) {
         ) {
             current?.let { NowPlaying(vm, it) }
         }
-        vm.sheetTrack?.let { TagSheet(vm, it) }
+        vm.sheet?.let { SongSheet(vm, it) }
+        if (vm.queueOpen) QueueSheet(vm, byId)
+        if (vm.sleepOpen) SleepDialog(vm)
+        if (vm.speedOpen) SpeedDialog(vm)
+        vm.addTo?.let { AddToPlaylistDialog(vm, it) }
     }
 }

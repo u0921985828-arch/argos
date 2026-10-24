@@ -1,0 +1,152 @@
+package com.eddie.surco.ui
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlin.math.abs
+import kotlin.math.roundToInt
+
+/**
+ * Deslizador vertical para las bandas del ecualizador. El relleno sale del centro (0 dB);
+ * doble toque vuelve a 0.
+ */
+@Composable
+fun VerticalSlider(
+    value: Float, onChange: (Float) -> Unit, modifier: Modifier = Modifier,
+    min: Float = -12f, max: Float = 12f, step: Float = 0.5f, height: Dp = 180.dp,
+) {
+    val change by rememberUpdatedState(onChange)
+    fun fromY(y: Float, h: Int): Float {
+        val v = max - (y / h.coerceAtLeast(1)) * (max - min)
+        return ((v / step).roundToInt() * step).coerceIn(min, max)
+    }
+    Canvas(
+        modifier.width(34.dp).height(height)
+            .pointerInput(min, max) {
+                detectVerticalDragGestures(
+                    onDragStart = { change(fromY(it.y, size.height)) },
+                ) { ev, _ -> ev.consume(); change(fromY(ev.position.y, size.height)) }
+            }
+            .pointerInput(min, max) {
+                detectTapGestures(onDoubleTap = { change(0f) }, onTap = { change(fromY(it.y, size.height)) })
+            },
+    ) {
+        val cx = size.width / 2
+        val trackW = 4.dp.toPx()
+        fun yOf(v: Float) = (max - v) / (max - min) * size.height
+        drawRoundRect(Panel2, Offset(cx - trackW / 2, 0f), Size(trackW, size.height), CornerRadius(trackW))
+        val y0 = yOf(0f.coerceIn(min, max)); val yv = yOf(value)
+        drawRoundRect(Copper, Offset(cx - trackW / 2, minOf(y0, yv)), Size(trackW, abs(yv - y0)), CornerRadius(trackW))
+        drawLine(Muted.copy(alpha = 0.5f), Offset(cx - 8.dp.toPx(), y0), Offset(cx + 8.dp.toPx(), y0), 1.dp.toPx())
+        drawCircle(Paper, 9.dp.toPx(), Offset(cx, yv))
+        drawCircle(Copper, 6.dp.toPx(), Offset(cx, yv))
+    }
+}
+
+/** Fila de ajuste con título, valor a la derecha y deslizador debajo. */
+@Composable
+fun LabeledSlider(
+    title: String, value: Float, range: ClosedFloatingPointRange<Float>, valueText: String,
+    onChange: (Float) -> Unit, steps: Int = 0, onReset: (() -> Unit)? = null,
+) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(title, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            if (onReset != null) TextButton(onClick = onReset) { Text("0", color = Muted) }
+            Text(valueText, color = Copper, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+        }
+        Slider(
+            value = value, onValueChange = onChange, valueRange = range, steps = steps,
+            colors = SliderDefaults.colors(thumbColor = Copper, activeTrackColor = Copper, inactiveTrackColor = Panel2),
+        )
+    }
+}
+
+@Composable
+fun SwitchRow(title: String, subtitle: String? = null, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = 15.sp)
+            if (subtitle != null) Text(subtitle, color = Muted, fontSize = 12.sp, lineHeight = 15.sp)
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(
+            checked = checked, onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(checkedThumbColor = Ink, checkedTrackColor = Copper),
+        )
+    }
+}
+
+/** Diálogo para escribir un nombre (lista nueva, preajuste…). */
+@Composable
+fun NameDialog(title: String, initial: String = "", confirm: String = "Guardar", onDismiss: () -> Unit, onOk: (String) -> Unit) {
+    var text by remember { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Panel,
+        title = { Text(title) },
+        text = {
+            OutlinedTextField(
+                value = text, onValueChange = { text = it }, singleLine = true,
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+            )
+        },
+        confirmButton = { TextButton(onClick = { if (text.isNotBlank()) onOk(text.trim()) }, enabled = text.isNotBlank()) { Text(confirm) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
+    )
+}
+
+/** Fila pulsable de una opción con texto secundario. */
+@Composable
+fun OptionRow(title: String, subtitle: String? = null, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+        horizontalArrangement = Arrangement.Start, verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth()) {
+                Text(title, color = Paper, fontSize = 15.sp)
+                if (subtitle != null) Text(subtitle, color = Muted, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+fun dbText(v: Float): String = (if (v > 0) "+" else "") + "%.1f dB".format(v).replace('.', ',')

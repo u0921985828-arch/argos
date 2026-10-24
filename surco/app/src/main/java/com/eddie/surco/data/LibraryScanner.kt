@@ -10,6 +10,7 @@ import org.jaudiotagger.tag.Tag
 import org.jaudiotagger.tag.reference.GenreTypes
 import org.json.JSONArray
 import java.io.File
+import java.util.Locale
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -110,6 +111,12 @@ class LibraryScanner(private val ctx: Context) {
         put("disc_total", g(FieldKey.DISC_TOTAL))
         put("track_total", g(FieldKey.TRACK_TOTAL))
         if (g(FieldKey.LYRICS).isNotBlank()) extra["lyrics"] = "Sí"
+        tag?.let { tg ->
+            runCatching { readReplayGain(tg) }.getOrNull()?.let { rg ->
+                rg.trackDb?.let { extra["rg_track"] = "%.2f".format(Locale.ROOT, it) }
+                rg.albumDb?.let { extra["rg_album"] = "%.2f".format(Locale.ROOT, it) }
+            }
+        }
         runCatching { put("channels", h.channels.orEmpty()) }
         runCatching { if (h.bitsPerSample > 0) put("bits", "${h.bitsPerSample} bits") }
         runCatching { put("codec", h.encodingType.orEmpty()) }
@@ -153,6 +160,20 @@ class LibraryScanner(private val ctx: Context) {
         } finally {
             runCatching { r.release() }
         }
+    }
+
+    /**
+     * Letra de la canción: primero un .lrc con el mismo nombre al lado (en Android 13+ solo se
+     * puede leer si el sistema lo deja, así que es un extra), después la etiqueta incrustada.
+     */
+    fun loadLyrics(t: Track): Lyrics? {
+        val audio = File(t.path)
+        val lrc = File(audio.parentFile, audio.nameWithoutExtension + ".lrc")
+        runCatching { if (lrc.canRead()) parseLyrics(lrc.readText(), "archivo .lrc")?.let { return it } }
+        return runCatching {
+            val tag = AudioFileIO.read(audio).tag ?: return null
+            parseLyrics(tag.getFirst(FieldKey.LYRICS).orEmpty(), "etiqueta del archivo")
+        }.getOrNull()
     }
 
     // ----- caché en disco -----

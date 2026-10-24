@@ -7,9 +7,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.eddie.surco.audio.SurcoSettings
 import com.eddie.surco.data.LibraryScanner
+import com.eddie.surco.data.Lyrics
+import com.eddie.surco.data.SmartList
 import com.eddie.surco.data.TagField
 import com.eddie.surco.data.Track
+import com.eddie.surco.data.UserStore
+import com.eddie.surco.data.buckets
 import com.eddie.surco.player.PlayerConnection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -25,10 +30,24 @@ sealed interface Screen {
     data class Groups(val field: TagField) : Screen
     /** field/key nulos = todas las canciones. */
     data class Songs(val field: TagField?, val key: String?, val title: String) : Screen
+    data class Smart(val list: SmartList) : Screen
+    data class PlaylistView(val id: Long) : Screen
+    data object Playlists : Screen
+    data object Settings : Screen
+    data object Equalizer : Screen
 }
+
+/** Menú de una canción; si viene de una lista, dónde está en ella (para poder quitarla). */
+data class SongSheetState(val track: Track, val playlistId: Long? = null, val playlistIndex: Int = -1)
 
 class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     private val scanner = LibraryScanner(app)
+
+    init {
+        SurcoSettings.init(app)
+        UserStore.init(app)
+    }
+
     val player = PlayerConnection(app)
 
     val tracks = MutableStateFlow<List<Track>>(emptyList())
@@ -36,7 +55,12 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     val stack = mutableStateListOf<Screen>(Screen.Home)
     var query by mutableStateOf("")
     var nowPlayingOpen by mutableStateOf(false)
-    var sheetTrack by mutableStateOf<Track?>(null)
+    var sheet by mutableStateOf<SongSheetState?>(null)
+    var queueOpen by mutableStateOf(false)
+    var sleepOpen by mutableStateOf(false)
+    var speedOpen by mutableStateOf(false)
+    /** Canciones que se van a añadir a una lista (abre el diálogo). */
+    var addTo by mutableStateOf<List<Track>?>(null)
 
     private var scanJob: Job? = null
 
@@ -75,8 +99,13 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun loadLyrics(t: Track): Lyrics? = scanner.loadLyrics(t)
+
+    fun goToAlbum(t: Track) = TagField.ALBUM.buckets(t).firstOrNull()?.let { openTag(TagField.ALBUM, it.key, it.label) }
+    fun goToArtist(t: Track) = TagField.ARTIST.buckets(t).firstOrNull()?.let { openTag(TagField.ARTIST, it.key, it.label) }
+
     fun openTag(field: TagField, key: String, label: String) {
-        sheetTrack = null
+        sheet = null
         nowPlayingOpen = false
         push(Screen.Songs(field, key, label))
     }

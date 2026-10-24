@@ -39,7 +39,7 @@ jobs:
         working-directory: surco
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon assembleDebug assembleRelease
+          ./gradlew --no-daemon testDebugUnitTest assembleDebug assembleRelease
 
       - name: Collect APKs
         run: |
@@ -99,6 +99,10 @@ jobs:
             -metadata TITLE="Prueba Dos" -metadata ARTIST="Otra Banda" -metadata ALBUM="Disco de Prueba" \
             -metadata GENRE="Jazz" -metadata DATE=1987 -metadata BPM=95 -metadata LABEL=sellonorte \
             musica/dos.flac
+          # Caso reservado: 96 kHz, 24 bits, un canal.
+          ffmpeg -loglevel error -f lavfi -i "sine=frequency=550:duration=20:sample_rate=96000" -ac 1 -c:a flac -sample_fmt s32 \
+            -bits_per_raw_sample 24 -metadata TITLE="Prueba Tres" -metadata ARTIST="Tercera Banda" -metadata MOOD=tres96 \
+            musica/tres.flac
           ls -l musica
 
       - name: Enable KVM
@@ -112,6 +116,7 @@ jobs:
           api-level: 34
           arch: x86_64
           target: google_apis
+          profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: bash .github/scripts/smoke-surco.sh Surco.apk
