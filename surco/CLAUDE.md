@@ -3,8 +3,9 @@
 App nativa Android (Kotlin + Jetpack Compose + Media3). Lee todas las etiquetas de los archivos de audio del móvil y permite navegar la biblioteca por cualquiera de ellas.
 
 ## Estado
-- Código completo, **todavía sin compilar**: la sesión anterior no pudo bajar dependencias de Maven por problemas de red. No se ha visto ningún error de compilación de Kotlin todavía, así que pueden aparecer errores menores de API en la primera compilación.
-- Primera tarea: compilar, corregir los errores que salgan y generar el APK.
+- **Compila y funciona**: la primera compilación salió sin errores de Kotlin ni de R8. El APK de release pasa una prueba de humo en emulador (API 34): arranca, MediaStore ve las canciones, el buscador encuentra etiquetas que solo lee jaudiotagger (estado de ánimo en ID3 TMOO, sello en Vorbis LABEL) y reproduce sin caerse.
+- Se compila en GitHub Actions (`.github/workflows/build-surco.yml` del repo `argos`, donde vive en `surco/`): el contenedor de desarrollo no llega a Google Maven ni al Android SDK. Cada push que toque `surco/` compila debug y release, pasa la prueba de humo (`.github/scripts/smoke-surco.sh`) y deja los APK en el artifact `surco-apk` y en la rama `apk-surco` (un solo commit, se reescribe).
+- El release va firmado con la clave de depuración del ejecutor, que cambia en cada compilación: para instalar uno nuevo encima hay que desinstalar el anterior. Una clave propia lo arregla.
 
 ## Compilar
 Requisitos: JDK 17 o superior y Android SDK (platform 35, build-tools 35). Crear `local.properties` con `sdk.dir=<ruta al SDK>` si no existe (en Windows: `sdk.dir=C\:\\Users\\<usuario>\\AppData\\Local\\Android\\Sdk`).

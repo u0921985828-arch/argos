@@ -113,7 +113,7 @@ if crashed; then
     sed -n '/FATAL EXCEPTION/,$p' crash.txt | head -60
     exit 1
 fi
-estado=$(adb shell dumpsys media_session | grep -m1 -o 'state=PlaybackState {state=[0-9]*' || true)
+estado=$(adb shell dumpsys media_session | grep -m1 -oE 'state=PlaybackState \{state=[A-Z_]*\(?[0-9]+\)?' || true)
 echo "sesión multimedia: ${estado:-sin sesión} (3 = sonando)"
 adb logcat -d > logcat.txt || true
 echo "Surco: arranca, lee las etiquetas y reproduce sin caerse"
