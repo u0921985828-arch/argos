@@ -22,3 +22,6 @@ Poweramp / Neutron / Musicolet: EQ gráfico + preajustes + preamp, tono (graves/
 
 ## Hecho
 - (en curso)
+- Compilación 1 de Surco 2 en CI: verde a la primera (tests unitarios incluidos).
+- Humo 1: falló al abrir «Sonando»: uiautomator no vuelca con la música sonando (la barra se mueve) y deja el volcado anterior.
+  → REGLA: volcar la interfaz solo en pausa (KEYCODE_MEDIA_PAUSE) y borrar /sdcard/ui.xml antes de cada volcado.

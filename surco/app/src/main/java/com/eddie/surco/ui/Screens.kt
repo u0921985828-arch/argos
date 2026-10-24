@@ -68,6 +68,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -89,6 +91,8 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, progress: Pair<Int, In
     val fields = remember(tracks) { availableFields(tracks) }
     val results = remember(tracks, vm.query) { search(tracks, vm.query) }
     val currentId = vm.player.currentId
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focus = LocalFocusManager.current
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
@@ -144,7 +148,8 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, progress: Pair<Int, In
         if (vm.query.isNotBlank()) {
             item { SectionLabel("${songs(results.size)} encontradas") }
             itemsIndexed(results, key = { _, t -> t.id }) { i, t ->
-                SongRow(t, null, t.id == currentId, onClick = { vm.player.play(results, i) }, onLong = { vm.sheet = SongSheetState(t) })
+                SongRow(t, null, t.id == currentId, onClick = { keyboard?.hide(); focus.clearFocus(); vm.player.play(results, i) },
+                    onLong = { keyboard?.hide(); focus.clearFocus(); vm.sheet = SongSheetState(t) })
             }
             return@LazyColumn
         }
