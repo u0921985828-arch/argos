@@ -189,8 +189,9 @@ tap "Ajustes" || fallo "no encuentro Ajustes en Inicio"
 sleep 2; ui
 tap "Ecualizador y efectos" || fallo "no encuentro el ecualizador en Ajustes"
 sleep 2; ui
-# «Graves» sale siempre dos veces (chip y deslizador de tono); la tercera es el subtítulo con el preajuste activo.
-[ "$(grep -o 'text="Graves"' ui.xml | wc -l)" -ge 3 ] || fallo "el preajuste Graves no se guardó"
+# El subtítulo bajo «Ecualizador» es el preajuste activo (el chip «Graves» está siempre).
+sub=$(grep -o 'text="[^"]*"' ui.xml | grep -v '^text=""$' | grep -A1 '^text="Ecualizador"$' | sed -n 2p || true)
+[ "$sub" = 'text="Graves"' ] || fallo "el preajuste Graves no se guardó (subtítulo: $sub)"
 adb shell input keyevent KEYCODE_BACK; sleep 1
 adb shell input keyevent KEYCODE_BACK; sleep 1; ui
 tap "Favoritas" || fallo "no encuentro la lista Favoritas"
