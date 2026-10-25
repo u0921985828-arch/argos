@@ -56,13 +56,21 @@ fun SurcoTheme(content: @Composable () -> Unit) = MaterialTheme(colorScheme = Sc
 
 // ---------- Portadas ----------
 private object NoArt
-private val artCache = object : LruCache<Long, Any>(300) {}
+/** Por bytes, no por número: con «Sonando» cada portada grande son ~3 MB. Tope: 1/8 de la memoria. */
+private val artCache = object : LruCache<Long, Any>((Runtime.getRuntime().maxMemory() / 8).toInt()) {
+    override fun sizeOf(key: Long, value: Any): Int = (value as? ImageBitmap)?.asAndroidBitmap()?.byteCount ?: 64
+}
+
+/** Tamaños de 128, 256, 512 y 1024 px: una miniatura nunca se reutiliza estirada en grande. */
+private fun sizeBucket(px: Int) = when { px <= 128 -> 0; px <= 256 -> 1; px <= 512 -> 2; else -> 3 }
+private fun bucketPx(b: Int) = 128 shl b
 
 private suspend fun loadArt(ctx: android.content.Context, t: Track, px: Int): ImageBitmap? = withContext(Dispatchers.IO) {
-    val key = t.artKey * 10 + if (px > 300) 1 else 0
+    val b = sizeBucket(px)
+    val key = t.artKey * 10 + b
     artCache.get(key)?.let { return@withContext it as? ImageBitmap }
     val bmp: Bitmap? = runCatching {
-        if (Build.VERSION.SDK_INT >= 29) ctx.contentResolver.loadThumbnail(t.uri, Size(px, px), null)
+        if (Build.VERSION.SDK_INT >= 29) ctx.contentResolver.loadThumbnail(t.uri, Size(bucketPx(b), bucketPx(b)), null)
         else MediaMetadataRetriever().run {
             try { setDataSource(ctx, t.uri); embeddedPicture?.let { BitmapFactory.decodeByteArray(it, 0, it.size) } } finally { release() }
         }

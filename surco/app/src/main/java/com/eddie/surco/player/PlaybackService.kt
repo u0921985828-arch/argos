@@ -7,6 +7,16 @@ import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import android.widget.Toast
+import androidx.media3.common.PlaybackException
+import androidx.media3.exoplayer.source.DefaultShuffleOrder
+import com.eddie.surco.data.currentFirstOrder
+import com.eddie.surco.data.insertIntoOrder
+import com.google.common.util.concurrent.SettableFuture
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
+import kotlin.random.Random
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -85,11 +95,17 @@ class PlaybackService : MediaSessionService() {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 applyReplayGain()
                 saveQueue()
+                listenedId = null // también con «Repetir una»: es otra escucha
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying && fadeMul < 1f && fadeTarget < 1f) fadeTo(1f)
-                if (!isPlaying) saveQueue()
+                if (isPlaying && fadeMul < 1f && fadeTarget < 1f && fadeRunnable == null) fadeTo(1f)
+                if (isPlaying) errorStreak = 0 else saveQueue()
             }
+            override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+                // Volver al principio de la misma canción también cuenta como otra escucha.
+                if (reason == Player.DISCONTINUITY_REASON_SEEK && newPosition.positionMs < 1000) listenedId = null
+            }
+            override fun onPlayerError(error: PlaybackException) = skipBroken()
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) {
                     SleepTimer.cancel()
@@ -120,14 +136,25 @@ class PlaybackService : MediaSessionService() {
                 )
 
                 // Reanudar desde la notificación, el Bluetooth o el sistema tras cerrar la app.
+                // Se lee la caché fuera del hilo principal y se descarta lo que ya no existe.
                 override fun onPlaybackResumption(
                     mediaSession: MediaSession,
                     controller: MediaSession.ControllerInfo,
                 ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
-                    val byId = LibraryScanner(this@PlaybackService).loadCache().associateBy { it.id }
-                    val r = restoreQueue(UserStore.state.value.queue, byId)
-                        ?: return Futures.immediateFailedFuture(UnsupportedOperationException())
-                    return Futures.immediateFuture(r)
+                    val result = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
+                    scope.launch {
+                        val q = UserStore.state.value.queue
+                        val r = withContext(Dispatchers.IO) {
+                            val byId = LibraryScanner(this@PlaybackService).loadCache().filter { File(it.path).exists() }.associateBy { it.id }
+                            restoreQueue(q, byId)
+                        }
+                        if (r == null) result.setException(UnsupportedOperationException()) else {
+                            exo.shuffleModeEnabled = q.shuffle
+                            exo.repeatMode = q.repeat
+                            result.set(r)
+                        }
+                    }
+                    return result
                 }
             })
             .build()
@@ -186,19 +213,72 @@ class PlaybackService : MediaSessionService() {
         handler.post(r)
     }
 
+    private var errorStreak = 0
+
+    /**
+     * Un archivo que no se puede abrir (borrado, tarjeta quitada, sin permiso, dañado) se quita de
+     * la cola con un aviso y se sigue con la siguiente; sin esto, ExoPlayer se queda parado en el
+     * error y el botón de reproducir lo repite. Como mucho 10 seguidas, para no dar vueltas.
+     */
+    private fun skipBroken() {
+        val title = exo.currentMediaItem?.mediaMetadata?.title ?: "la canción"
+        Toast.makeText(this, "No se pudo reproducir «$title»: se quita de la cola.", Toast.LENGTH_SHORT).show()
+        if (exo.mediaItemCount == 0) return
+        exo.removeMediaItem(exo.currentMediaItemIndex)
+        if (exo.mediaItemCount > 0 && ++errorStreak < 10) { exo.prepare(); exo.play() }
+    }
+
+    /** Índices de la cola en el orden en que suena con el aleatorio. */
+    private fun shuffledOrder(): List<Int> {
+        val tl = exo.currentTimeline
+        val out = ArrayList<Int>()
+        var i = tl.getFirstWindowIndex(true)
+        while (i != C.INDEX_UNSET && out.size < exo.mediaItemCount) {
+            out += i
+            i = tl.getNextWindowIndex(i, Player.REPEAT_MODE_OFF, true)
+        }
+        return out
+    }
+
     /** Las órdenes de reproducir/pausar de la notificación y de la app pasan por aquí: con fundido. */
     private inner class FadingPlayer(p: ExoPlayer) : ForwardingPlayer(p) {
         override fun pause() {
             if (SurcoSettings.state.value.fade && exo.isPlaying) fadeTo(0f) { exo.pause() } else exo.pause()
         }
+
+        // Al activar el aleatorio, la que suena va primero: si no, lo que cae delante no suena nunca.
+        override fun setShuffleModeEnabled(shuffleModeEnabled: Boolean) {
+            if (shuffleModeEnabled && !exo.shuffleModeEnabled && exo.mediaItemCount > 1) {
+                exo.setShuffleOrder(DefaultShuffleOrder(currentFirstOrder(exo.mediaItemCount, exo.currentMediaItemIndex, Random), Random.nextLong()))
+            }
+            exo.shuffleModeEnabled = shuffleModeEnabled
+        }
+
+        override fun addMediaItems(mediaItems: MutableList<MediaItem>) = addMediaItems(exo.mediaItemCount, mediaItems)
+
+        // «A continuación» y «A la cola» respetan su nombre también en aleatorio.
+        override fun addMediaItems(index: Int, mediaItems: MutableList<MediaItem>) {
+            if (!exo.shuffleModeEnabled || exo.mediaItemCount == 0) { exo.addMediaItems(index, mediaItems); return }
+            val order = shuffledOrder()
+            val cur = exo.currentMediaItemIndex
+            exo.addMediaItems(index, mediaItems)
+            val next = insertIntoOrder(order, index, mediaItems.size, cur, playNext = index == cur + 1)
+            exo.setShuffleOrder(DefaultShuffleOrder(next.toIntArray(), Random.nextLong()))
+        }
+
         override fun play() {
-            if (SurcoSettings.state.value.fade && !exo.isPlaying) {
+            // Fundido solo al reanudar la misma canción; una canción nueva empieza con su ataque entero.
+            val resuming = exo.playbackState == Player.STATE_READY && exo.currentPosition > 500
+            if (SurcoSettings.state.value.fade && !exo.isPlaying && resuming) {
                 fadeRunnable?.let { handler.removeCallbacks(it) }
                 fadeMul = 0f; fadeTarget = 0f; applyVolume()
                 exo.play()
                 fadeTo(1f)
             } else {
-                if (fadeMul < 1f) fadeTo(1f)
+                if (fadeMul < 1f) {
+                    if (exo.isPlaying) fadeTo(1f) // pausa a medio fundido: vuelve
+                    else { fadeRunnable?.let { handler.removeCallbacks(it) }; fadeMul = 1f; fadeTarget = 1f; applyVolume() }
+                }
                 exo.play()
             }
         }
@@ -251,7 +331,7 @@ class PlaybackService : MediaSessionService() {
         val n = exo.mediaItemCount
         if (n == 0) return
         val ids = List(n) { exo.getMediaItemAt(it).mediaId.toLongOrNull() ?: -1L }
-        UserStore.saveQueue(SavedQueue(ids, exo.currentMediaItemIndex, exo.currentPosition.coerceAtLeast(0)))
+        UserStore.saveQueue(SavedQueue(ids, exo.currentMediaItemIndex, exo.currentPosition.coerceAtLeast(0), exo.shuffleModeEnabled, exo.repeatMode))
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {

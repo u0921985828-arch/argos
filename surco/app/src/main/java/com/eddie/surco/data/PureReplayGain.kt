@@ -16,6 +16,8 @@ data class ReplayGain(val trackDb: Float?, val albumDb: Float?)
 fun readReplayGain(tag: Tag): ReplayGain {
     var track: Float? = null
     var album: Float? = null
+    var r128Track: Float? = null
+    var r128Album: Float? = null
     val it = tag.fields
     while (it.hasNext()) {
         val f = it.next()
@@ -28,7 +30,16 @@ fun readReplayGain(tag: Tag): ReplayGain {
         when (name.orEmpty().trim().uppercase()) {
             "REPLAYGAIN_TRACK_GAIN" -> track = track ?: parseGainDb(value.orEmpty())
             "REPLAYGAIN_ALBUM_GAIN" -> album = album ?: parseGainDb(value.orEmpty())
+            "R128_TRACK_GAIN" -> r128Track = r128ToDb(value.orEmpty())
+            "R128_ALBUM_GAIN" -> r128Album = r128ToDb(value.orEmpty())
         }
     }
-    return ReplayGain(track, album)
+    // Opus usa R128 (RFC 7845) si no trae REPLAYGAIN_*.
+    return ReplayGain(track ?: r128Track, album ?: r128Album)
 }
+
+/**
+ * R128_*_GAIN: entero Q7.8 respecto a −23 LUFS. ReplayGain 2 mide respecto a −18 LUFS, así que
+ * en su escala son 5 dB más: «-2560» (−10 dB a −23 LUFS) → −5 dB.
+ */
+fun r128ToDb(raw: String): Float? = raw.trim().toIntOrNull()?.let { it / 256f + 5f }?.takeIf { it in -60f..60f }

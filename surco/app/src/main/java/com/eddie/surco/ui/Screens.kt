@@ -83,13 +83,18 @@ import com.eddie.surco.data.Track
 import com.eddie.surco.data.availableFields
 import com.eddie.surco.data.buckets
 import com.eddie.surco.data.groupTracks
+import com.eddie.surco.data.SEARCHABLE_EXTRA
+import com.eddie.surco.data.haystack
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 // ======================= ETIQUETAS =======================
 /** La seña de Surco: la biblioteca organizada por cualquiera de sus etiquetas. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TagsScreen(vm: LibraryViewModel, tracks: List<Track>) {
-    val fields = remember(tracks) { availableFields(tracks) }
+    val fields = rememberOffMain(tracks, initial = emptyList()) { availableFields(tracks) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
             Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp)) {
@@ -134,19 +139,25 @@ fun SectionLabel(s: String) = Text(
     modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 10.dp),
 )
 
-fun searchTracks(tracks: List<Track>, q: String): List<Track> {
-    val s = q.trim().lowercase()
-    if (s.isEmpty()) return emptyList()
-    return tracks.filter { t ->
-        sequenceOf(t.title, t.artist, t.album, t.albumArtist, t.genre, t.composer, t.year.toString(), t.folder)
-            .plus(t.extra.values).any { it.lowercase().contains(s) }
-    }
+/** Campos en los que se busca: solo texto (no «24 bits», «No», «-6.48»…). */
+fun searchHay(t: Track): String = haystack(
+    listOf(t.title, t.artist, t.album, t.albumArtist, t.genre, t.composer, t.folder) +
+        (if (t.year > 0) listOf(t.year.toString()) else emptyList()) + SEARCHABLE_EXTRA.map { t.x(it) },
+)
+
+/** Calcula fuera del hilo principal (agrupar 10.000 canciones no debe congelar la interfaz). */
+@Composable
+fun <T> rememberOffMain(vararg keys: Any?, initial: T, calc: () -> T): T {
+    val v by produceState(initial, *keys) { value = withContext(Dispatchers.Default) { calc() } }
+    return v
+}
+}
 }
 
 // ======================= GRUPOS =======================
 @Composable
 fun GroupsScreen(vm: LibraryViewModel, field: TagField, tracks: List<Track>) {
-    val all = remember(tracks, field) { groupTracks(tracks, field) }
+    val all = rememberOffMain(tracks, field, initial = emptyList()) { groupTracks(tracks, field) }
     var byCount by rememberSaveable(field) { mutableStateOf(false) }
     val numeric = remember(all) { all.any { it.bucket.order != 0L && it.bucket.order != Long.MAX_VALUE } }
     val sorted = remember(all, byCount) {
@@ -338,7 +349,8 @@ fun SongListScreen(
 @Composable
 fun SongRow(t: Track, number: Int?, playing: Boolean, onClick: () -> Unit, onLong: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLong).padding(horizontal = 16.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLong, onLongClickLabel = "Más opciones")
+            .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (number != null) {
@@ -355,6 +367,8 @@ fun SongRow(t: Track, number: Int?, playing: Boolean, onClick: () -> Unit, onLon
         }
         Spacer(Modifier.width(8.dp))
         Text(fmtTime(t.durationMs), color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+        // El menú (a continuación, a la cola, a una lista…) también a la vista, no solo con pulsación larga.
+        IconButton(onClick = onLong) { Icon(Icons.Default.MoreVert, "Más opciones", tint = Muted) }
     }
 }
 

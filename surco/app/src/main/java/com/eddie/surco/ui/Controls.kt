@@ -32,6 +32,12 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.Dp
@@ -47,7 +53,7 @@ import kotlin.math.roundToInt
 @Composable
 fun VerticalSlider(
     value: Float, onChange: (Float) -> Unit, modifier: Modifier = Modifier,
-    min: Float = -12f, max: Float = 12f, step: Float = 0.5f, height: Dp = 180.dp,
+    min: Float = -12f, max: Float = 12f, step: Float = 0.5f, height: Dp = 180.dp, label: String = "",
 ) {
     val change by rememberUpdatedState(onChange)
     fun fromY(y: Float, h: Int): Float {
@@ -55,7 +61,14 @@ fun VerticalSlider(
         return ((v / step).roundToInt() * step).coerceIn(min, max)
     }
     Canvas(
-        modifier.width(34.dp).height(height)
+        // Con TalkBack: anuncia banda y valor, y se ajusta con los gestos de deslizar.
+        modifier.width(38.dp).height(height)
+            .semantics {
+                contentDescription = label
+                stateDescription = dbText(value)
+                progressBarRangeInfo = ProgressBarRangeInfo(value, min..max, ((max - min) / step).toInt() - 1)
+                setProgress { v -> change(((v / step).roundToInt() * step).coerceIn(min, max)); true }
+            }
             .pointerInput(min, max) {
                 detectVerticalDragGestures(
                     onDragStart = { change(fromY(it.y, size.height)) },

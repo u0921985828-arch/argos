@@ -71,7 +71,7 @@ class LibraryScanner(private val ctx: Context) {
 
     /** Lectura profunda del archivo: todas las etiquetas que soporte el formato. */
     fun enrich(t: Track): Track {
-        val viaTagger = runCatching { readWithTagger(t) }.getOrNull()
+        val viaTagger = runCatching { if (t.path.endsWith(".opus", true)) readOpus(t) else readWithTagger(t) }.getOrNull()
         val base = viaTagger ?: runCatching { readWithRetriever(t) }.getOrDefault(t)
         return base.copy(enriched = true)
     }
@@ -141,6 +141,43 @@ class LibraryScanner(private val ctx: Context) {
         )
     }
 
+    /** Opus: jaudiotagger 3.0.1 no lo abre; se leen sus comentarios (formato Vorbis) a mano. */
+    private fun readOpus(t: Track): Track? {
+        val f = File(t.path)
+        if (!f.canRead()) return null
+        val c = f.inputStream().buffered().use { readOpusTags(it) } ?: return null
+        fun g(vararg k: String) = k.firstNotNullOfOrNull { key -> c[key]?.map { cleanText(it) }?.firstOrNull { it.isNotEmpty() } }.orEmpty()
+        fun all(vararg k: String) = k.flatMap { key -> c[key].orEmpty() }.map { cleanText(it) }.filter { it.isNotEmpty() }.distinct().joinToString("; ")
+        val extra = LinkedHashMap<String, String>()
+        fun put(key: String, v: String) { if (v.isNotBlank()) extra[key] = v }
+        put("bpm", g("BPM")); put("key", g("INITIALKEY", "KEY")); put("mood", all("MOOD"))
+        put("label", g("LABEL", "ORGANIZATION", "PUBLISHER")); put("lyricist", all("LYRICIST")); put("producer", all("PRODUCER"))
+        put("remixer", all("REMIXER")); put("conductor", g("CONDUCTOR")); put("grouping", g("GROUPING", "CONTENTGROUP"))
+        put("language", g("LANGUAGE")); put("country", g("RELEASECOUNTRY")); put("media", g("MEDIA"))
+        put("encoder", g("ENCODER")); put("comment", g("COMMENT", "DESCRIPTION")); put("isrc", g("ISRC"))
+        put("catalog", g("CATALOGNUMBER")); put("original_year", g("ORIGINALDATE", "ORIGINALYEAR").take(4))
+        if (g("LYRICS", "UNSYNCEDLYRICS").isNotBlank()) extra["lyrics"] = "Sí"
+        put("codec", "Opus"); put("lossless", "No")
+        val rg = replayGainFromComments(c)
+        rg.trackDb?.let { extra["rg_track"] = "%.2f".format(Locale.ROOT, it) }
+        rg.albumDb?.let { extra["rg_album"] = "%.2f".format(Locale.ROOT, it) }
+        val year = g("DATE", "YEAR").take(4).toIntOrNull() ?: 0
+        return t.copy(
+            title = g("TITLE").ifBlank { t.title },
+            artist = all("ARTIST").ifBlank { t.artist },
+            album = g("ALBUM").ifBlank { t.album },
+            albumArtist = g("ALBUMARTIST", "ALBUM ARTIST").ifBlank { t.albumArtist },
+            genre = cleanGenre(all("GENRE")).ifBlank { t.genre },
+            year = if (year > 0) year else t.year,
+            composer = all("COMPOSER").ifBlank { t.composer },
+            trackNo = g("TRACKNUMBER").substringBefore('/').toIntOrNull() ?: t.trackNo,
+            discNo = g("DISCNUMBER").substringBefore('/').toIntOrNull() ?: t.discNo,
+            sampleRate = 48_000,
+            format = "OPUS",
+            extra = extra,
+        )
+    }
+
     private fun readWithRetriever(t: Track): Track {
         val r = MediaMetadataRetriever()
         try {
@@ -172,6 +209,10 @@ class LibraryScanner(private val ctx: Context) {
         val lrc = File(audio.parentFile, audio.nameWithoutExtension + ".lrc")
         runCatching { if (lrc.canRead()) parseLyrics(lrc.readText(), "archivo .lrc")?.let { return it } }
         return runCatching {
+            if (t.path.endsWith(".opus", true)) {
+                val c = audio.inputStream().buffered().use { readOpusTags(it) } ?: return null
+                return parseLyrics((c["LYRICS"] ?: c["UNSYNCEDLYRICS"])?.firstOrNull().orEmpty(), "etiqueta del archivo")
+            }
             val tag = AudioFileIO.read(audio).tag ?: return null
             parseLyrics(tag.getFirst(FieldKey.LYRICS).orEmpty(), "etiqueta del archivo")
         }.getOrNull()
@@ -184,16 +225,13 @@ class LibraryScanner(private val ctx: Context) {
 
     fun loadCache(): List<Track> = runCatching {
         File(ctx.filesDir, "library.json").takeIf { it.exists() }?.delete()
-        val arr = JSONArray(cacheFile.readText())
+        val arr = JSONArray(Disk.read(cacheFile) ?: return emptyList())
         List(arr.length()) { Track.fromJson(arr.getJSONObject(it)) }
     }.getOrDefault(emptyList())
 
     fun saveCache(list: List<Track>) {
-        runCatching {
-            val arr = JSONArray(); list.forEach { arr.put(it.toJson()) }
-            val tmp = File(ctx.filesDir, "library2.json.tmp")
-            tmp.writeText(arr.toString()); tmp.renameTo(cacheFile)
-        }
+        val arr = JSONArray(); list.forEach { arr.put(it.toJson()) }
+        Disk.write(cacheFile, arr.toString())
     }
 
     companion object {

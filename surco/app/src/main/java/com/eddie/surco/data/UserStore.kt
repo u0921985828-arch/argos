@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -17,7 +18,10 @@ import java.io.File
 data class Playlist(val id: Long, val name: String, val trackIds: List<Long>)
 
 /** Cola guardada para reanudar donde se quedó. */
-data class SavedQueue(val ids: List<Long> = emptyList(), val index: Int = 0, val positionMs: Long = 0)
+data class SavedQueue(
+    val ids: List<Long> = emptyList(), val index: Int = 0, val positionMs: Long = 0,
+    val shuffle: Boolean = false, val repeat: Int = 0,
+)
 
 /** Lo que el usuario hace con su música: favoritas, listas, escuchas y la cola. Nada sale del móvil. */
 data class UserData(
@@ -26,6 +30,8 @@ data class UserData(
     val plays: Map<Long, Int> = emptyMap(),
     val lastPlayed: Map<Long, Long> = emptyMap(),
     val queue: SavedQueue = SavedQueue(),
+    /** Claves estables (ruta, datos) de cada id usado, para recuperarlo si MediaStore le cambia el id. */
+    val keys: Map<Long, List<String>> = emptyMap(),
 )
 
 object UserStore {
@@ -40,20 +46,19 @@ object UserStore {
         if (file != null) return
         val f = File(ctx.applicationContext.filesDir, "usuario.json")
         file = f
-        runCatching { _state.value = fromJson(JSONObject(f.readText())) }
-        scope.launch { _state.drop(1).debounce(800).collect { save(it) } }
+        Disk.read(f)?.let { text ->
+            runCatching { _state.value = fromJson(JSONObject(text)) }.onFailure { Disk.quarantine(f) }
+        }
+        scope.launch(Disk.writer) { _state.drop(1).debounce(800).collect { save(it) } }
     }
 
     private fun save(d: UserData) {
         val f = file ?: return
-        runCatching {
-            val tmp = File(f.parentFile, f.name + ".tmp")
-            tmp.writeText(toJson(d).toString()); tmp.renameTo(f)
-        }
+        Disk.write(f, toJson(d).toString())
     }
 
-    /** Guarda ya, sin esperar (al cerrar el servicio). */
-    fun flush() = save(_state.value)
+    /** Guarda ya, sin esperar (al cerrar el servicio), por el mismo hilo que los demás guardados. */
+    fun flush() = runBlocking(Disk.writer) { save(_state.value) }
 
     @Synchronized
     fun update(f: (UserData) -> UserData) { _state.value = f(_state.value) }
@@ -84,6 +89,33 @@ object UserStore {
         d.copy(plays = d.plays + (id to (d.plays[id] ?: 0) + 1), lastPlayed = d.lastPlayed + (id to System.currentTimeMillis()))
     }
 
+    /**
+     * Tras cada escaneo: los ids que ya no existen se cambian por el id actual de la misma canción
+     * (por ruta o por título+artista+álbum+duración) en favoritas, listas, escuchas y cola.
+     */
+    fun reconcile(tracks: List<Track>) {
+        if (tracks.isEmpty()) return
+        val byId = tracks.associateBy { it.id }
+        val idByKey = HashMap<String, Long>()
+        for (t in tracks) for (k in t.stableKeys()) idByKey.putIfAbsent(k, t.id)
+        update { d ->
+            val refs = d.favorites + d.playlists.flatMap { it.trackIds } + d.plays.keys + d.lastPlayed.keys + d.queue.ids
+            val m = remapIds(refs, byId.keys, d.keys, idByKey)
+            fun f(id: Long) = m[id] ?: id
+            val nd = if (m.isEmpty()) d else d.copy(
+                favorites = d.favorites.map(::f).toSet(),
+                playlists = d.playlists.map { p -> p.copy(trackIds = p.trackIds.map(::f)) },
+                plays = d.plays.entries.groupBy({ f(it.key) }, { it.value }).mapValues { it.value.sum() },
+                lastPlayed = d.lastPlayed.entries.groupBy({ f(it.key) }, { it.value }).mapValues { it.value.max() },
+                queue = d.queue.copy(ids = d.queue.ids.map(::f)),
+            )
+            val newRefs = nd.favorites + nd.playlists.flatMap { it.trackIds } + nd.plays.keys + nd.lastPlayed.keys + nd.queue.ids
+            // Claves al día de lo que existe; las de lo que falta se guardan por si vuelve.
+            val keys = newRefs.associateWith { id -> byId[id]?.stableKeys() ?: d.keys[id].orEmpty() }.filterValues { it.isNotEmpty() }
+            if (m.isEmpty() && keys == d.keys) d else nd.copy(keys = keys)
+        }
+    }
+
     fun saveQueue(q: SavedQueue) { if (q != _state.value.queue) update { it.copy(queue = q) } }
 
     // ----- JSON -----
@@ -94,7 +126,9 @@ object UserStore {
         })
         put("plays", JSONObject().apply { d.plays.forEach { (k, v) -> put(k.toString(), v) } })
         put("lastPlayed", JSONObject().apply { d.lastPlayed.forEach { (k, v) -> put(k.toString(), v) } })
-        put("queue", JSONObject().put("ids", JSONArray(d.queue.ids)).put("index", d.queue.index).put("position", d.queue.positionMs))
+        put("queue", JSONObject().put("ids", JSONArray(d.queue.ids)).put("index", d.queue.index).put("position", d.queue.positionMs)
+            .put("shuffle", d.queue.shuffle).put("repeat", d.queue.repeat))
+        put("keys", JSONObject().apply { d.keys.forEach { (id, ks) -> put(id.toString(), JSONArray(ks)) } })
     }
 
     private fun longs(a: JSONArray?): List<Long> = a?.let { arr -> List(arr.length()) { arr.optLong(it) } }.orEmpty()
@@ -118,10 +152,15 @@ object UserStore {
             playlists = playlists,
             plays = map("plays") { m, k -> m.optInt(k) },
             lastPlayed = map("lastPlayed") { m, k -> m.optLong(k) },
-            queue = if (q == null) SavedQueue() else SavedQueue(longs(q.optJSONArray("ids")), q.optInt("index"), q.optLong("position")),
+            queue = if (q == null) SavedQueue() else SavedQueue(
+                longs(q.optJSONArray("ids")), q.optInt("index"), q.optLong("position"), q.optBoolean("shuffle"), q.optInt("repeat"),
+            ),
+            keys = map("keys") { m, k -> m.optJSONArray(k)?.let { a -> List(a.length()) { a.optString(it) } }.orEmpty() },
         )
     }
 }
+
+fun Track.stableKeys() = stableKeys(path, title, artist, album, durationMs)
 
 /** Listas que se hacen solas a partir de lo escuchado. */
 enum class SmartList(val label: String) {

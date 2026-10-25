@@ -3,7 +3,14 @@ package com.eddie.surco
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
+import androidx.core.app.ActivityCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -67,15 +74,27 @@ private val audioPerm = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.REA
 @Composable
 private fun Root(vm: LibraryViewModel = viewModel()) {
     val ctx = LocalContext.current
-    var granted by remember { mutableStateOf(ContextCompat.checkSelfPermission(ctx, audioPerm) == PackageManager.PERMISSION_GRANTED) }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted = it[audioPerm] == true || granted }
+    fun check() = ContextCompat.checkSelfPermission(ctx, audioPerm) == PackageManager.PERMISSION_GRANTED
+    var granted by remember { mutableStateOf(check()) }
+    var denied by remember { mutableStateOf(0) }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        granted = it[audioPerm] == true || check()
+        if (!granted) denied++
+    }
     val perms = remember {
         if (Build.VERSION.SDK_INT >= 33) arrayOf(audioPerm, Manifest.permission.POST_NOTIFICATIONS) else arrayOf(audioPerm)
     }
     LaunchedEffect(Unit) { if (!granted) launcher.launch(perms) }
+    // Si se da (o se quita) el permiso desde Ajustes del sistema, se nota al volver.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { granted = check() }
     LaunchedEffect(granted) { if (granted) vm.scan() }
 
-    if (!granted) PermissionScreen { launcher.launch(perms) } else App(vm)
+    // Tras dos negativas Android ya no vuelve a preguntar: el botón lleva a los ajustes de la app.
+    val blocked = denied > 0 && !((ctx as? Activity)?.let { ActivityCompat.shouldShowRequestPermissionRationale(it, audioPerm) } ?: true)
+    if (!granted) PermissionScreen(blocked) {
+        if (blocked) ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null)))
+        else launcher.launch(perms)
+    } else App(vm)
 }
 
 @Composable
@@ -87,11 +106,13 @@ private fun App(vm: LibraryViewModel) {
         if (prefs.minDurationSec <= 0) all else all.filter { it.durationMs <= 0 || it.durationMs >= prefs.minDurationSec * 1000L }
     }
     val byId = remember(all) { all.associateBy { it.id } }
-    val current = vm.player.currentId?.let { byId[it] }
+    val current = vm.player.currentId?.let { byId[it] ?: vm.player.currentAsTrack() }
 
     // Al abrir sin nada sonando, deja preparada la cola de la última vez.
-    LaunchedEffect(vm.player.controller, byId.isNotEmpty()) {
-        if (byId.isNotEmpty()) vm.player.restoreIfEmpty(byId)
+    // Solo con la lista ya consultada a MediaStore: con la caché podría restaurar canciones borradas.
+    val fresh by vm.fresh.collectAsStateWithLifecycle()
+    LaunchedEffect(vm.player.controller, fresh) {
+        if (fresh) vm.player.restoreIfEmpty(vm.tracks.value.associateBy { it.id })
     }
 
     BackHandler(enabled = vm.nowPlayingOpen || vm.stack.size > 1 || vm.tab != Tab.HOME) {

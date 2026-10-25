@@ -71,6 +71,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.eddie.surco.AlbumSort
 import com.eddie.surco.LibraryTab
 import com.eddie.surco.LibraryViewModel
 import com.eddie.surco.Screen
@@ -83,6 +84,8 @@ import com.eddie.surco.data.Track
 import com.eddie.surco.data.UserStore
 import com.eddie.surco.data.buckets
 import com.eddie.surco.data.groupTracks
+import com.eddie.surco.data.fold
+import com.eddie.surco.data.matchesFolded
 import java.util.Calendar
 
 // ======================= BARRA INFERIOR =======================
@@ -126,13 +129,20 @@ private fun TabHeader(title: String, subtitle: String?, actions: @Composable () 
 /** Álbumes (agrupados como en la pestaña Etiquetas) por clave. */
 @Composable
 private fun rememberAlbums(tracks: List<Track>): Map<String, Group> =
-    remember(tracks) { groupTracks(tracks, TagField.ALBUM).associateBy { it.bucket.key } }
+    rememberOffMain(tracks, initial = emptyMap()) { groupTracks(tracks, TagField.ALBUM).associateBy { it.bucket.key } }
 
 private fun albumKey(t: Track) = TagField.ALBUM.buckets(t).firstOrNull()?.key
 
 private fun albumArtist(g: Group): String {
     val names = g.tracks.map { it.albumArtist.ifBlank { it.artist } }.distinct()
     return if (names.size == 1) names[0].ifBlank { "Desconocido" } else "Varios artistas"
+}
+
+fun sortAlbums(list: List<Group>, sort: AlbumSort): List<Group> = when (sort) {
+    AlbumSort.TITLE -> list.sortedBy { fold(it.bucket.label) }
+    AlbumSort.ARTIST -> list.sortedWith(compareBy({ fold(albumArtist(it)) }, { it.tracks.maxOf { t -> t.year } }, { fold(it.bucket.label) }))
+    AlbumSort.YEAR -> list.sortedWith(compareByDescending<Group> { it.tracks.maxOf { t -> t.year } }.thenBy { fold(it.bucket.label) })
+    AlbumSort.ADDED -> list.sortedByDescending { it.tracks.maxOf { t -> t.dateAdded } }
 }
 
 private fun List<Track>.inAlbumOrder() = sortedWith(compareBy({ it.discNo }, { it.trackNo }, { it.title.lowercase() }))
@@ -144,7 +154,7 @@ private fun AlbumCard(vm: LibraryViewModel, g: Group, size: Dp = 148.dp, modifie
             Art(g.tracks.first(), size, corner = 12.dp, modifier = Modifier.size(size))
             FilledIconButton(
                 onClick = { vm.player.play(g.tracks.inAlbumOrder(), 0) },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp).size(40.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).size(48.dp),
                 colors = IconButtonDefaults.filledIconButtonColors(containerColor = Copper, contentColor = Ink),
             ) { Icon(Icons.Default.PlayArrow, "Reproducir ${g.bucket.label}") }
         }
@@ -166,24 +176,23 @@ private fun greeting(): String = when (Calendar.getInstance().get(Calendar.HOUR_
 fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, byId: Map<Long, Track>, progress: Pair<Int, Int>?) {
     val user by UserStore.state.collectAsState()
     val albums = rememberAlbums(tracks)
-    val recent = remember(tracks, user.lastPlayed, albums) {
+    val recent = rememberOffMain(tracks, user.lastPlayed, albums, initial = emptyList()) {
         tracks.filter { it.id in user.lastPlayed }.sortedByDescending { user.lastPlayed[it.id] ?: 0 }
             .mapNotNull { albumKey(it) }.distinct().mapNotNull { albums[it] }.take(12)
     }
-    val added = remember(tracks, albums) {
+    val added = rememberOffMain(tracks, albums, initial = emptyList()) {
         tracks.sortedByDescending { it.dateAdded }.mapNotNull { albumKey(it) }.distinct().mapNotNull { albums[it] }.take(12)
     }
-    val top = remember(tracks, user.plays) { SmartList.MOST_PLAYED.tracks(tracks, user).take(5) }
+    val top = rememberOffMain(tracks, user.plays, initial = emptyList()) { SmartList.MOST_PLAYED.tracks(tracks, user).take(5) }
     val resume = user.queue.ids.getOrNull(user.queue.index)?.let { byId[it] }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
             TabHeader(greeting(), "${songs(tracks.size)} · ${fmtTotal(tracks.sumOf { it.durationMs })}") {
-                IconButton(onClick = { vm.push(Screen.Search) }) { Icon(Icons.Default.Search, "Buscar", tint = Paper) }
-                IconButton(onClick = { vm.push(Screen.Equalizer) }) { Icon(Icons.Default.Equalizer, "Ecualizador", tint = Paper) }
                 IconButton(onClick = { vm.push(Screen.Settings) }) { Icon(Icons.Default.Settings, "Ajustes", tint = Paper) }
             }
         }
+        item { SearchPill(vm) }
         if (progress != null) item {
             Column(Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
                 Text("Leyendo etiquetas · ${progress.first} de ${progress.second}", color = Teal, fontSize = 12.sp)
@@ -256,6 +265,20 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, byId: Map<Long, Track>
     }
 }
 
+/** Buscador siempre a la vista: un toque y se escribe (abre la búsqueda con el teclado). */
+@Composable
+private fun SearchPill(vm: LibraryViewModel) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(14.dp))
+            .background(Panel).clickable { vm.push(Screen.Search) }.padding(horizontal = 14.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Default.Search, null, tint = Muted)
+        Spacer(Modifier.width(10.dp))
+        Text("Buscar en cualquier etiqueta", color = Muted, fontSize = 15.sp)
+    }
+}
+
 @Composable
 private fun AlbumRow(vm: LibraryViewModel, list: List<Group>) {
     LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -278,14 +301,14 @@ private fun QuickAction(icon: ImageVector, label: String, modifier: Modifier, on
 // ======================= BIBLIOTECA =======================
 @Composable
 fun LibraryScreen(vm: LibraryViewModel, tracks: List<Track>) {
-    val albums = remember(tracks) { groupTracks(tracks, TagField.ALBUM).sortedBy { it.bucket.label.lowercase() } }
-    val artists = remember(tracks) { groupTracks(tracks, TagField.ARTIST).sortedBy { it.bucket.label.lowercase() } }
-    val folders = remember(tracks) { groupTracks(tracks, TagField.FOLDER).sortedBy { it.bucket.label.lowercase() } }
-    val songsSorted = remember(tracks) { tracks.sortedBy { it.title.lowercase() } }
+    val sort = vm.albumSort
+    val albums = rememberOffMain(tracks, sort, initial = emptyList()) { sortAlbums(groupTracks(tracks, TagField.ALBUM), sort) }
+    val artists = rememberOffMain(tracks, initial = emptyList()) { groupTracks(tracks, TagField.ARTIST).sortedBy { fold(it.bucket.label) } }
+    val folders = rememberOffMain(tracks, initial = emptyList()) { groupTracks(tracks, TagField.FOLDER).sortedBy { fold(it.bucket.label) } }
+    val songsSorted = rememberOffMain(tracks, initial = emptyList()) { tracks.sortedBy { fold(it.title) } }
     Column(Modifier.fillMaxSize()) {
-        TabHeader("Biblioteca", null) {
-            IconButton(onClick = { vm.push(Screen.Search) }) { Icon(Icons.Default.Search, "Buscar", tint = Paper) }
-        }
+        TabHeader("Biblioteca", null)
+        SearchPill(vm)
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -315,6 +338,13 @@ fun LibraryScreen(vm: LibraryViewModel, tracks: List<Track>) {
                 GridCells.Adaptive(150.dp), contentPadding = PaddingValues(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AlbumSort.entries.forEach { o ->
+                            FilterChip(selected = vm.albumSort == o, onClick = { vm.albumSort = o }, label = { Text(o.label) })
+                        }
+                    }
+                }
                 if (albums.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { Text("Sin álbumes.", color = Muted) }
                 items(albums, key = { it.bucket.key }) { g -> AlbumCard(vm, g, size = 150.dp) }
             }
@@ -347,7 +377,12 @@ private fun GroupList(vm: LibraryViewModel, field: TagField, groups: List<Group>
 // ======================= BUSCAR =======================
 @Composable
 fun SearchScreen(vm: LibraryViewModel, tracks: List<Track>) {
-    val results = remember(tracks, vm.query) { searchTracks(tracks, vm.query) }
+    // Índice de búsqueda plegado una vez por biblioteca; el filtrado, fuera del hilo principal.
+    val index = rememberOffMain(tracks, initial = emptyList<Pair<Track, String>>()) { tracks.map { it to searchHay(it) } }
+    val q = vm.query
+    val results = rememberOffMain(index, q, initial = emptyList()) {
+        if (q.isBlank()) emptyList() else index.filter { matchesFolded(it.second, q) }.map { it.first }
+    }
     val albums = rememberAlbums(tracks)
     val albumHits = remember(results, albums) { results.mapNotNull { albumKey(it) }.distinct().mapNotNull { albums[it] }.take(10) }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -364,11 +399,11 @@ fun SearchScreen(vm: LibraryViewModel, tracks: List<Track>) {
                 leadingIcon = { Icon(Icons.Default.Search, null) },
                 trailingIcon = { if (vm.query.isNotEmpty()) IconButton(onClick = { vm.query = "" }) { Icon(Icons.Default.Clear, "Borrar") } },
                 singleLine = true, shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = Panel, focusedContainerColor = Panel, unfocusedBorderColor = Panel),
+                colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = Panel, focusedContainerColor = Panel, unfocusedBorderColor = Muted.copy(alpha = 0.6f)),
             )
         }
         if (vm.query.isBlank()) {
-            Text("Título, artista, álbum, género, año, carpeta… y también estado de ánimo, sello, BPM, compositor o cualquier otra etiqueta del archivo.",
+            Text("Título, artista, álbum, género, año, carpeta… y también estado de ánimo, sello, compositor, comentario o cualquier otra etiqueta de texto. Sin importar tildes ni mayúsculas.",
                 color = Muted, fontSize = 13.sp, modifier = Modifier.padding(20.dp))
             return@Column
         }
@@ -380,7 +415,14 @@ fun SearchScreen(vm: LibraryViewModel, tracks: List<Track>) {
             item { SectionLabel("${songs(results.size)} encontradas") }
             itemsIndexed(results, key = { _, t -> t.id }) { i, t ->
                 SongRow(t, null, t.id == vm.player.currentId,
-                    onClick = { keyboard?.hide(); focus.clearFocus(); vm.player.play(results, i) },
+                    onClick = {
+                        keyboard?.hide(); focus.clearFocus()
+                        // Se reproduce su disco desde ella, en su orden; si no tiene disco, los resultados.
+                        val key = albumKey(t)
+                        val album = albums[key]?.tracks?.inAlbumOrder()
+                        if (key != null && album != null && album.size > 1 && t.album.isNotBlank()) vm.player.play(album, album.indexOfFirst { it.id == t.id }.coerceAtLeast(0))
+                        else vm.player.play(results, i)
+                    },
                     onLong = { keyboard?.hide(); focus.clearFocus(); vm.sheet = SongSheetState(t) })
             }
         }

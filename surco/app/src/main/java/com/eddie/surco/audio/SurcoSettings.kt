@@ -1,6 +1,7 @@
 package com.eddie.surco.audio
 
 import android.content.Context
+import com.eddie.surco.data.Disk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -30,6 +31,8 @@ data class Prefs(
     val fade: Boolean = true,
     /** Canciones más cortas que esto no salen en la biblioteca (notas de voz, avisos…). */
     val minDurationSec: Int = 0,
+    /** La preamplificación baja sola lo que suban bandas y tono. */
+    val autoPreamp: Boolean = true,
 )
 
 /**
@@ -53,13 +56,17 @@ object SurcoSettings {
         if (file != null) return
         val f = File(ctx.applicationContext.filesDir, "ajustes.json")
         file = f
-        runCatching { set(fromJson(JSONObject(f.readText()))) }
-        scope.launch { _state.drop(1).debounce(400).collect { p -> runCatching { f.writeText(toJson(p).toString()) } } }
+        Disk.read(f)?.let { text ->
+            runCatching { set(fromJson(JSONObject(text))) }.onFailure { Disk.quarantine(f) }
+        }
+        scope.launch(Disk.writer) { _state.drop(1).debounce(400).collect { p -> Disk.write(f, toJson(p).toString()) } }
     }
 
     private fun set(p: Prefs) {
-        dsp = p.dsp
-        _state.value = p
+        // Con la preamplificación automática, la curva nunca pasa de 0 dB: el limitador no actúa.
+        val q = if (p.autoPreamp) p.copy(dsp = p.dsp.copy(preampDb = autoPreampDb(p.dsp))) else p
+        dsp = q.dsp
+        _state.value = q
     }
 
     @Synchronized
@@ -80,7 +87,7 @@ object SurcoSettings {
         put("custom", JSONObject().apply { p.customPresets.forEach { (k, v) -> put(k, JSONArray(v.map { it.toDouble() })) } })
         put("replayGain", p.replayGain.name); put("skipSilence", p.skipSilence)
         put("speed", p.speed.toDouble()); put("keepPitch", p.keepPitch); put("fade", p.fade)
-        put("minDuration", p.minDurationSec)
+        put("minDuration", p.minDurationSec); put("autoPreamp", p.autoPreamp)
     }
 
     private fun floats(a: JSONArray?): List<Float>? = a?.let { arr -> List(arr.length()) { arr.optDouble(it, 0.0).toFloat() } }
@@ -106,6 +113,7 @@ object SurcoSettings {
             keepPitch = o.optBoolean("keepPitch", true),
             fade = o.optBoolean("fade", true),
             minDurationSec = o.optInt("minDuration", 0),
+            autoPreamp = o.optBoolean("autoPreamp", true),
         )
     }
 }

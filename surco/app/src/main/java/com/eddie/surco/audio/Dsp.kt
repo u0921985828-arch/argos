@@ -151,8 +151,23 @@ private class Chain(val p: DspParams, private val fs: Int, private val ch: Int) 
     private var cfGain = 1.0
     private val cfLo = DoubleArray(2); private val cfHi = DoubleArray(2); private val cfAsis = DoubleArray(2)
 
-    private var env = 0.0
-    private val release = exp(-1.0 / (0.12 * fs)) // 120 ms
+    // Limitador con anticipación: solo si la cadena puede pasar de 0 dB (bandas o tono que suben
+    // más de lo que baja la preamplificación). Mono y balance nunca suben: no lo activan.
+    private val limiting = p.limiter && peakGainDb(p) > 0.05
+    // Sin anticipación: un retardo solo cuando limita cambiaría la latencia al encender o apagar
+    // efectos, y el fundido entre configuraciones chasquearía (medido: ×8,7 la segunda diferencia).
+    private val look = 0
+    private val delay = DoubleArray((look + 1) * ch)
+    // Cola monótona del máximo de la ventana: posición absoluta y pico de cada trama.
+    private val dqPos = LongArray(look + 1)
+    private val dqVal = DoubleArray(look + 1)
+    private var dqHead = 0; private var dqSize = 0
+    private var pos = 0L
+    private var gain = 1.0
+    private var hold = 0
+    private val holdFrames = (0.06 * fs).toInt()
+    private val attack = 1 - exp(-1.0 / (0.0005 * fs)) // 0,5 ms; el tope duro de abajo evita pasarse
+    private val release = 1 - exp(-1.0 / (0.12 * fs)) // 120 ms
 
     init {
         val f = fs.toDouble()
@@ -191,21 +206,57 @@ private class Chain(val p: DspParams, private val fs: Int, private val ch: Int) 
             }
         }
         if (src.cfOn && cfOn) { src.cfLo.copyInto(cfLo); src.cfHi.copyInto(cfHi); src.cfAsis.copyInto(cfAsis) }
-        env = src.env
+        if (limiting && src.limiting && src.look == look) {
+            src.delay.copyInto(delay); src.dqPos.copyInto(dqPos); src.dqVal.copyInto(dqVal)
+            dqHead = src.dqHead; dqSize = src.dqSize; pos = src.pos; gain = src.gain; hold = src.hold
+        }
     }
 
     fun reset() {
         z1.fill(0.0); z2.fill(0.0)
         cfLo.fill(0.0); cfHi.fill(0.0); cfAsis.fill(0.0)
-        env = 0.0
+        delay.fill(0.0); dqHead = 0; dqSize = 0; pos = 0; gain = 1.0; hold = 0
     }
+
+    /**
+     * Mete la trama [frame] (ya procesada) en la línea de retardo y deja en [frame] la que sale,
+     * con la ganancia del limitador (con [look] = 0, la misma trama).
+     */
+    private fun limitFrame(frame: DoubleArray) {
+        val n = look + 1
+        var pk = 0.0
+        for (c in 0 until ch) pk = max(pk, abs(frame[c]))
+        while (dqSize > 0 && dqVal[(dqHead + dqSize - 1) % n] <= pk) dqSize--
+        val tail = (dqHead + dqSize) % n
+        dqPos[tail] = pos; dqVal[tail] = pk; dqSize++
+        while (dqPos[dqHead] < pos - look) { dqHead = (dqHead + 1) % n; dqSize-- }
+        val winMax = dqVal[dqHead]
+        val target = if (winMax > LIMIT_THR) LIMIT_THR / winMax else 1.0
+        // Mantener 60 ms antes de soltar: más que un ciclo de 20 Hz, así no «bombea» dentro de cada
+        // ciclo de un grave (eso es distorsión, no limitación).
+        if (target < gain) { gain += (target - gain) * attack; hold = holdFrames }
+        else if (hold > 0) hold--
+        else gain += (target - gain) * release
+        // Sale la trama de hace `look` y entra la nueva.
+        val outSlot = ((pos + 1) % n).toInt()
+        var opk = 0.0
+        for (c in 0 until ch) opk = max(opk, abs(if (look == 0) frame[c] else delay[outSlot * ch + c]))
+        if (opk * gain > LIMIT_THR) gain = LIMIT_THR / opk
+        val inSlot = (pos % n).toInt()
+        for (c in 0 until ch) {
+            val out = if (look == 0) frame[c] else delay[outSlot * ch + c]
+            delay[inSlot * ch + c] = frame[c]
+            frame[c] = out * gain
+        }
+        pos++
+    }
+
+    private val frameBuf = DoubleArray(ch)
 
     fun process(buf: FloatArray, frames: Int) {
         val stereo = ch == 2
         val balL = if (stereo) min(1.0, 1.0 - p.balance) else 1.0
         val balR = if (stereo) min(1.0, 1.0 + p.balance) else 1.0
-        val limit = p.limiter
-        val thr = 0.98
         var i = 0
         for (f in 0 until frames) {
             for (c in 0 until ch) {
@@ -233,22 +284,21 @@ private class Chain(val p: DspParams, private val fs: Int, private val ch: Int) 
                 }
                 if (p.mono) { val m = (l + r) * 0.5; l = m; r = m }
                 l *= balL; r *= balR
-                if (limit) {
-                    val peak = max(abs(l), abs(r))
-                    env = if (peak > env) peak else env * release + peak * (1 - release)
-                    if (env > thr) { val g = thr / env; l *= g; r *= g }
+                if (limiting) {
+                    frameBuf[0] = l; frameBuf[1] = r
+                    limitFrame(frameBuf)
+                    l = frameBuf[0]; r = frameBuf[1]
                 }
                 buf[i] = l.coerceIn(-1.0, 1.0).toFloat()
                 buf[i + 1] = r.coerceIn(-1.0, 1.0).toFloat()
             } else {
-                var peak = 0.0
-                for (c in 0 until ch) peak = max(peak, abs(buf[i + c].toDouble()))
-                var g = 1.0
-                if (limit) {
-                    env = if (peak > env) peak else env * release + peak * (1 - release)
-                    if (env > thr) g = thr / env
+                if (limiting) {
+                    for (c in 0 until ch) frameBuf[c] = buf[i + c].toDouble()
+                    limitFrame(frameBuf)
+                    for (c in 0 until ch) buf[i + c] = frameBuf[c].toFloat()
+                } else {
+                    for (c in 0 until ch) buf[i + c] = buf[i + c].coerceIn(-1f, 1f)
                 }
-                for (c in 0 until ch) buf[i + c] = (buf[i + c] * g).coerceIn(-1.0, 1.0).toFloat()
             }
             i += ch
         }
@@ -264,6 +314,16 @@ private class Chain(val p: DspParams, private val fs: Int, private val ch: Int) 
  * el ecualizador). Sin eso, mover un deslizador o cambiar de preajuste da un chasquido.
  */
 private const val FADE_FRAMES = 1024
+private const val LIMIT_THR = 0.98
+
+/**
+ * Preamplificación que deja la curva sin pasar de 0 dB: lo que suben bandas y tono, en negativo,
+ * redondeado a medio decibelio hacia abajo. Con ella el limitador no tiene nada que hacer.
+ */
+fun autoPreampDb(p: DspParams): Float {
+    val peak = peakGainDb(p.copy(preampDb = 0f))
+    return if (peak <= 0.0) 0f else -(kotlin.math.ceil(peak * 2) / 2).toFloat()
+}
 
 class DspEngine {
     private var fs = 48_000

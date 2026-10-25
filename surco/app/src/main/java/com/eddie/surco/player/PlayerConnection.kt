@@ -71,15 +71,34 @@ class PlayerConnection(ctx: Context) {
         return out
     }
 
+    /** Lo que suena según el propio reproductor, por si ya no está en la biblioteca (borrada mientras suena). */
+    fun currentAsTrack(): Track? {
+        val item = controller?.currentMediaItem ?: return null
+        val id = item.mediaId.toLongOrNull() ?: return null
+        val m = item.mediaMetadata
+        return Track(
+            id = id, path = "", title = m.title?.toString().orEmpty(), artist = m.artist?.toString().orEmpty(),
+            album = m.albumTitle?.toString().orEmpty(), albumArtist = m.albumArtist?.toString().orEmpty(), albumId = 0,
+            genre = m.genre?.toString().orEmpty(), year = m.recordingYear ?: 0, composer = "", trackNo = 0, discNo = 0,
+            durationMs = 0, bitrate = 0, sampleRate = 0, format = "", size = 0, dateAdded = 0, dateModified = 0,
+        )
+    }
+
     val positionMs: Long get() = controller?.currentPosition ?: 0
     val durationMs: Long get() = controller?.duration?.takeIf { it > 0 } ?: 0
 
     fun play(list: List<Track>, start: Int, shuffled: Boolean = false) {
         val c = controller ?: return
         if (list.isEmpty()) return
-        c.shuffleModeEnabled = shuffled
-        val idx = if (shuffled) list.indices.random() else start.coerceIn(list.indices)
-        c.setMediaItems(list.map { it.toMediaItem() }, idx, 0)
+        val items = list.map { it.toMediaItem() }
+        if (shuffled) {
+            // Con resetPosition empieza por la primera del orden aleatorio: suena la lista entera.
+            c.shuffleModeEnabled = true
+            c.setMediaItems(items, true)
+        } else {
+            c.shuffleModeEnabled = false
+            c.setMediaItems(items, start.coerceIn(list.indices), 0)
+        }
         c.prepare(); c.play()
     }
 
@@ -113,8 +132,11 @@ class PlayerConnection(ctx: Context) {
     fun restoreIfEmpty(byId: Map<Long, Track>) {
         val c = controller ?: return
         if (c.mediaItemCount > 0) return
-        val r = restoreQueue(UserStore.state.value.queue, byId) ?: return
+        val q = UserStore.state.value.queue
+        val r = restoreQueue(q, byId) ?: return
         c.setMediaItems(r.mediaItems, r.startIndex, r.startPositionMs)
+        c.repeatMode = q.repeat
+        c.shuffleModeEnabled = q.shuffle
         c.prepare()
     }
 

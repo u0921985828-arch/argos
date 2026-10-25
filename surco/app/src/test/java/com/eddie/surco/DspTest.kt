@@ -190,4 +190,73 @@ class DspTest {
         val r = clickRatio(sig, sr, listOf(g, g.copy(eqOn = false), g, DspParams(), g))
         assertTrue("salto ×$r", r < 3.0)
     }
+
+    // ---- Distorsión: el limitador no debe tocar lo que no sube ----
+
+    /** THD+N de un canal: lo que queda tras quitar el seno de [f] Hz ajustado por mínimos cuadrados. */
+    private fun thd(buf: FloatArray, chs: Int, c: Int, f: Double, sr: Int, from: Int): Double {
+        val n = buf.size / chs - from
+        var ss = 0.0; var sc = 0.0; var cc = 0.0; var ys = 0.0; var yc = 0.0; var y1 = 0.0; var s1 = 0.0; var c1 = 0.0
+        for (k in 0 until n) {
+            val w = 2 * PI * f * (from + k) / sr
+            val sn = sin(w); val cs = kotlin.math.cos(w); val y = buf[(from + k) * chs + c].toDouble()
+            ss += sn * sn; sc += sn * cs; cc += cs * cs; ys += y * sn; yc += y * cs; y1 += y; s1 += sn; c1 += cs
+        }
+        // Sistema 3×3 (seno, coseno, continua) por Cramer.
+        val m = arrayOf(doubleArrayOf(ss, sc, s1), doubleArrayOf(sc, cc, c1), doubleArrayOf(s1, c1, n.toDouble()))
+        val v = doubleArrayOf(ys, yc, y1)
+        fun det(a: Array<DoubleArray>) = a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1]) - a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0]) + a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0])
+        val d = det(m)
+        val sol = DoubleArray(3) { j -> det(Array(3) { r -> DoubleArray(3) { q -> if (q == j) v[r] else m[r][q] } }) / d }
+        var res = 0.0; var fund = 0.0
+        for (k in 0 until n) {
+            val w = 2 * PI * f * (from + k) / sr
+            val fit = sol[0] * sin(w) + sol[1] * kotlin.math.cos(w)
+            val y = buf[(from + k) * chs + c] - sol[2]
+            res += (y - fit) * (y - fit); fund += fit * fit
+        }
+        return sqrt(res / fund)
+    }
+
+    private fun runBlocks(p: DspParams, sig: FloatArray, sr: Int): FloatArray {
+        val e = DspEngine(); e.configure(sr, 2); e.setParams(p)
+        val out = sig.copyOf(); val frames = out.size / 2
+        var f0 = 0
+        while (f0 < frames) {
+            val n = minOf(1024, frames - f0)
+            val chunk = out.copyOfRange(f0 * 2, (f0 + n) * 2); e.process(chunk, n); chunk.copyInto(out, f0 * 2); f0 += n
+        }
+        return out
+    }
+
+    @Test fun monoYBalanceNoDistorsionan() {
+        val sr = 48_000
+        val sig = tone(listOf(60.0), 0.995f, 48_000, sr)
+        val mono = runBlocks(DspParams(mono = true), sig, sr)
+        assertTrue("mono ${thd(mono, 2, 0, 60.0, sr, 8000)}", thd(mono, 2, 0, 60.0, sr, 8000) < 1e-5)
+        val bal = runBlocks(DspParams(balance = 0.2f), sig, sr)
+        assertTrue(thd(bal, 2, 0, 60.0, sr, 8000) < 1e-5 && thd(bal, 2, 1, 60.0, sr, 8000) < 1e-5)
+    }
+
+    @Test fun preajusteConPreampAutomaticaNoDistorsiona() {
+        val sr = 48_000
+        val g = DspParams(bands = BUILTIN_PRESETS.toMap().getValue("Graves"))
+        val p = g.copy(preampDb = com.eddie.surco.audio.autoPreampDb(g))
+        assertTrue(p.preampDb <= -6f)
+        assertTrue(peakGainDb(p) <= 0.0)
+        val sig = tone(listOf(40.0), 0.708f, 96_000, sr) // −3 dBFS
+        val out = runBlocks(p, sig, sr)
+        val t = thd(out, 2, 0, 40.0, sr, 16_000)
+        assertTrue("THD $t", t < 1e-4)
+        assertTrue(out.maxOf { abs(it) } <= 1f)
+    }
+
+    @Test fun conSubidaElLimitadorContieneSinRecortarCadaPico() {
+        val sr = 48_000
+        val p = DspParams(bands = BUILTIN_PRESETS.toMap().getValue("Graves")) // sin bajar la preamplificación
+        val out = runBlocks(p, tone(listOf(40.0), 0.708f, 96_000, sr), sr)
+        assertTrue(out.maxOf { abs(it) } <= 0.98f + 1e-4f)
+        val t = thd(out, 2, 0, 40.0, sr, 24_000)
+        assertTrue("THD $t", t < 0.01) // antes: 1,3 % (auditoría)
+    }
 }

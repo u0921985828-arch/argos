@@ -93,6 +93,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.media3.common.Player
 import com.eddie.surco.LibraryViewModel
 import com.eddie.surco.SongSheetState
@@ -132,19 +135,30 @@ fun qualityLine(t: Track): String = listOfNotNull(
     t.bitrate.takeIf { it > 0 }?.let { "%,d kbps".format(Locale("es"), it) },
 ).joinToString(" · ")
 
-/** Cómo sale el audio: «Salida: 24 bits → coma flotante · 96 kHz · sin pérdida». */
+/**
+ * Cómo sale el audio de Surco hacia el sistema, sin adornos: «Salida: 24 bits (FLAC) → coma
+ * flotante · 96 kHz · sin recortar a 16 bits». Si algo cambia la señal (efectos, ReplayGain,
+ * velocidad), lo dice. El mezclador de Android puede remuestrear después: eso ya no es de Surco.
+ */
 @Composable
-fun outputLine(): String? {
+fun outputLine(track: Track? = null): String? {
     val info by AudioOutput.info.collectAsState()
     val prefs by SurcoSettings.state.collectAsState()
     val i = info ?: return null
     val khz = "%.1f kHz".format(Locale("es"), i.sampleRate / 1000f).replace(",0 ", " ")
-    return when {
-        i.float && i.source.startsWith("coma") -> "Salida: coma flotante 32 bits · $khz · sin pérdida"
-        i.float -> "Salida: ${i.source} → coma flotante · $khz · sin pérdida"
-        prefs.dsp.neutral -> "Salida: ${i.source} · $khz · bit a bit"
-        else -> "Salida: ${i.source} · $khz · efectos con dither"
+    val bits = track?.x("bits")?.takeIf { it.isNotBlank() }
+    val src = if (track != null && bits != null && track.format.isNotBlank()) "$bits (${track.format})" else i.source
+    val changes = listOfNotNull(
+        if (!prefs.dsp.neutral) (if (i.float) "con efectos" else "con efectos y dither") else null,
+        if (prefs.replayGain != com.eddie.surco.audio.ReplayGainMode.OFF) "ReplayGain" else null,
+        if (prefs.speed != 1f) "%.2f×".format(Locale("es"), prefs.speed) else null,
+    )
+    val tail = when {
+        changes.isNotEmpty() -> changes.joinToString(", ")
+        i.float -> "sin recortar a 16 bits"
+        else -> "bit a bit hasta el sistema"
     }
+    return if (i.float) "Salida: $src → coma flotante · $khz · $tail" else "Salida: $src · $khz · $tail"
 }
 
 // ======================= MINI REPRODUCTOR =======================
@@ -241,7 +255,7 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
         if (q.isNotEmpty()) {
             Text(q, color = Teal, fontSize = 12.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
         }
-        outputLine()?.let { Text(it, color = Muted, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth()) }
+        outputLine(track)?.let { Text(it, color = Muted, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth()) }
         Spacer(Modifier.height(10.dp))
         Slider(
             value = if (dragging) dragVal else if (dur > 0) (pos / dur.toFloat()).coerceIn(0f, 1f) else 0f,
@@ -385,6 +399,13 @@ fun QueueSheet(vm: LibraryViewModel, byId: Map<Long, Track>) {
                 val current = e.index == p.currentIndex
                 Row(
                     Modifier.fillMaxWidth().height(60.dp).zIndex(if (dragging) 1f else 0f)
+                        .semantics {
+                            // Con TalkBack no se puede arrastrar: subir y bajar como acciones.
+                            if (!p.shuffle) customActions = listOfNotNull(
+                                if (pos > 0) CustomAccessibilityAction("Subir") { p.move(e.index, q[pos - 1].index); true } else null,
+                                if (pos < q.lastIndex) CustomAccessibilityAction("Bajar") { p.move(e.index, q[pos + 1].index); true } else null,
+                            )
+                        }
                         .graphicsLayer { translationY = if (dragging) dragDy else 0f }
                         .background(if (dragging) Panel2 else if (current) Panel else Color.Transparent)
                         .clickable { p.jumpTo(e.index) }
@@ -582,7 +603,7 @@ private fun ActionChip(icon: ImageVector, label: String, onClick: () -> Unit) {
 }
 
 @Composable
-fun PermissionScreen(onAsk: () -> Unit) {
+fun PermissionScreen(blocked: Boolean, onAsk: () -> Unit) {
     Column(
         Modifier.fillMaxSize().background(Ink).padding(32.dp),
         verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
@@ -591,8 +612,12 @@ fun PermissionScreen(onAsk: () -> Unit) {
         Spacer(Modifier.height(24.dp))
         Text("Surco necesita acceso a tu música", fontSize = 20.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
         Spacer(Modifier.height(8.dp))
-        Text("Lee las etiquetas de tus archivos de audio para organizarlos. Nada sale del móvil.", color = Muted, textAlign = TextAlign.Center)
+        Text(
+            if (blocked) "Android ya no vuelve a preguntar. Abre los ajustes de Surco → Permisos → Música y audio → Permitir."
+            else "Lee las etiquetas de tus archivos de audio para organizarlos. Nada sale del móvil.",
+            color = Muted, textAlign = TextAlign.Center,
+        )
         Spacer(Modifier.height(24.dp))
-        androidx.compose.material3.Button(onClick = onAsk) { Text("Dar permiso") }
+        androidx.compose.material3.Button(onClick = onAsk) { Text(if (blocked) "Abrir ajustes" else "Dar permiso") }
     }
 }

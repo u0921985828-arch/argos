@@ -111,7 +111,7 @@ fun EqualizerScreen(vm: LibraryViewModel) {
                             color = if (d.bands[i] == 0f) Muted else Copper, fontSize = 10.sp, fontFamily = FontFamily.Monospace,
                         )
                         VerticalSlider(
-                            value = d.bands[i], min = -EQ_MAX_DB, max = EQ_MAX_DB,
+                            value = d.bands[i], min = -EQ_MAX_DB, max = EQ_MAX_DB, label = "Banda de ${freqLabel(f)}Hz",
                             onChange = { v -> if (v != d.bands[i]) setBands(d.bands.toMutableList().also { it[i] = v }) },
                         )
                         Text(freqLabel(f), color = Muted, fontSize = 10.sp, textAlign = TextAlign.Center)
@@ -120,17 +120,29 @@ fun EqualizerScreen(vm: LibraryViewModel) {
             }
 
             val peak = remember(d) { peakGainDb(d) }
-            LabeledSlider(
-                "Preamplificación", d.preampDb, -15f..6f, dbText(d.preampDb), steps = 41,
-                onChange = { v -> SurcoSettings.updateDsp { it.copy(preampDb = v) } },
-                onReset = { SurcoSettings.updateDsp { it.copy(preampDb = 0f) } },
-            )
-            if (peak > 0.3 && !d.limiter) {
-                Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("La curva sube ${dbText(peak.toFloat())}: puede saturar.", color = Copper, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                    TextButton(onClick = {
-                        SurcoSettings.updateDsp { it.copy(preampDb = (it.preampDb - floor(peak * 2 + 1).toFloat() / 2).coerceAtLeast(-15f)) }
-                    }) { Text("Ajustar") }
+            SwitchRow(
+                "Preamplificación automática",
+                "Baja el volumen lo que suben las bandas y el tono: nunca satura y el limitador no tiene que actuar.",
+                prefs.autoPreamp,
+            ) { a -> SurcoSettings.update { it.copy(autoPreamp = a) } }
+            if (prefs.autoPreamp) {
+                Text("Preamplificación ${dbText(d.preampDb)}", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
+            } else {
+                LabeledSlider(
+                    "Preamplificación", d.preampDb, -15f..6f, dbText(d.preampDb), steps = 41,
+                    onChange = { v -> SurcoSettings.updateDsp { it.copy(preampDb = v) } },
+                    onReset = { SurcoSettings.updateDsp { it.copy(preampDb = 0f) } },
+                )
+                if (peak > 0.3) {
+                    Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "La curva sube ${dbText(peak.toFloat())}: " + if (d.limiter) "el limitador lo contiene, con algo de compresión." else "puede saturar.",
+                            color = Copper, fontSize = 12.sp, modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = {
+                            SurcoSettings.updateDsp { it.copy(preampDb = (it.preampDb - floor(peak * 2 + 1).toFloat() / 2).coerceAtLeast(-15f)) }
+                        }) { Text("Ajustar") }
+                    }
                 }
             }
 
@@ -159,7 +171,7 @@ fun EqualizerScreen(vm: LibraryViewModel) {
                 }
             }
             SwitchRow("Mono", "Suma los dos canales: para un solo auricular o un altavoz.", d.mono) { m -> SurcoSettings.updateDsp { it.copy(mono = m) } }
-            SwitchRow("Limitador", "Evita la saturación cuando el ecualizador sube el volumen.", d.limiter) { l -> SurcoSettings.updateDsp { it.copy(limiter = l) } }
+            SwitchRow("Limitador", "Solo actúa si la curva pasa de 0 dB (con la preamplificación manual). Mono y balance no lo activan.", d.limiter) { l -> SurcoSettings.updateDsp { it.copy(limiter = l) } }
 
             TextButton(
                 onClick = { SurcoSettings.update { it.copy(dsp = DspParams(), preset = "Plano") } },

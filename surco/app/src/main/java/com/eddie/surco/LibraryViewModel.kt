@@ -17,6 +17,7 @@ import com.eddie.surco.data.UserStore
 import com.eddie.surco.data.buckets
 import com.eddie.surco.player.PlayerConnection
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -44,6 +45,8 @@ sealed interface Screen {
 enum class Tab(val label: String, val root: Screen) {
     HOME("Inicio", Screen.Home), LIBRARY("Biblioteca", Screen.Library), TAGS("Etiquetas", Screen.Tags), LISTS("Listas", Screen.Playlists),
 }
+
+enum class AlbumSort(val label: String) { TITLE("A–Z"), ARTIST("Artista"), YEAR("Año"), ADDED("Recientes") }
 
 enum class LibraryTab(val label: String) { SONGS("Canciones"), ALBUMS("Álbumes"), ARTISTS("Artistas"), FOLDERS("Carpetas") }
 
@@ -76,6 +79,7 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
 
     var tab by mutableStateOf(Tab.HOME)
     var libraryTab by mutableStateOf(LibraryTab.ALBUMS)
+    var albumSort by mutableStateOf(AlbumSort.TITLE)
 
     fun push(s: Screen) { stack += s }
 
@@ -92,32 +96,50 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         else -> false
     }
 
+    /** true cuando la lista ya viene de MediaStore (no solo de la caché): hasta entonces no se restaura la cola. */
+    val fresh = MutableStateFlow(false)
+    private var scannedOnce = false
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val tagReaders = Dispatchers.IO.limitedParallelism(4)
+
+    /** Una vez por proceso (girar la pantalla no vuelve a escanear); [force] relee todo. */
     fun scan(force: Boolean = false) {
-        if (scanJob?.isActive == true) return
+        if (scanJob?.isActive == true || (scannedOnce && !force)) return
+        scannedOnce = true
         scanJob = viewModelScope.launch(Dispatchers.IO) {
             if (tracks.value.isEmpty()) tracks.value = scanner.loadCache()
             val cached = if (force) emptyMap() else tracks.value.associateBy { it.id }
-            val fresh = scanner.queryMediaStore().map { m ->
+            val current = scanner.queryMediaStore().map { m ->
                 cached[m.id]?.takeIf { it.enriched && it.dateModified == m.dateModified } ?: m
             }.sortedBy { it.title.lowercase() }
-            tracks.value = fresh
+            tracks.value = current
+            UserStore.reconcile(current)
+            fresh.value = true
 
-            val todo = fresh.indices.filter { !fresh[it].enriched }
+            val todo = current.indices.filter { !current[it].enriched }
             if (todo.isNotEmpty()) {
-                val list = fresh.toMutableList()
+                val list = current.toMutableList()
                 val done = AtomicInteger(0)
                 progress.value = 0 to todo.size
-                // Lectura de etiquetas en paralelo, por bloques
-                todo.chunked(64).forEach { chunk ->
+                var lastEmit = System.currentTimeMillis()
+                var lastSave = lastEmit
+                // Lectura de etiquetas: 4 a la vez (con portadas incrustadas, más gasta mucha memoria).
+                todo.chunked(32).forEach { chunk ->
                     chunk.map { i ->
-                        async {
+                        async(tagReaders) {
                             val r = scanner.enrich(list[i])
                             progress.value = done.incrementAndGet() to todo.size
                             i to r
                         }
                     }.awaitAll().forEach { (i, r) -> list[i] = r }
-                    tracks.value = list.toList()
+                    val now = System.currentTimeMillis()
+                    // La interfaz se rehace como mucho una vez por segundo y lo leído se guarda cada 20 s.
+                    if (now - lastEmit > 1000) { tracks.value = list.toList(); lastEmit = now }
+                    if (now - lastSave > 20_000) { scanner.saveCache(list); lastSave = now }
                 }
+                tracks.value = list.toList()
+                UserStore.reconcile(tracks.value)
             }
             progress.value = null
             scanner.saveCache(tracks.value)
