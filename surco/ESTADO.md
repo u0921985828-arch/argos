@@ -50,3 +50,24 @@ Encargo: «Auditoría de diseño y lógicas, reproducción y motor de sonido sin
 - Humo de 2a560f6: el toque al buscador de Inicio se perdió una vez: la barra «Leyendo etiquetas» aparecía encima y lo empujaba. → la barra va debajo del buscador, y la prueba comprueba que la búsqueda se abrió (hasta 3 toques).
 - Humo de cd4f355: todo verde salvo el caso reservado: el WAV float de 192 kHz salía como «32 bits» enteros. Causa: Media3 1.5.1 (WavUtil) trata WAVE_FORMAT_EXTENSIBLE por profundidad y no mira el subformato 0x0003 (float): esos WAV sonarían como ruido. ffmpeg (y muchos programas) escriben así cualquier WAV de más de 16 bits o float. → `SurcoExtractorsFactory` envuelve el WavExtractor y corrige el formato a float; prueba `wavEnComaFlotanteExtensible`.
 - Humo de b1f0ecd: VERDE entero (pestañas, seguir escuchando, búsqueda, favorita, cola, EQ, persistencia, FLAC 96 kHz y WAV float 192 kHz en coma flotante, MP3 en 16 bits). APK 2.1 entregado (versionCode 21).
+
+# Surco 2.1 — sin errores
+
+Encargo: «MODO ABSOLUTO / Sin errores».
+
+## Criterios
+- C1: Kotlin compila sin un solo aviso (`allWarningsAsErrors = true`). Base: avisos de iconos obsoletos (`Icons.Default.QueueMusic/PlaylistAdd`).
+- C2: Android Lint con 0 errores en CI (`lintDebug` + `.github/scripts/lint-surco.py`, que falla con cualquier error). Base medida: 12 errores, 11 avisos.
+- C3: CI verde: JVM + debug/release + lint + humo en emulador.
+- Caso reservado: las pruebas unitarias también compilan sin avisos.
+
+## Decisiones
+- `produceState` → `remember` + `LaunchedEffect` en «Sonando», temporizador y letra: lint (K2) no veía la asignación a `value` en esos tres.
+- `@OptIn(UnstableApi::class)` solo donde se usa `MediaItemsWithStartPosition` (restoreQueue, restoreIfEmpty), no en el archivo entero.
+- Versiones fijadas (Media3 1.5.1, targetSdk 35…): `GradleDependency` y `OldTargetApi` pasan a informativos con su motivo. El sink y la corrección de WAV dependen del comportamiento medido de 1.5.1; subirlas es otro encargo con su propia prueba.
+- Servicio exportado a propósito (`tools:ignore="ExportedService"`): es lo que pide MediaSessionService.
+
+## Hecho
+- C1 y caso reservado: run 40164847353, compilación de Kotlin y de pruebas sin avisos.
+- Lint medido: 12 errores (3 ProduceStateDoesNotAssignValue, 9 UnsafeOptInUsageError) y 11 avisos (7 GradleDependency, OldTargetApi, ExportedService, 2 ObsoleteSdkInt) → corregidos o anotados.
+- Trampa: `::error::` se convierte en anotación y no sale en el log; el script imprime cada error también en claro.
