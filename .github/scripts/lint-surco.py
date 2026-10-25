@@ -16,7 +16,11 @@ def where(i):
     f = loc.get("file", "?").split("/surco/")[-1]
     return f"{f}:{loc.get('line', '?')}"
 for i in errors:
+    # La línea ::error:: se vuelve anotación y desaparece del log: va también en claro.
+    print(f"  ERROR {i.get('id')} {where(i)} {i.get('message')}")
     print(f"::error::lint {i.get('id')} {where(i)} {i.get('message')}")
+infos = [i for i in issues if i.get("severity") == "Information"]
+print("informativos:", dict(Counter(i.get("id") for i in infos)))
 print("avisos por tipo:", dict(Counter(i.get("id") for i in warnings)))
 for i in warnings:
     print(f"  aviso {i.get('id')} {where(i)} {i.get('message')}")

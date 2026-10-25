@@ -3,8 +3,10 @@ package com.eddie.surco.player
 import android.content.ContentUris
 import android.net.Uri
 import android.os.Bundle
+import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import com.eddie.surco.data.SavedQueue
 import com.eddie.surco.data.Track
@@ -39,6 +41,7 @@ fun Track.toMediaItem(): MediaItem {
  * índice y la posición se recolocan sobre lo que queda (si la que sonaba ya no está, se empieza
  * por la siguiente desde el principio).
  */
+@OptIn(UnstableApi::class)
 fun restoreQueue(q: SavedQueue, byId: Map<Long, Track>): MediaSession.MediaItemsWithStartPosition? {
     val (kept, start, same) = keptQueue(q.ids, q.index) { it in byId } ?: return null
     return MediaSession.MediaItemsWithStartPosition(

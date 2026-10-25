@@ -3,7 +3,6 @@ package com.eddie.surco.audio
 import android.content.Context
 import android.media.AudioFormat
 import android.media.MediaFormat
-import android.os.Build
 import android.os.Handler
 import android.util.Log
 import androidx.annotation.OptIn
@@ -133,7 +132,7 @@ class SurcoAudioRenderer(ctx: Context, handler: Handler?, listener: AudioRendere
 
     override fun getMediaFormat(format: Format, codecMimeType: String, codecMaxInputSize: Int, codecOperatingRate: Float): MediaFormat {
         val mf = super.getMediaFormat(format, codecMimeType, codecMaxInputSize, codecOperatingRate)
-        if (Build.VERSION.SDK_INT >= 24 && codecMimeType !in LOSSLESS && mf.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
+        if (codecMimeType !in LOSSLESS && mf.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
             mf.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
         }
         return mf

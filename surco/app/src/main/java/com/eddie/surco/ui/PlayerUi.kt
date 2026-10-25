@@ -73,7 +73,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -212,7 +211,10 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
     val sleepEnd by SleepTimer.endAt.collectAsState()
     val sleepTrack by SleepTimer.endOfTrack.collectAsState()
 
-    val tint by produceState<Color?>(null, track.artKey) { value = artColor(ctx, track) }
+    // Sin produceState: lint (K2) no ve la asignación a value y lo da por error. Se queda el color
+    // anterior hasta tener el nuevo, para que el fondo cambie con la animación y no pase por el gris.
+    var tint by remember { mutableStateOf<Color?>(null) }
+    LaunchedEffect(track.artKey) { tint = artColor(ctx, track) }
     val top by animateColorAsState(tint?.copy(alpha = 0.55f) ?: Panel, tween(600), label = "fondo")
 
     Column(
@@ -314,7 +316,8 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
 
 @Composable
 private fun sleepRemaining(end: Long): String {
-    val now by produceState(System.currentTimeMillis(), end) { while (true) { value = System.currentTimeMillis(); delay(1000) } }
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(end) { while (true) { now = System.currentTimeMillis(); delay(1000) } }
     val s = ((end - now) / 1000).coerceAtLeast(0)
     return "%d:%02d".format(s / 60, s % 60)
 }
@@ -333,7 +336,8 @@ private fun ToolButton(icon: ImageVector, label: String, active: Boolean, onClic
 // ======================= LETRA =======================
 @Composable
 fun LyricsPanel(vm: LibraryViewModel, track: Track, pos: Long, modifier: Modifier) {
-    val lyrics by produceState<Lyrics?>(null, track.id) { value = withContext(Dispatchers.IO) { vm.loadLyrics(track) } }
+    var lyrics by remember(track.id) { mutableStateOf<Lyrics?>(null) }
+    LaunchedEffect(track.id) { lyrics = withContext(Dispatchers.IO) { vm.loadLyrics(track) } }
     var loaded by remember(track.id) { mutableStateOf(false) }
     LaunchedEffect(track.id) { delay(1500); loaded = true }
     Box(modifier, contentAlignment = Alignment.Center) {

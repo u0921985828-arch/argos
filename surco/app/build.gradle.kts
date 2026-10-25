@@ -36,6 +36,10 @@ android {
         abortOnError = false
         xmlReport = true
         checkDependencies = false
+        // Versiones fijadas a propósito: SurcoAudioSink y SurcoExtractorsFactory dependen del
+        // comportamiento medido de Media3 1.5.1, y targetSdk 36 cambia la pantalla completa forzada.
+        // Subirlas es un cambio con su propia prueba, no un aviso que apagar. Quedan en el informe.
+        informational += setOf("GradleDependency", "OldTargetApi")
     }
     buildFeatures { compose = true }
     packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }

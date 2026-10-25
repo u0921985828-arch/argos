@@ -2,6 +2,7 @@ package com.eddie.surco.player
 
 import android.content.ComponentName
 import android.content.Context
+import androidx.annotation.OptIn
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -10,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.media3.common.C
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.eddie.surco.data.Track
@@ -129,6 +131,7 @@ class PlayerConnection(ctx: Context) {
     }
 
     /** Al abrir la app sin nada en la cola, deja preparada la última (en pausa). */
+    @OptIn(UnstableApi::class)
     fun restoreIfEmpty(byId: Map<Long, Track>) {
         val c = controller ?: return
         if (c.mediaItemCount > 0) return
