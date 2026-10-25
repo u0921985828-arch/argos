@@ -34,7 +34,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Settings
@@ -94,7 +94,7 @@ private fun Tab.icon(): ImageVector = when (this) {
     Tab.HOME -> Icons.Default.Home
     Tab.LIBRARY -> Icons.Default.LibraryMusic
     Tab.TAGS -> Icons.Default.Sell
-    Tab.LISTS -> Icons.Default.QueueMusic
+    Tab.LISTS -> Icons.AutoMirrored.Filled.QueueMusic
 }
 
 @Composable

@@ -11,6 +11,7 @@ on:
       - 'surco/**'
       - '.github/workflows/build-surco.yml'
       - '.github/scripts/smoke-surco.sh'
+      - '.github/scripts/lint-surco.py'
 
 permissions:
   contents: read
@@ -39,7 +40,10 @@ jobs:
         working-directory: surco
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon testDebugUnitTest assembleDebug assembleRelease
+          ./gradlew --no-daemon testDebugUnitTest assembleDebug assembleRelease lintDebug
+
+      - name: Lint without errors
+        run: python3 .github/scripts/lint-surco.py surco/app/build/reports/lint-results-debug.xml
 
       - name: Collect APKs
         run: |

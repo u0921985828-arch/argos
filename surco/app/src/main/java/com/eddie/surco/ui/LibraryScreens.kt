@@ -23,7 +23,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.NewReleases
-import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.FilterChip
@@ -83,7 +83,7 @@ fun PlaylistsScreen(vm: LibraryViewModel, tracks: List<Track>) {
                     color = Muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
             }
             items(user.playlists, key = { it.id }) { pl ->
-                ListRow(Icons.Default.QueueMusic, pl.name, songs(pl.trackIds.size)) { vm.push(Screen.PlaylistView(pl.id)) }
+                ListRow(Icons.AutoMirrored.Filled.QueueMusic, pl.name, songs(pl.trackIds.size)) { vm.push(Screen.PlaylistView(pl.id)) }
             }
         }
     }

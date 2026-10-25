@@ -29,7 +29,14 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
+    // Ningún aviso de Kotlin pasa: un aviso de hoy es el error de mañana.
+    kotlinOptions { jvmTarget = "17"; allWarningsAsErrors = true }
+    lint {
+        // El informe se lee en CI (.github/scripts/lint-surco.py), que falla con cualquier error.
+        abortOnError = false
+        xmlReport = true
+        checkDependencies = false
+    }
     buildFeatures { compose = true }
     packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
 }

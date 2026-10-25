@@ -44,8 +44,8 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.PlaylistAdd
-import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Sell
@@ -294,7 +294,7 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
         // Herramientas
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             ToolButton(Icons.Default.FormatQuote, "Letra", showLyrics) { showLyrics = !showLyrics }
-            ToolButton(Icons.Default.QueueMusic, "Cola", false) { vm.queueOpen = true }
+            ToolButton(Icons.AutoMirrored.Filled.QueueMusic, "Cola", false) { vm.queueOpen = true }
             ToolButton(Icons.Default.Equalizer, if (prefs.dsp.eqOn && prefs.dsp.eqActive) prefs.preset else "EQ", prefs.dsp.eqOn && prefs.dsp.eqActive) {
                 vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.Equalizer)
             }
@@ -570,8 +570,8 @@ fun SongSheet(vm: LibraryViewModel, s: SongSheetState) {
             Spacer(Modifier.height(14.dp))
             FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ActionChip(Icons.Default.SkipNext, "A continuación") { vm.player.playNext(listOf(track)); close() }
-                ActionChip(Icons.Default.QueueMusic, "A la cola") { vm.player.enqueue(listOf(track)); close() }
-                ActionChip(Icons.Default.PlaylistAdd, "A una lista") { vm.addTo = listOf(track); close() }
+                ActionChip(Icons.AutoMirrored.Filled.QueueMusic, "A la cola") { vm.player.enqueue(listOf(track)); close() }
+                ActionChip(Icons.AutoMirrored.Filled.PlaylistAdd, "A una lista") { vm.addTo = listOf(track); close() }
                 ActionChip(if (fav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, if (fav) "Quitar favorita" else "Favorita") {
                     UserStore.toggleFavorite(track.id)
                 }
