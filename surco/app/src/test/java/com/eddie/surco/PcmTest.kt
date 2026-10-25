@@ -74,4 +74,12 @@ class PcmTest {
         val e = DspEngine(); e.configure(192_000, 2); e.setParams(DspParams()); e.process(g, g.size / 2)
         assertTrue(f.contentEquals(g))
     }
+
+    @Test fun wavEnComaFlotanteExtensible() {
+        fun head(n: String) = javaClass.getResourceAsStream("/rg/$n")!!.use { it.readNBytes(256) }
+        assertTrue(com.eddie.surco.audio.isFloatExtensibleWav(head("float-ext.wav")))
+        assertTrue(!com.eddie.surco.audio.isFloatExtensibleWav(head("int24-ext.wav")))
+        assertTrue(com.eddie.surco.audio.isFloatExtensibleWav(head("float-mono.wav"))) // ffmpeg también usa la extensible en mono
+        assertTrue(!com.eddie.surco.audio.isFloatExtensibleWav(head("sin.mp3")))
+    }
 }

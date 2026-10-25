@@ -62,3 +62,26 @@ object Pcm {
         }
     }
 }
+
+/**
+ * ¿Es un WAV en coma flotante con cabecera WAVE_FORMAT_EXTENSIBLE (subformato 0x0003)? Media3 1.5.1
+ * los toma por enteros de 32 bits y suenan como ruido. [h] = los primeros bytes del archivo.
+ */
+fun isFloatExtensibleWav(h: ByteArray, len: Int = h.size): Boolean {
+    fun u16(i: Int) = (h[i].toInt() and 0xFF) or ((h[i + 1].toInt() and 0xFF) shl 8)
+    fun u32(i: Int) = u16(i).toLong() or (u16(i + 2).toLong() shl 16)
+    fun tag(i: Int, s: String) = i + 4 <= len && s.indices.all { h[i + it] == s[it].code.toByte() }
+    if (len < 12 || !tag(0, "RIFF") || !tag(8, "WAVE")) return false
+    var i = 12
+    while (i + 8 <= len) {
+        val size = u32(i + 4)
+        if (tag(i, "fmt ")) {
+            if (i + 8 + 26 > len || size < 26) return false
+            val format = u16(i + 8)
+            val sub = u16(i + 8 + 24) // primeros 2 bytes del GUID del subformato
+            return format == 0xFFFE && sub == 0x0003
+        }
+        i += 8 + size.toInt() + (size.toInt() and 1)
+    }
+    return false
+}

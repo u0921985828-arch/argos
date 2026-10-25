@@ -26,6 +26,8 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.Renderer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import com.eddie.surco.audio.SurcoExtractorsFactory
 import androidx.media3.exoplayer.RenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
@@ -84,6 +86,8 @@ class PlaybackService : MediaSessionService() {
             arrayOf<Renderer>(SurcoAudioRenderer(this, handler, audioListener, SurcoAudioSink.create(this)))
         }
         exo = ExoPlayer.Builder(this, renderers)
+            // WAV en coma flotante con cabecera extensible: Media3 los leería como enteros (ruido).
+            .setMediaSourceFactory(DefaultMediaSourceFactory(this, SurcoExtractorsFactory()))
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),
                 true,

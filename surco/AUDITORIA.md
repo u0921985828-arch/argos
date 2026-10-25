@@ -36,6 +36,7 @@ Comprobación: pruebas JVM `PcmTest` (24 bits → float exacto en 4.101 valores;
 | 14 | MENOR | El fundido de entrada se comía el ataque de una canción nueva | Fundido solo al reanudar la misma canción ya preparada |
 | 15 | MENOR | Caché de portadas por número (cientos de MB) y miniaturas estiradas | Por bytes (1/8 de la memoria) y por tamaños 128/256/512/1024 px |
 | — | (medido aquí) | Los WAV traen el nulo final dentro del texto de sus etiquetas («Prueba\u0000») | `cleanText` lo quita en jaudiotagger y MediaStore |
+| — | (caso reservado) | Media3 1.5.1 lee los WAV en coma flotante con cabecera extensible como enteros de 32 bits: sonarían como ruido | `SurcoExtractorsFactory` corrige el formato a float al leer la cabecera; prueba `wavEnComaFlotanteExtensible` y humo con un WAV float de 192 kHz |
 
 ## Orden de uso (pantalla principal)
 
