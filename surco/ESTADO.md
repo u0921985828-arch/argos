@@ -62,7 +62,7 @@ Encargo: «MODO ABSOLUTO / Sin errores».
 - Caso reservado: las pruebas unitarias también compilan sin avisos.
 
 ## Decisiones
-- `produceState` → `remember` + `LaunchedEffect` en los cinco sitios (fondo de «Sonando», temporizador, letra, portadas, `rememberOffMain`): lint no veía la asignación a `value`. Lint solo enseñó tres en la primera pasada.
+- `produceState` → `remember` + `LaunchedEffect` en los cinco sitios (fondo de «Sonando», temporizador, letra, portadas, `rememberOffMain`): lint no veía la asignación a `value`. Las anotaciones solo enseñaron tres: GitHub corta en 10 por paso, y los otros dos quedaron ocultos.
 - `@OptIn(UnstableApi::class)` solo donde se usa `MediaItemsWithStartPosition` (restoreQueue, restoreIfEmpty), no en el archivo entero.
 - Versiones fijadas (Media3 1.5.1, targetSdk 35…): `GradleDependency` y `OldTargetApi` pasan a informativos con su motivo. El sink y la corrección de WAV dependen del comportamiento medido de 1.5.1; subirlas es otro encargo con su propia prueba.
 - Servicio exportado a propósito (`tools:ignore="ExportedService"`): es lo que pide MediaSessionService.
@@ -71,3 +71,4 @@ Encargo: «MODO ABSOLUTO / Sin errores».
 - C1 y caso reservado: run 40164847353, compilación de Kotlin y de pruebas sin avisos.
 - Lint medido: 12 errores (3 ProduceStateDoesNotAssignValue, 9 UnsafeOptInUsageError) y 11 avisos (7 GradleDependency, OldTargetApi, ExportedService, 2 ObsoleteSdkInt) → corregidos o anotados.
 - Trampa: `::error::` se convierte en anotación y no sale en el log; el script imprime cada error también en claro.
+- Revisión por ataque: 1 FATAL (dos produceState ocultos por el tope de 10 anotaciones; ya corregido) y 2 MENORES (rutas cortadas en lint-surco.py; runs en paralelo que se pisaban `apk-surco`) → corregidos: rutas desde la raíz con `file=`/`line=`, y `concurrency` que cancela el run anterior de la misma rama.

@@ -13,12 +13,16 @@ warnings = [i for i in issues if i.get("severity") == "Warning"]
 def where(i):
     loc = i.find("location")
     if loc is None: return "?"
-    f = loc.get("file", "?").split("/surco/")[-1]
+    f = loc.get("file", "?")
+    # Ruta desde la raíz del repo (el paquete com/eddie/surco también contiene «/surco/»).
+    if "surco/app/" in f: f = f[f.index("surco/app/"):]
     return f"{f}:{loc.get('line', '?')}"
 for i in errors:
-    # La línea ::error:: se vuelve anotación y desaparece del log: va también en claro.
+    # La línea ::error:: se vuelve anotación (GitHub enseña como mucho 10 por paso) y desaparece
+    # del log: va también en claro.
     print(f"  ERROR {i.get('id')} {where(i)} {i.get('message')}")
-    print(f"::error::lint {i.get('id')} {where(i)} {i.get('message')}")
+    f, _, line = where(i).rpartition(":")
+    print(f"::error file={f},line={line if line.isdigit() else 1}::lint {i.get('id')} {i.get('message')}")
 infos = [i for i in issues if i.get("severity") == "Information"]
 print("informativos:", dict(Counter(i.get("id") for i in infos)))
 print("avisos por tipo:", dict(Counter(i.get("id") for i in warnings)))

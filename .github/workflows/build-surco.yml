@@ -16,6 +16,11 @@ on:
 permissions:
   contents: read
 
+# Cada run hace push -f a apk-surco: uno viejo que acabe tarde dejaría allí un APK anterior.
+concurrency:
+  group: build-surco-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
