@@ -164,7 +164,7 @@ adb shell input keyevent KEYCODE_BACK; sleep 1; ui
 
 tap "EQ" || fallo "no encuentro el botón del ecualizador"
 sleep 2; ui
-grep -q 'text="Preamplificación"' ui.xml || fallo "no se abrió el ecualizador"
+grep -q 'text="Ecualizador"' ui.xml && grep -q 'text="Graves y agudos"' ui.xml || fallo "no se abrió el ecualizador"
 tap "Graves" || fallo "no encuentro el preajuste Graves"
 sleep 1
 adb shell input keyevent KEYCODE_MEDIA_PLAY
