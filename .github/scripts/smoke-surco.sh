@@ -109,29 +109,33 @@ fi
 # El buscador mira también las etiquetas raras, que solo lee jaudiotagger:
 # el estado de ánimo del MP3 (ID3 TMOO) y el sello del FLAC (Vorbis LABEL).
 busca() {  # $1 = texto, $2 = canción que tiene que salir
-    # La búsqueda es una pantalla propia (el buscador de Inicio la abre); si ya está abierta, se
-    # reescribe. Se comprueba que se ha abierto: un toque durante un cambio de diseño se pierde.
-    if ! grep -q 'content-desc="Atrás"' ui.xml || ! grep -q 'Buscar en cualquier etiqueta\|text="'"$prev"'"' ui.xml; then
+    # La búsqueda es una pantalla propia (el buscador de Inicio la abre). Se comprueba que se ha
+    # abierto (un toque durante un cambio de diseño se pierde) y se pulsa el campo antes de
+    # escribir (el foco automático no siempre llega a tiempo). Dos intentos de escritura.
+    if ! grep -q 'content-desc="Atrás"' ui.xml; then
         for _ in 1 2 3; do
             tap "Buscar en cualquier etiqueta" || true
             sleep 2; ui
             grep -q 'content-desc="Atrás"' ui.xml && break
         done
-    else
+    fi
+    for intento in 1 2; do
         tap "Buscar en cualquier etiqueta" || tap "$prev" || true
-    fi
-    adb shell input keyevent KEYCODE_MOVE_END
-    for _ in $(seq 1 20); do adb shell input keyevent KEYCODE_DEL; done
-    adb shell input text "$1"
-    sleep 2
-    ui
-    if ! grep -q "text=\"$2\"" ui.xml || ! grep -qi 'text="1 canci.n encontradas"' ui.xml; then
-        echo "::error::buscar «$1» no da «$2»: jaudiotagger no leyó las etiquetas (¿R8?)"
-        grep -o 'text="[^"]*"' ui.xml | head -30 || true
-        exit 1
-    fi
-    echo "buscar «$1» → $2"
-    prev=$1
+        sleep 1
+        adb shell input keyevent KEYCODE_MOVE_END
+        for _ in $(seq 1 20); do adb shell input keyevent KEYCODE_DEL; done
+        adb shell input text "$1"
+        sleep 2
+        ui
+        if grep -q "text=\"$2\"" ui.xml && grep -qi 'text="1 canci.n encontradas"' ui.xml; then
+            echo "buscar «$1» → $2"
+            prev=$1
+            return 0
+        fi
+    done
+    echo "::error::buscar «$1» no da «$2»: jaudiotagger no leyó las etiquetas (¿R8?)"
+    grep -o 'text="[^"]*"' ui.xml | head -30 || true
+    exit 1
 }
 prev=""
 busca zorzal "Prueba Uno"
