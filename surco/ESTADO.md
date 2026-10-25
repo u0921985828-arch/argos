@@ -62,7 +62,7 @@ Encargo: «MODO ABSOLUTO / Sin errores».
 - Caso reservado: las pruebas unitarias también compilan sin avisos.
 
 ## Decisiones
-- `produceState` → `remember` + `LaunchedEffect` en «Sonando», temporizador y letra: lint (K2) no veía la asignación a `value` en esos tres.
+- `produceState` → `remember` + `LaunchedEffect` en los cinco sitios (fondo de «Sonando», temporizador, letra, portadas, `rememberOffMain`): lint no veía la asignación a `value`. Lint solo enseñó tres en la primera pasada.
 - `@OptIn(UnstableApi::class)` solo donde se usa `MediaItemsWithStartPosition` (restoreQueue, restoreIfEmpty), no en el archivo entero.
 - Versiones fijadas (Media3 1.5.1, targetSdk 35…): `GradleDependency` y `OldTargetApi` pasan a informativos con su motivo. El sink y la corrección de WAV dependen del comportamiento medido de 1.5.1; subirlas es otro encargo con su propia prueba.
 - Servicio exportado a propósito (`tools:ignore="ExportedService"`): es lo que pide MediaSessionService.

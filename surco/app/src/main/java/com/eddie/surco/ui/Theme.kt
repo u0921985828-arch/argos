@@ -14,8 +14,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -101,9 +104,10 @@ suspend fun artColor(ctx: android.content.Context, t: Track): Color? = withConte
 fun Art(track: Track?, size: Dp, corner: Dp = 6.dp, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
     val px = (size.value * 2.5f).toInt().coerceIn(96, 900)
-    val img by produceState<ImageBitmap?>(null, track?.artKey, px) {
-        value = track?.let { loadArt(ctx, it, px) }
-    }
+    // Sin produceState: lint no ve la asignación a value y lo da por error. Como antes, la portada
+    // anterior se queda hasta tener la nueva.
+    var img by remember { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(track?.artKey, px) { img = track?.let { loadArt(ctx, it, px) } }
     val shape = RoundedCornerShape(corner)
     Box(modifier.then(Modifier.clip(shape)), contentAlignment = Alignment.Center) {
         val i = img

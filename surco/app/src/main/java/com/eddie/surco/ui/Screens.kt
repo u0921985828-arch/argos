@@ -85,7 +85,6 @@ import com.eddie.surco.data.buckets
 import com.eddie.surco.data.groupTracks
 import com.eddie.surco.data.SEARCHABLE_EXTRA
 import com.eddie.surco.data.haystack
-import androidx.compose.runtime.produceState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -148,7 +147,8 @@ fun searchHay(t: Track): String = haystack(
 /** Calcula fuera del hilo principal (agrupar 10.000 canciones no debe congelar la interfaz). */
 @Composable
 fun <T> rememberOffMain(vararg keys: Any?, initial: T, calc: () -> T): T {
-    val v by produceState(initial, *keys) { value = withContext(Dispatchers.Default) { calc() } }
+    var v by remember { mutableStateOf(initial) }
+    LaunchedEffect(*keys) { v = withContext(Dispatchers.Default) { calc() } }
     return v
 }
 
