@@ -544,9 +544,17 @@ aparte, no una configuración.
 
 ## Seguridad
 
-`argos/api/main.py` **no lleva autenticación**. Tal como está es una herramienta de
-red local. Ponerlo en internet sin un proxy inverso con auth y TLS delante expone un
-feed de cámara y un índice de búsqueda a quien encuentre el puerto.
+`argos/api/auth.py` autentica por token (`ARGOS_TOKEN`). Sin token, el servicio
+**se niega a arrancar** si escucha fuera de loopback: un aviso en el registro se
+ignora, un fallo al arrancar no. Con token, solo quedan abiertos la interfaz, sus
+trece módulos y `/api/health`; el resto pide `Authorization: Bearer <token>`, y las
+rutas de medios (`preview`, `stream.mjpg`, `file/`) admiten además `?t=`, porque un
+`<img>` o un `<video>` no pueden enviar cabeceras. La comparación es en tiempo
+constante y hay límite de intentos por cliente.
+
+Eso no sustituye a TLS: el token viaja en claro y, en las rutas de medios, queda en
+el historial del navegador y en los registros de acceso. Fuera de una red de
+confianza, proxy inverso con TLS delante.
 
 ---
 
