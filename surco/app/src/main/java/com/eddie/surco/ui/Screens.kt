@@ -151,8 +151,6 @@ fun <T> rememberOffMain(vararg keys: Any?, initial: T, calc: () -> T): T {
     val v by produceState(initial, *keys) { value = withContext(Dispatchers.Default) { calc() } }
     return v
 }
-}
-}
 
 // ======================= GRUPOS =======================
 @Composable

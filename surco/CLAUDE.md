@@ -3,16 +3,19 @@
 App nativa Android (Kotlin + Jetpack Compose + Media3). Lee todas las etiquetas de los archivos de audio del móvil y permite navegar la biblioteca por cualquiera de ellas.
 
 ## Estado
-- **Surco 2** (reproductor completo). CI en verde: 25 pruebas JVM (motor, letras, ReplayGain, cola), debug + release, y prueba de humo en emulador con el APK de release: biblioteca, etiquetas profundas, favorita, «Sonando» con la calidad del archivo, cola, ecualizador con preajuste mientras suena, persistencia tras cerrar la app y un FLAC de 96 kHz/24 bits mono con EQ.
+- **Surco 2.1**: salida sin recortar a 16 bits, auditoría independiente aplicada (`AUDITORIA.md`) y app en pestañas. Pruebas JVM (motor, PCM, letras, ReplayGain/R128/Opus, cola, búsqueda) + debug/release + prueba de humo en emulador con el APK de release.
 - Se compila en GitHub Actions (`.github/workflows/build-surco.yml` del repo `argos`, donde vive en `surco/`): el contenedor de desarrollo no llega a Google Maven ni al Android SDK. Cada push que toque `surco/` deja los APK en el artifact `surco-apk` y en la rama `apk-surco` (un solo commit, se reescribe).
-- Las partes puras (motor, letras, ReplayGain, cola) se prueban también sin Android con `kotlinc` + JUnit (ver ESTADO.md).
+- Las partes puras se prueban también sin Android con `kotlinc` + JUnit (ver ESTADO.md).
 - El release va firmado con la clave de depuración del ejecutor, que cambia en cada compilación: para instalar uno nuevo encima hay que desinstalar el anterior. Una clave propia lo arregla.
 
 ## Sonido (lo importante)
-- Motor propio (`audio/Dsp.kt`) en un `AudioProcessor` de Media3, no `android.media.audiofx`: mismas 10 bandas en todos los móviles, curva dibujable y probado en JVM. Recibe PCM 16 bits: **no activar la salida float**, con ella Media3 se salta los procesadores.
-- Estructura fija de filtros por hueco y **fundido cruzado de ~20 ms** al cambiar parámetros: sin eso, mover una banda por 0 dB o cambiar de preajuste chasqueaba (×828 la segunda diferencia; prueba `moverUnaBandaPorCeroNoChasquea`).
-- Con todo en neutro, bytes intactos (bit a bit).
-- ReplayGain va por `player.volume` al cambiar de pista (sin el desfase del búfer). Con RG activo todo baja 6 dB (`RG_HEADROOM_DB`) para poder subir las flojas.
+- **Dos caminos** (`audio/SurcoAudioSink.kt`): Media3 recorta a 16 bits todo lo de más resolución antes de los procesadores y, con salida float, se salta los procesadores (también la 1.11.1). Por eso:
+  - FLAC/ALAC se piden en coma flotante al decodificador (`SurcoAudioRenderer`) y, como los WAV de 24/32 bits o float, `SurcoAudioSink` los convierte a float sin pérdida, los procesa con `DspEngine` y los entrega en float a AudioTrack;
+  - MP3/AAC/Opus/Vorbis se piden en 16 bits: el recorte de huecos del codificador («sin cortes») solo existe en el camino de 16 bits. Ahí actúa `SurcoAudioProcessor` (bit a bit en neutro; con efectos, float interno y dither TPDF).
+  - Velocidad y tono por AudioTrack (valen en ambos caminos); saltar silencios solo en 16 bits.
+- Motor `audio/Dsp.kt`: estructura fija de filtros por hueco y **fundido cruzado de ~20 ms** al cambiar parámetros (sin eso chasqueaba ×828). **Preamplificación automática** (por defecto) que deja la curva ≤ 0 dB; el **limitador solo actúa si la curva pasa de 0 dB** (mono y balance nunca lo activan) y mantiene 60 ms (sin «bombear» en graves). Sin anticipación a propósito: un retardo solo cuando limita cambiaría la latencia y el fundido entre configuraciones chasquearía (medido ×8,7).
+- ReplayGain por `player.volume` al cambiar de pista; con RG todo baja 6 dB (`RG_HEADROOM_DB`). Opus: R128 → escala RG (+5 dB).
+- La línea «Salida» de «Sonando» dice lo que hay: profundidad del archivo, si va en float y qué cambia la señal. El mezclador de Android remuestrea después (no es de Surco); «bit-perfect» por USB pendiente.
 
 ## Compilar
 Requisitos: JDK 17 o superior y Android SDK (platform 35, build-tools 35). Crear `local.properties` con `sdk.dir=<ruta al SDK>` si no existe (en Windows: `sdk.dir=C\:\\Users\\<usuario>\\AppData\\Local\\Android\\Sdk`).
@@ -28,21 +31,17 @@ Si el release falla en R8 por clases que faltan de jaudiotagger (java.awt, javax
 AGP 8.7.3 · Kotlin 2.0.21 · Gradle 8.14.3 · Compose BOM 2024.12.01 · Media3 1.5.1 · jaudiotagger 3.0.1 · palette 1.0.0 · minSdk 26 · targetSdk 35.
 
 ## Estructura (`app/src/main/java/com/eddie/surco/`)
-- `MainActivity.kt` — permisos, navegación por pila, minirreproductor, «Sonando», hojas y diálogos.
-- `LibraryViewModel.kt` — estado, pantallas (`Home / Groups / Songs / Smart / PlaylistView / Playlists / Settings / Equalizer`) y escaneo con caché `filesDir/library2.json`.
-- `audio/Dsp.kt` — ecualizador 10 bandas (RBJ), preamplificación, graves/agudos (estantes), crossfeed bs2b, mono, balance, limitador, curva de respuesta, preajustes. Kotlin puro.
-- `audio/SurcoAudioProcessor.kt` — el motor dentro de Media3 (16 bits ↔ float con dither TPDF).
-- `audio/SurcoSettings.kt` — ajustes (`ajustes.json`): sonido, ReplayGain, velocidad/tono, saltar silencios, fundidos, duración mínima.
-- `data/UserStore.kt` — favoritas, listas, escuchas, última escucha y cola (`usuario.json`); listas automáticas (`SmartList`).
-- `data/Lyrics.kt` — letras LRC sincronizadas (varias marcas, offset) o planas. `PureReplayGain.kt` — RG de ID3/Vorbis/MP4. `PureQueue.kt` — reanudar la cola aunque falten canciones.
-- `data/LibraryScanner.kt`, `TagField.kt`, `Track.kt` — como en la 1.0, más RG y letras.
-- `player/PlaybackService.kt` — ExoPlayer con el procesador, ReplayGain, fundido al pausar (ForwardingPlayer), temporizador, escuchas (mitad o 4 min), guardar y reanudar cola (`onPlaybackResumption` + `MediaButtonReceiver`).
-- `player/PlayerConnection.kt` — controlador y cola en orden de reproducción (también en aleatorio); a continuación, a la cola, mover, quitar.
-- `ui/` — `EqualizerScreen` (curva, 10 deslizadores verticales, preajustes propios), `PlayerUi` («Sonando» con color de la portada, letra, cola arrastrable, temporizador, velocidad, menú de canción), `Screens` (inicio, grupos, listas de canciones), `LibraryScreens` (listas y ajustes), `Controls`, `Theme`.
+- `MainActivity.kt` — permisos (con salida a Ajustes y recomprobación al volver), barra inferior, minirreproductor, «Sonando», hojas y diálogos.
+- `LibraryViewModel.kt` — pestañas (`Tab`: Inicio · Biblioteca · Etiquetas · Listas) con su pila de pantallas; escaneo (4 lecturas a la vez, interfaz 1 vez/s, caché cada 20 s, una vez por proceso) y `fresh` (la cola solo se restaura tras consultar MediaStore).
+- `audio/` — `Dsp.kt` (motor), `PurePcm.kt` (conversión exacta a float), `SurcoAudioSink.kt` (sink + renderizador sin pérdida, `AudioOutput`), `SurcoAudioProcessor.kt` (camino de 16 bits), `SurcoSettings.kt` (ajustes).
+- `data/` — `LibraryScanner.kt` (MediaStore + jaudiotagger + Opus propio, `cleanText` quita nulos de WAV), `Disk.kt` (AtomicFile, un hilo de escritura, JSON roto apartado), `UserStore.kt` (favoritas, listas, escuchas, cola con aleatorio/repetición, `reconcile` por claves estables), `PureQueue.kt` (reanudar, claves, órdenes aleatorios), `PureText.kt` (búsqueda sin tildes), `PureOpus.kt`, `PureReplayGain.kt`, `Lyrics.kt`, `TagField.kt`, `Track.kt`.
+- `player/PlaybackService.kt` — ExoPlayer con un solo renderizador de audio; salta archivos rotos con aviso; ReplayGain; fundido solo al reanudar; aleatorio que empieza por la actual y «a continuación» que respeta su nombre; temporizador; escuchas; reanudar (fuera del hilo principal).
+- `player/PlayerConnection.kt` — controlador, cola en orden de reproducción, «Seguir escuchando».
+- `ui/` — `Home.kt` (Inicio, Biblioteca, Buscar, barra inferior), `Screens.kt` (Etiquetas, grupos, listas de canciones, `rememberOffMain`), `PlayerUi.kt` («Sonando», letra, cola, temporizador, velocidad, menú de canción, línea de salida), `EqualizerScreen.kt`, `LibraryScreens.kt` (listas y ajustes), `Controls.kt` (deslizadores accesibles), `Theme.kt` (portadas por bytes y tamaños).
 
 ## Pendiente
-- Fundido cruzado entre canciones (necesita dos reproductores), Android Auto, edición de etiquetas, salida float/hi-res con EQ (habría que procesar en float).
-- Probado en emulador; falta un móvil real (sonido real del EQ, Bluetooth con la app cerrada).
+- «Bit-perfect» por USB (Android 14+), fundido cruzado entre canciones, índice de letras en álbumes, Android Auto, edición de etiquetas.
+- Probado en JVM y en emulador; falta un móvil real (sonido real, Bluetooth con la app cerrada).
 
 ## Idioma
 La interfaz y los comentarios están en español.

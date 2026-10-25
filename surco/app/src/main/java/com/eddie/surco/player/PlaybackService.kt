@@ -9,7 +9,7 @@ import android.os.Looper
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.media3.common.PlaybackException
-import androidx.media3.exoplayer.source.DefaultShuffleOrder
+import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
 import com.eddie.surco.data.currentFirstOrder
 import com.eddie.surco.data.insertIntoOrder
 import com.google.common.util.concurrent.SettableFuture

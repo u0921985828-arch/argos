@@ -1,0 +1,54 @@
+# Auditoría de Surco 2.1
+
+Auditoría independiente (un revisor que no escribió el código) de diseño, lógica, reproducción y motor de sonido, más lo que salió al medir. Cada hallazgo, con lo que se hizo y cómo se comprueba.
+
+## Calidad de sonido: qué pasa con la señal
+
+| Fuente | Antes (2.0) | Ahora (2.1) |
+|---|---|---|
+| FLAC / ALAC (cualquier profundidad) | Decodificado a 16 bits; 24 bits recortados | Decodificado en coma flotante, procesado en float, entregado en float al sistema |
+| WAV de 24/32 bits o float | Convertido a 16 bits antes de los efectos | En float de punta a punta |
+| MP3 / AAC / Opus / Vorbis | 16 bits | 16 bits a propósito: Media3 solo recorta los huecos del codificador («sin cortes») en 16 bits, y es su resolución útil |
+| Efectos en neutro, fuente de 16 bits | Bit a bit | Bit a bit |
+| Efectos activos, fuente de 16 bits | Float interno y dither TPDF a 16 bits | Igual |
+
+Lo que Surco no controla: el mezclador de Android remuestrea a la frecuencia del dispositivo (casi siempre 48 kHz) salvo en modo «bit-perfect» por USB (Android 14+), que no está implementado.
+
+Comprobación: pruebas JVM `PcmTest` (24 bits → float exacto en 4.101 valores; ±1 LSB de 24 bits, −138 dBFS, sobrevive al motor neutro) y prueba de humo (log `Surco salida:` del FLAC de 96 kHz y del WAV float de 192 kHz en coma flotante; MP3 en 16 bits).
+
+## Hallazgos
+
+| # | Gravedad | Hallazgo | Resolución |
+|---|---|---|---|
+| 1 | FATAL | Un archivo que no se puede abrir dejaba la reproducción parada; play repetía el fallo; la cola se restauraba con la caché (canciones ya borradas) | `onPlayerError`: se quita de la cola con aviso y sigue (máx. 10 seguidas). La cola se restaura solo tras consultar MediaStore; al reanudar desde fuera se filtra lo que ya no existe, fuera del hilo principal. Si la canción que suena desaparece de la biblioteca, el minirreproductor usa los datos del reproductor |
+| 2 | FATAL | `usuario.json` podía quedar corrupto (dos escrituras a la vez) y perderse todo en silencio; `ajustes.json` sin escritura segura | `Disk`: AtomicFile (fsync + copia) y un único hilo de escritura para todo; un JSON ilegible se aparta (`.roto-…`) en vez de sobrescribirse. También la caché de la biblioteca |
+| 3 | FATAL | Favoritas, listas y escuchas colgaban del `_ID` de MediaStore: se perdían al volver a copiar la música o cambiar de móvil | Claves estables por canción (ruta; si no, título+artista+álbum+duración). Tras cada escaneo, `UserStore.reconcile` cambia los ids viejos por los nuevos. Prueba `idsQueCambianSeRecuperanPorRutaOPorDatos` |
+| 4 | GRAVE | En aleatorio solo sonaba, de media, la mitad de la lista; «A continuación» caía en cualquier sitio | Mezclar empieza por la primera del orden aleatorio; al activar el aleatorio la actual va primera; lo añadido va detrás de la actual o al final del orden. Pruebas `aleatorioEmpiezaPorLaQueSuenaYNoPierdeNinguna`, `aContinuacionYALaColaEnAleatorio` |
+| 5 | GRAVE | El limitador recortaba cada pico (THD 1–1,3 %) y actuaba con solo mono o balance; los preajustes no bajaban la preamplificación | Preamplificación automática (por defecto) que deja la curva en ≤ 0 dB; limitador solo si la curva pasa de 0 dB, con mantenimiento de 60 ms. Medido: mono y balance THD < 0,001 %; «Graves» con preamplificación automática < 0,01 %; con subida manual, el limitador contiene sin pasar de 0,98 y THD < 1 % (antes 1,3 %) |
+| 6 | GRAVE | ReplayGain se aplicaba después de los efectos; Opus con R128 sin leer | Con la preamplificación automática el motor ya no satura antes del volumen de RG (la causa del daño del hallazgo 5). Opus: lector propio de comentarios (jaudiotagger 3.0.1 no abre .opus) con R128 → escala RG (+5 dB). Pruebas `opusComentariosYR128`, `r128Conversion` |
+| 7 | GRAVE | Escanear 10.000 canciones congelaba la interfaz y gastaba mucha memoria | 4 lecturas a la vez, interfaz rehecha como mucho 1 vez/s, caché guardada cada 20 s, un escaneo por proceso; agrupaciones, ordenaciones y búsqueda en `Dispatchers.Default` |
+| 8 | GRAVE | La búsqueda encontraba por «No», «24 bits» o «-7.12»; no ignoraba tildes; un disco sonaba en orden alfabético | Solo campos de texto, sin tildes ni mayúsculas, por palabras (índice plegado una vez). Al tocar una canción suena su disco en orden desde ella. Pruebas `TextTest` |
+| 9 | GRAVE | Tras dos negativas al permiso, la app se quedaba sin salida | El botón pasa a «Abrir ajustes»; el permiso se vuelve a comprobar al volver a la app |
+| 10 | MENOR | Buscar costaba dos toques; álbumes sin orden útil; botón de 40 dp | Buscador visible arriba en Inicio y Biblioteca; álbumes por A–Z, artista, año o recientes; botón de 48 dp. Sin índice de letras (pendiente) |
+| 11 | MENOR | La línea «Salida» decía «bit a bit / sin pérdida» con RG o velocidad activos, y un CD en FLAC parecía alta resolución | Dice la profundidad del archivo y lo que cambia la señal (efectos, ReplayGain, velocidad); «sin recortar a 16 bits» en vez de «sin pérdida» |
+| 12 | MENOR | Ecualizador y cola inaccesibles con TalkBack; menú de canción oculto | Bandas con valor anunciado y ajustables (setProgress); «Subir/Bajar» en la cola; botón «Más opciones» en cada canción. Las bandas miden 38 dp, no 48: diez de 48 dp no caben en un móvil; con TalkBack se ajustan sin tocar el trazo |
+| 13 | MENOR | Al reanudar se perdían aleatorio y repetición; «Repetir una» no sumaba escuchas | Se guardan y restauran; cada repetición o vuelta al principio cuenta como escucha nueva |
+| 14 | MENOR | El fundido de entrada se comía el ataque de una canción nueva | Fundido solo al reanudar la misma canción ya preparada |
+| 15 | MENOR | Caché de portadas por número (cientos de MB) y miniaturas estiradas | Por bytes (1/8 de la memoria) y por tamaños 128/256/512/1024 px |
+| — | (medido aquí) | Los WAV traen el nulo final dentro del texto de sus etiquetas («Prueba\u0000») | `cleanText` lo quita en jaudiotagger y MediaStore |
+
+## Orden de uso (pantalla principal)
+
+Antes: una sola pantalla con buscador, chips y 30 tarjetas de etiquetas; poner un disco o seguir donde se dejó costaba varios toques.
+
+Ahora, barra inferior por orden de uso diario:
+1. **Inicio**: «Seguir escuchando» (1 toque), buscador a la vista, mezclar todo / favoritas / más escuchadas, escuchado y añadido hace poco (portadas con reproducir), lo que más suena y acceso a etiquetas.
+2. **Biblioteca**: álbumes en cuadrícula (ordenables), artistas, carpetas y canciones.
+3. **Etiquetas**: la seña de Surco, organizar por cualquier etiqueta.
+4. **Listas**: automáticas y propias.
+
+## Pendiente
+
+- Salida «bit-perfect» por USB (Android 14+, `AudioMixerAttributes`): sin DAC USB en el emulador no se puede medir.
+- Fundido cruzado entre canciones, índice de letras en álbumes, Android Auto, edición de etiquetas.
+- Todo lo de arriba está probado en JVM y en emulador; falta un móvil real.
