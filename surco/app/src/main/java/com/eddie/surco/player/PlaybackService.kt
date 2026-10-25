@@ -15,15 +15,15 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.Renderer
+import androidx.media3.exoplayer.RenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.audio.AudioSink
-import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.eddie.surco.MainActivity
 import com.eddie.surco.audio.ReplayGainMode
-import com.eddie.surco.audio.SurcoAudioProcessor
+import com.eddie.surco.audio.SurcoAudioRenderer
+import com.eddie.surco.audio.SurcoAudioSink
 import com.eddie.surco.audio.SurcoSettings
 import com.eddie.surco.data.LibraryScanner
 import com.eddie.surco.data.SavedQueue
@@ -69,11 +69,9 @@ class PlaybackService : MediaSessionService() {
         SurcoSettings.init(this)
         UserStore.init(this)
 
-        val renderers = object : DefaultRenderersFactory(this) {
-            override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink =
-                DefaultAudioSink.Builder(context)
-                    .setAudioProcessors(arrayOf(SurcoAudioProcessor()))
-                    .build()
+        // Solo audio: un único renderizador, con la salida sin pérdida de Surco.
+        val renderers = RenderersFactory { handler, _, audioListener, _, _ ->
+            arrayOf<Renderer>(SurcoAudioRenderer(this, handler, audioListener, SurcoAudioSink.create(this)))
         }
         exo = ExoPlayer.Builder(this, renderers)
             .setAudioAttributes(

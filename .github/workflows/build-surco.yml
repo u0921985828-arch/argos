@@ -103,6 +103,10 @@ jobs:
           ffmpeg -loglevel error -f lavfi -i "sine=frequency=550:duration=20:sample_rate=96000" -ac 1 -c:a flac -sample_fmt s32 \
             -bits_per_raw_sample 24 -metadata TITLE="Prueba Tres" -metadata ARTIST="Tercera Banda" -metadata MOOD=tres96 \
             musica/tres.flac
+          # Caso reservado: WAV en coma flotante, 192 kHz, estéreo.
+          ffmpeg -loglevel error -f lavfi -i "sine=frequency=660:duration=20:sample_rate=192000" -ac 2 -c:a pcm_f32le \
+            -metadata title="Prueba Cuatro" -metadata artist="Cuarta Banda" -metadata comment=cuatro192 \
+            musica/cuatro.wav
           ls -l musica
 
       - name: Enable KVM
@@ -131,3 +135,4 @@ jobs:
             logcat.txt
             crash.txt
             flinger.txt
+            salida.txt

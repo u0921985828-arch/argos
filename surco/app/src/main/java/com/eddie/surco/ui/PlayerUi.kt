@@ -96,6 +96,7 @@ import androidx.compose.ui.zIndex
 import androidx.media3.common.Player
 import com.eddie.surco.LibraryViewModel
 import com.eddie.surco.SongSheetState
+import com.eddie.surco.audio.AudioOutput
 import com.eddie.surco.audio.SurcoSettings
 import com.eddie.surco.data.Lyrics
 import com.eddie.surco.data.TagField
@@ -131,12 +132,27 @@ fun qualityLine(t: Track): String = listOfNotNull(
     t.bitrate.takeIf { it > 0 }?.let { "%,d kbps".format(Locale("es"), it) },
 ).joinToString(" · ")
 
+/** Cómo sale el audio: «Salida: 24 bits → coma flotante · 96 kHz · sin pérdida». */
+@Composable
+fun outputLine(): String? {
+    val info by AudioOutput.info.collectAsState()
+    val prefs by SurcoSettings.state.collectAsState()
+    val i = info ?: return null
+    val khz = "%.1f kHz".format(Locale("es"), i.sampleRate / 1000f).replace(",0 ", " ")
+    return when {
+        i.float && i.source.startsWith("coma") -> "Salida: coma flotante 32 bits · $khz · sin pérdida"
+        i.float -> "Salida: ${i.source} → coma flotante · $khz · sin pérdida"
+        prefs.dsp.neutral -> "Salida: ${i.source} · $khz · bit a bit"
+        else -> "Salida: ${i.source} · $khz · efectos con dither"
+    }
+}
+
 // ======================= MINI REPRODUCTOR =======================
 @Composable
 fun MiniPlayer(vm: LibraryViewModel, track: Track) {
     val (pos, dur) = rememberPosition(vm)
     val fav = UserStore.state.collectAsState().value.favorites.contains(track.id)
-    Column(Modifier.fillMaxWidth().background(Panel).navigationBarsPadding()) {
+    Column(Modifier.fillMaxWidth().background(Panel)) {
         Box(Modifier.fillMaxWidth().height(2.dp).background(Panel2)) {
             Box(Modifier.fillMaxWidth(if (dur > 0) (pos / dur.toFloat()).coerceIn(0f, 1f) else 0f).height(2.dp).background(Copper))
         }
@@ -225,6 +241,7 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
         if (q.isNotEmpty()) {
             Text(q, color = Teal, fontSize = 12.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
         }
+        outputLine()?.let { Text(it, color = Muted, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth()) }
         Spacer(Modifier.height(10.dp))
         Slider(
             value = if (dragging) dragVal else if (dur > 0) (pos / dur.toFloat()).coerceIn(0f, 1f) else 0f,

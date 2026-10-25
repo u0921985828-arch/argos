@@ -14,6 +14,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -39,6 +40,10 @@ import com.eddie.surco.ui.PermissionScreen
 import com.eddie.surco.ui.SongsScreen
 import com.eddie.surco.ui.SurcoTheme
 import com.eddie.surco.ui.AddToPlaylistDialog
+import com.eddie.surco.ui.BottomNav
+import com.eddie.surco.ui.LibraryScreen
+import com.eddie.surco.ui.SearchScreen
+import com.eddie.surco.ui.TagsScreen
 import com.eddie.surco.ui.EqualizerScreen
 import com.eddie.surco.ui.PlaylistScreen
 import com.eddie.surco.ui.PlaylistsScreen
@@ -89,19 +94,26 @@ private fun App(vm: LibraryViewModel) {
         if (byId.isNotEmpty()) vm.player.restoreIfEmpty(byId)
     }
 
-    BackHandler(enabled = vm.nowPlayingOpen || vm.stack.size > 1 || vm.query.isNotEmpty()) {
-        when {
-            vm.nowPlayingOpen -> vm.nowPlayingOpen = false
-            vm.pop() -> Unit
-            else -> vm.query = ""
-        }
+    BackHandler(enabled = vm.nowPlayingOpen || vm.stack.size > 1 || vm.tab != Tab.HOME) {
+        if (vm.nowPlayingOpen) vm.nowPlayingOpen = false else vm.pop()
     }
 
     Box(Modifier.fillMaxSize()) {
-        Scaffold(containerColor = Ink, bottomBar = { current?.let { MiniPlayer(vm, it) } }) { pad ->
+        Scaffold(
+            containerColor = Ink,
+            bottomBar = {
+                Column {
+                    current?.let { MiniPlayer(vm, it) }
+                    BottomNav(vm)
+                }
+            },
+        ) { pad ->
             Box(Modifier.fillMaxSize().padding(pad)) {
                 when (val s = vm.stack.last()) {
-                    Screen.Home -> HomeScreen(vm, tracks, progress)
+                    Screen.Home -> HomeScreen(vm, tracks, byId, progress)
+                    Screen.Library -> LibraryScreen(vm, tracks)
+                    Screen.Tags -> TagsScreen(vm, tracks)
+                    Screen.Search -> SearchScreen(vm, tracks)
                     is Screen.Groups -> GroupsScreen(vm, s.field, tracks)
                     is Screen.Songs -> SongsScreen(vm, s, tracks)
                     is Screen.Smart -> SmartScreen(vm, s.list, tracks)

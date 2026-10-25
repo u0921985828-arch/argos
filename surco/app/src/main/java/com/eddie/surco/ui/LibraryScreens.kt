@@ -68,7 +68,7 @@ fun PlaylistsScreen(vm: LibraryViewModel, tracks: List<Track>) {
     val user by UserStore.state.collectAsState()
     var creating by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
-        TopBar("Listas", "${user.playlists.size} propias", onBack = { vm.pop() }) {
+        TopBar("Listas", "${user.playlists.size} propias", onBack = if (vm.stack.size > 1) ({ vm.pop(); Unit }) else null) {
             IconButton(onClick = { creating = true }) { Icon(Icons.Default.Add, "Lista nueva") }
         }
         LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -145,6 +145,15 @@ fun SettingsScreen(vm: LibraryViewModel) {
                 }
             }
 
+            Text("Calidad de salida", fontSize = 15.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+            Text(
+                "FLAC, ALAC y WAV de 24 o 32 bits se decodifican y procesan en coma flotante y llegan así al sistema: no se recortan a 16 bits. " +
+                    "MP3, AAC y demás formatos con pérdida van en 16 bits (es su resolución útil y conserva las transiciones sin cortes). " +
+                    "Con el ecualizador y los efectos en neutro, lo de 16 bits sale bit a bit.",
+                color = Muted, fontSize = 12.sp, lineHeight = 15.sp, modifier = Modifier.padding(horizontal = 20.dp),
+            )
+            outputLine()?.let { Text(it, color = Teal, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) }
+
             SectionLabel("Reproducción")
             SwitchRow("Fundido al pausar y reanudar", "Sin golpes de volumen al pulsar pausa.", prefs.fade) { f -> SurcoSettings.update { it.copy(fade = f) } }
             SwitchRow("Saltar silencios", "Recorta los silencios largos dentro de las pistas.", prefs.skipSilence) { k -> SurcoSettings.update { it.copy(skipSilence = k) } }
@@ -168,7 +177,7 @@ fun SettingsScreen(vm: LibraryViewModel) {
             SectionLabel("Privacidad")
             Text("Surco no usa internet. Las escuchas, favoritas, listas y ajustes se guardan solo en este móvil.",
                 color = Muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
-            TextButton(onClick = {}, enabled = false, modifier = Modifier.padding(horizontal = 8.dp)) { Text("Surco 2.0", color = Muted) }
+            TextButton(onClick = {}, enabled = false, modifier = Modifier.padding(horizontal = 8.dp)) { Text("Surco 2.1", color = Muted) }
         }
     }
 }

@@ -84,94 +84,19 @@ import com.eddie.surco.data.availableFields
 import com.eddie.surco.data.buckets
 import com.eddie.surco.data.groupTracks
 
-// ======================= INICIO =======================
+// ======================= ETIQUETAS =======================
+/** La seña de Surco: la biblioteca organizada por cualquiera de sus etiquetas. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, progress: Pair<Int, Int>?) {
+fun TagsScreen(vm: LibraryViewModel, tracks: List<Track>) {
     val fields = remember(tracks) { availableFields(tracks) }
-    val results = remember(tracks, vm.query) { search(tracks, vm.query) }
-    val currentId = vm.player.currentId
-    val keyboard = LocalSoftwareKeyboardController.current
-    val focus = LocalFocusManager.current
-
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
-            Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Surco", fontSize = 34.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onBackground)
-                    Text(
-                        "${songs(tracks.size)} · ${fmtTotal(tracks.sumOf { it.durationMs })}",
-                        color = Muted, fontSize = 13.sp,
-                    )
-                }
-                IconButton(onClick = { vm.push(Screen.Playlists) }) { Icon(Icons.Default.QueueMusic, "Listas", tint = Paper) }
-                IconButton(onClick = { vm.push(Screen.Equalizer) }) { Icon(Icons.Default.Equalizer, "Ecualizador", tint = Paper) }
-                IconButton(onClick = { vm.push(Screen.Settings) }) { Icon(Icons.Default.Settings, "Ajustes", tint = Paper) }
+            Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp)) {
+                Text("Etiquetas", fontSize = 30.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onBackground)
+                Text("Tu música ordenada por lo que dicen sus archivos: personas, obra, tiempo y calidad.", color = Muted, fontSize = 13.sp)
             }
         }
-        item {
-            OutlinedTextField(
-                value = vm.query, onValueChange = { vm.query = it },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                placeholder = { Text("Buscar en cualquier etiqueta") },
-                leadingIcon = { Icon(Icons.Default.Search, null) },
-                trailingIcon = { if (vm.query.isNotEmpty()) IconButton(onClick = { vm.query = "" }) { Icon(Icons.Default.Clear, "Borrar") } },
-                singleLine = true, shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = Panel, focusedContainerColor = Panel, unfocusedBorderColor = Panel),
-            )
-        }
-        if (vm.query.isBlank()) item {
-            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(SmartList.entries.toList()) { sl ->
-                    Row(
-                        Modifier.clip(RoundedCornerShape(12.dp)).background(Panel).clickable { vm.push(Screen.Smart(sl)) }
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (sl == SmartList.FAVORITES) { Icon(Icons.Default.Favorite, null, tint = Copper, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)) }
-                        Text(sl.label, fontSize = 14.sp)
-                    }
-                }
-            }
-        }
-        if (progress != null) item {
-            Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
-                Text("Leyendo etiquetas · ${progress.first} de ${progress.second}", color = Teal, fontSize = 12.sp)
-                Spacer(Modifier.height(6.dp))
-                LinearProgressIndicator(
-                    progress = { progress.first / progress.second.coerceAtLeast(1).toFloat() },
-                    modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape), color = Teal, trackColor = Panel2,
-                )
-            }
-        }
-
-        if (vm.query.isNotBlank()) {
-            item { SectionLabel("${songs(results.size)} encontradas") }
-            itemsIndexed(results, key = { _, t -> t.id }) { i, t ->
-                SongRow(t, null, t.id == currentId, onClick = { keyboard?.hide(); focus.clearFocus(); vm.player.play(results, i) },
-                    onLong = { keyboard?.hide(); focus.clearFocus(); vm.sheet = SongSheetState(t) })
-            }
-            return@LazyColumn
-        }
-
-        item {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).clip(RoundedCornerShape(16.dp))
-                    .background(Panel).clickable { vm.push(Screen.Songs(null, null, "Todas las canciones")) }.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(Modifier.size(44.dp).clip(CircleShape).background(Copper), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.GraphicEq, null, tint = Ink)
-                }
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("Todas las canciones", fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
-                    Text(songs(tracks.size), color = Muted, fontSize = 13.sp)
-                }
-                IconButton(onClick = { vm.player.play(tracks, 0, shuffled = true) }) { Icon(Icons.Default.Shuffle, "Aleatorio", tint = Copper) }
-            }
-        }
-
         fields.groupBy { it.first.group }.forEach { (section, list) ->
             item(key = "sec-$section") { SectionLabel(section) }
             item(key = "grid-$section") {
@@ -185,11 +110,8 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, progress: Pair<Int, In
                 }
             }
         }
-        if (tracks.isEmpty() && progress == null) item {
-            Text(
-                "No se han encontrado canciones en el dispositivo. Copia música a la memoria y pulsa ⟳.",
-                color = Muted, modifier = Modifier.padding(24.dp),
-            )
+        if (tracks.isEmpty()) item {
+            Text("Cuando haya canciones en el móvil, aquí salen todas sus etiquetas.", color = Muted, modifier = Modifier.padding(24.dp))
         }
     }
 }
@@ -212,7 +134,7 @@ fun SectionLabel(s: String) = Text(
     modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 10.dp),
 )
 
-private fun search(tracks: List<Track>, q: String): List<Track> {
+fun searchTracks(tracks: List<Track>, q: String): List<Track> {
     val s = q.trim().lowercase()
     if (s.isEmpty()) return emptyList()
     return tracks.filter { t ->
@@ -437,9 +359,10 @@ fun SongRow(t: Track, number: Int?, playing: Boolean, onClick: () -> Unit, onLon
 }
 
 @Composable
-fun TopBar(title: String, subtitle: String, onBack: () -> Unit, actions: @Composable RowScope.() -> Unit = {}) {
+fun TopBar(title: String, subtitle: String, onBack: (() -> Unit)?, actions: @Composable RowScope.() -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Atrás") }
+        if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Atrás") }
+        else Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
             Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(subtitle, color = Muted, fontSize = 12.sp)

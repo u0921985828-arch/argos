@@ -118,6 +118,14 @@ class PlayerConnection(ctx: Context) {
         c.prepare()
     }
 
+    /** «Seguir escuchando»: la cola de la última vez donde se quedó, sonando. */
+    fun resume(byId: Map<Long, Track>) {
+        val c = controller ?: return
+        restoreIfEmpty(byId)
+        if (c.playbackState == Player.STATE_IDLE) c.prepare()
+        c.play()
+    }
+
     fun toggle() { controller?.let { if (it.isPlaying) it.pause() else { if (it.playbackState == Player.STATE_IDLE) it.prepare(); it.play() } } }
     fun next() { controller?.seekToNext() }
     fun prev() { controller?.seekToPrevious() }

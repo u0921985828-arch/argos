@@ -12,8 +12,8 @@ android {
         applicationId = "com.eddie.surco"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 21
+        versionName = "2.1"
     }
 
     buildTypes {

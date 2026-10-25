@@ -38,7 +38,7 @@ class LibraryScanner(private val ctx: Context) {
             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, cols.toTypedArray(),
             "${MediaStore.Audio.Media.IS_MUSIC} != 0", null, null,
         )?.use { c ->
-            fun s(n: String) = c.getColumnIndex(n).let { if (it < 0) "" else c.getString(it).orEmpty() }
+            fun s(n: String) = c.getColumnIndex(n).let { if (it < 0) "" else cleanText(c.getString(it).orEmpty()) }
             fun l(n: String) = c.getColumnIndex(n).let { if (it < 0) 0L else c.getLong(it) }
             while (c.moveToNext()) {
                 val trk = l(MediaStore.Audio.Media.TRACK).toInt()
@@ -82,9 +82,10 @@ class LibraryScanner(private val ctx: Context) {
         val af = AudioFileIO.read(f)
         val h = af.audioHeader
         val tag: Tag? = af.tag
-        fun g(k: FieldKey): String = try { tag?.getFirst(k)?.trim().orEmpty() } catch (_: Throwable) { "" }
+        // Los WAV (bloque INFO) traen el terminador nulo dentro del texto: «Prueba\u0000».
+        fun g(k: FieldKey): String = try { tag?.getFirst(k)?.let { cleanText(it) }.orEmpty() } catch (_: Throwable) { "" }
         fun all(k: FieldKey): String = try {
-            tag?.getAll(k)?.map { it.trim() }?.filter { it.isNotEmpty() }?.distinct()?.joinToString("; ").orEmpty()
+            tag?.getAll(k)?.map { cleanText(it) }?.filter { it.isNotEmpty() }?.distinct()?.joinToString("; ").orEmpty()
         } catch (_: Throwable) { g(k) }
 
         val extra = LinkedHashMap<String, String>()
@@ -198,7 +199,10 @@ class LibraryScanner(private val ctx: Context) {
     companion object {
         private val ID3_NUM = Regex("""^\(?(\d{1,3})\)?$""")
 
-        fun clean(s: String) = s.trim().let { if (it.equals("<unknown>", true)) "" else it }
+        /** Sin nulos ni espacios de sobra. */
+        fun cleanText(s: String) = s.replace("\u0000", "").trim()
+
+        fun clean(s: String) = cleanText(s).let { if (it.equals("<unknown>", true)) "" else it }
 
         /** Convierte géneros ID3v1 numéricos ("(17)", "17") en su nombre. */
         fun cleanGenre(raw: String): String = raw.split(';').map { it.trim() }.filter { it.isNotEmpty() }

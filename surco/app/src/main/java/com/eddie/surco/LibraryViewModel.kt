@@ -35,7 +35,17 @@ sealed interface Screen {
     data object Playlists : Screen
     data object Settings : Screen
     data object Equalizer : Screen
+    data object Library : Screen
+    data object Tags : Screen
+    data object Search : Screen
 }
+
+/** Pestañas de la barra inferior, en el orden de uso: lo de cada día primero. */
+enum class Tab(val label: String, val root: Screen) {
+    HOME("Inicio", Screen.Home), LIBRARY("Biblioteca", Screen.Library), TAGS("Etiquetas", Screen.Tags), LISTS("Listas", Screen.Playlists),
+}
+
+enum class LibraryTab(val label: String) { SONGS("Canciones"), ALBUMS("Álbumes"), ARTISTS("Artistas"), FOLDERS("Carpetas") }
 
 /** Menú de una canción; si viene de una lista, dónde está en ella (para poder quitarla). */
 data class SongSheetState(val track: Track, val playlistId: Long? = null, val playlistIndex: Int = -1)
@@ -64,8 +74,23 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
 
     private var scanJob: Job? = null
 
+    var tab by mutableStateOf(Tab.HOME)
+    var libraryTab by mutableStateOf(LibraryTab.ALBUMS)
+
     fun push(s: Screen) { stack += s }
-    fun pop(): Boolean = if (stack.size > 1) { stack.removeAt(stack.lastIndex); true } else false
+
+    /** Cambiar de pestaña empieza en su raíz; tocar la pestaña en la que ya se está, también. */
+    fun selectTab(t: Tab) {
+        tab = t
+        stack.clear(); stack.add(t.root)
+    }
+
+    /** Atrás: primero dentro de la pestaña, después a Inicio. */
+    fun pop(): Boolean = when {
+        stack.size > 1 -> { stack.removeAt(stack.lastIndex); true }
+        tab != Tab.HOME -> { selectTab(Tab.HOME); true }
+        else -> false
+    }
 
     fun scan(force: Boolean = false) {
         if (scanJob?.isActive == true) return
