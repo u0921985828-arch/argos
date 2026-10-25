@@ -193,6 +193,7 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, byId: Map<Long, Track>
             }
         }
         item { SearchPill(vm) }
+        // Debajo del buscador: si apareciera encima, empujaría el buscador justo cuando se va a tocar.
         if (progress != null) item {
             Column(Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
                 Text("Leyendo etiquetas · ${progress.first} de ${progress.second}", color = Teal, fontSize = 12.sp)

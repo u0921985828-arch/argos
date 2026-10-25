@@ -109,8 +109,17 @@ fi
 # El buscador mira también las etiquetas raras, que solo lee jaudiotagger:
 # el estado de ánimo del MP3 (ID3 TMOO) y el sello del FLAC (Vorbis LABEL).
 busca() {  # $1 = texto, $2 = canción que tiene que salir
-    # La búsqueda es una pantalla propia (lupa de Inicio); si ya está abierta, se reescribe.
-    tap "Buscar en cualquier etiqueta" || tap "$prev" || { tap "Buscar" && sleep 2 && ui && { tap "Buscar en cualquier etiqueta" || true; }; } || true
+    # La búsqueda es una pantalla propia (el buscador de Inicio la abre); si ya está abierta, se
+    # reescribe. Se comprueba que se ha abierto: un toque durante un cambio de diseño se pierde.
+    if ! grep -q 'content-desc="Atrás"' ui.xml || ! grep -q 'Buscar en cualquier etiqueta\|text="'"$prev"'"' ui.xml; then
+        for _ in 1 2 3; do
+            tap "Buscar en cualquier etiqueta" || true
+            sleep 2; ui
+            grep -q 'content-desc="Atrás"' ui.xml && break
+        done
+    else
+        tap "Buscar en cualquier etiqueta" || tap "$prev" || true
+    fi
     adb shell input keyevent KEYCODE_MOVE_END
     for _ in $(seq 1 20); do adb shell input keyevent KEYCODE_DEL; done
     adb shell input text "$1"
