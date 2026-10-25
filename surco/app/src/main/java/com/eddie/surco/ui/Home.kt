@@ -87,6 +87,7 @@ import com.eddie.surco.data.groupTracks
 import com.eddie.surco.data.fold
 import com.eddie.surco.data.matchesFolded
 import java.util.Calendar
+import kotlinx.coroutines.delay
 
 // ======================= BARRA INFERIOR =======================
 private fun Tab.icon(): ImageVector = when (this) {
@@ -389,7 +390,8 @@ fun SearchScreen(vm: LibraryViewModel, tracks: List<Track>) {
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
     val req = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { req.requestFocus() } }
+    // Al abrir la búsqueda, el teclado listo (tras un fotograma: antes el campo aún no está colocado).
+    LaunchedEffect(Unit) { delay(120); runCatching { req.requestFocus() }; keyboard?.show() }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { vm.pop() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Atrás") }
