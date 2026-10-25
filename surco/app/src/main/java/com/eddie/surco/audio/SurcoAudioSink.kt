@@ -50,7 +50,7 @@ class SurcoAudioSink private constructor(inner: AudioSink) : ForwardingAudioSink
     private var inEnc = C.ENCODING_PCM_16BIT
     private var channels = 2
     private var work = FloatArray(0)
-    private var out: ByteBuffer = ByteBuffer.allocateDirect(0)
+    private var out: ByteBuffer = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
     private var pendingIn: ByteBuffer? = null
 
     override fun configure(inputFormat: Format, specifiedBufferSize: Int, outputChannels: IntArray?) {
@@ -72,6 +72,7 @@ class SurcoAudioSink private constructor(inner: AudioSink) : ForwardingAudioSink
 
     override fun handleBuffer(buffer: ByteBuffer, presentationTimeUs: Long, encodedAccessUnitCount: Int): Boolean {
         if (!floatMode) return super.handleBuffer(buffer, presentationTimeUs, encodedAccessUnitCount)
+        if (!buffer.hasRemaining() && pendingIn == null) return true
         // El reproductor repite el mismo búfer hasta que se consume entero: se procesa una sola vez.
         if (buffer !== pendingIn) {
             val n = buffer.remaining() / Pcm.bytesPerSample(inEnc)

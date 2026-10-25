@@ -145,8 +145,14 @@ fun outputLine(track: Track? = null): String? {
     val info by AudioOutput.info.collectAsState()
     val prefs by SurcoSettings.state.collectAsState()
     val i = info ?: return null
+    // En el sin cortes la salida se prepara con la siguiente antes de que suene: si no casa con
+    // la que suena, mejor no decir nada que decir lo de otra.
+    if (track != null && track.sampleRate > 0 && track.sampleRate != i.sampleRate) return null
     val khz = "%.1f kHz".format(Locale("es"), i.sampleRate / 1000f).replace(",0 ", " ")
     val bits = track?.x("bits")?.takeIf { it.isNotBlank() }
+    val fileBits = bits?.take(2)?.trim()?.toIntOrNull() ?: 0
+    // Si el decodificador del móvil no da float, lo dice en vez de presumir de 24 bits.
+    if (!i.float && fileBits > 16) return "Salida: ${i.source} · $khz · el decodificador de este móvil entrega 16 bits"
     val src = if (track != null && bits != null && track.format.isNotBlank()) "$bits (${track.format})" else i.source
     val changes = listOfNotNull(
         if (!prefs.dsp.neutral) (if (i.float) "con efectos" else "con efectos y dither") else null,

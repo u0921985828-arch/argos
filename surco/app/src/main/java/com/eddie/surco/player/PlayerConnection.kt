@@ -113,7 +113,7 @@ class PlayerConnection(ctx: Context) {
     fun enqueue(tracks: List<Track>) {
         val c = controller ?: return
         if (c.mediaItemCount == 0) return play(tracks, 0)
-        c.addMediaItems(tracks.map { it.toMediaItem() })
+        c.addMediaItems(tracks.map { it.toMediaItem() }) // sin índice: «a la cola» también en aleatorio
     }
 
     fun jumpTo(index: Int) { controller?.let { it.seekToDefaultPosition(index); it.play() } }

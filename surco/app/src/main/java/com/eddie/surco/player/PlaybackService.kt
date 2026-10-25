@@ -105,7 +105,7 @@ class PlaybackService : MediaSessionService() {
                 // Volver al principio de la misma canción también cuenta como otra escucha.
                 if (reason == Player.DISCONTINUITY_REASON_SEEK && newPosition.positionMs < 1000) listenedId = null
             }
-            override fun onPlayerError(error: PlaybackException) = skipBroken()
+            override fun onPlayerError(error: PlaybackException) = skipBroken(error)
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) {
                     SleepTimer.cancel()
@@ -220,8 +220,15 @@ class PlaybackService : MediaSessionService() {
      * la cola con un aviso y se sigue con la siguiente; sin esto, ExoPlayer se queda parado en el
      * error y el botón de reproducir lo repite. Como mucho 10 seguidas, para no dar vueltas.
      */
-    private fun skipBroken() {
+    private fun skipBroken(error: PlaybackException) {
         val title = exo.currentMediaItem?.mediaMetadata?.title ?: "la canción"
+        // Solo los fallos del archivo (no se encuentra, no se puede leer o descodificar) quitan la
+        // canción; uno de la salida de audio no es culpa suya: se para y se avisa.
+        val fileProblem = error.errorCode in 2000..4999
+        if (!fileProblem) {
+            Toast.makeText(this, "Error de salida de audio (${error.errorCodeName}). Pulsa reproducir para reintentar.", Toast.LENGTH_LONG).show()
+            return
+        }
         Toast.makeText(this, "No se pudo reproducir «$title»: se quita de la cola.", Toast.LENGTH_SHORT).show()
         if (exo.mediaItemCount == 0) return
         exo.removeMediaItem(exo.currentMediaItemIndex)
@@ -254,15 +261,19 @@ class PlaybackService : MediaSessionService() {
             exo.shuffleModeEnabled = shuffleModeEnabled
         }
 
-        override fun addMediaItems(mediaItems: MutableList<MediaItem>) = addMediaItems(exo.mediaItemCount, mediaItems)
+        // «A la cola» llega sin índice (va al final también del orden aleatorio); «A continuación»,
+        // con el índice de detrás de la que suena. Así no se confunden aunque la actual sea la última.
+        override fun addMediaItems(mediaItems: MutableList<MediaItem>) = addOrdered(exo.mediaItemCount, mediaItems, playNext = false)
 
-        // «A continuación» y «A la cola» respetan su nombre también en aleatorio.
-        override fun addMediaItems(index: Int, mediaItems: MutableList<MediaItem>) {
+        override fun addMediaItems(index: Int, mediaItems: MutableList<MediaItem>) =
+            addOrdered(index, mediaItems, playNext = index == exo.currentMediaItemIndex + 1)
+
+        private fun addOrdered(index: Int, mediaItems: MutableList<MediaItem>, playNext: Boolean) {
             if (!exo.shuffleModeEnabled || exo.mediaItemCount == 0) { exo.addMediaItems(index, mediaItems); return }
             val order = shuffledOrder()
             val cur = exo.currentMediaItemIndex
             exo.addMediaItems(index, mediaItems)
-            val next = insertIntoOrder(order, index, mediaItems.size, cur, playNext = index == cur + 1)
+            val next = insertIntoOrder(order, index, mediaItems.size, cur, playNext)
             exo.setShuffleOrder(DefaultShuffleOrder(next.toIntArray(), Random.nextLong()))
         }
 

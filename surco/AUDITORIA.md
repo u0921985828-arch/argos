@@ -52,3 +52,15 @@ Ahora, barra inferior por orden de uso diario:
 - Salida «bit-perfect» por USB (Android 14+, `AudioMixerAttributes`): sin DAC USB en el emulador no se puede medir.
 - Fundido cruzado entre canciones, índice de letras en álbumes, Android Auto, edición de etiquetas.
 - Todo lo de arriba está probado en JVM y en emulador; falta un móvil real.
+
+## Revisión final (segundo revisor independiente)
+
+| # | Gravedad | Ataque | Resolución |
+|---|---|---|---|
+| 1 | FATAL | La prueba de humo fallaba en el ecualizador | La prueba buscaba un texto que con la preamplificación automática ya no existe; ahora reconoce la pantalla por título y preajustes, y el preajuste guardado por el subtítulo |
+| 2 | GRAVE | La preamplificación automática no se aplicaba con el EQ apagado y solo tono; el desfase de los filtros subía la cresta de una onda cuadrada por encima de 1 sin limitador | La preamplificación se aplica también con el tono; el limitador vigila siempre que haya filtros (solo actúa si algo pasa de 0,98). Pruebas `ondaCuadradaConPreajusteNoSeRecorta` (Voz, Nocturno, Rock, Graves: 0 muestras recortadas) y `tonoConEcualizadorApagadoTambienSeCompensa` |
+| 3 | GRAVE | Las claves estables solo se guardaban al escanear | Se guardan en el acto, al marcar, añadir a una lista o escuchar |
+| 4 | MENOR | Cualquier error quitaba canciones de la cola | Solo los fallos del archivo (2000–4999); uno de salida de audio para y avisa |
+| 5 | MENOR | La línea «Salida» podía presumir de 24 bits con un decodificador de 16 o mostrar el formato de la siguiente canción | Lo dice («el decodificador de este móvil entrega 16 bits») y se oculta si la frecuencia no casa con la que suena |
+| 6 | MENOR | Un búfer vacío con orden de bytes equivocado rompía el contrato de DefaultAudioSink | Búfer en orden nativo desde el principio y los vacíos se aceptan sin pasar |
+| 7 | MENOR | «A la cola» en aleatorio se volvía «A continuación» si la actual era la última | «A la cola» llega sin índice y siempre va al final del orden |

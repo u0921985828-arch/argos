@@ -60,8 +60,24 @@ object UserStore {
     /** Guarda ya, sin esperar (al cerrar el servicio), por el mismo hilo que los demás guardados. */
     fun flush() = runBlocking(Disk.writer) { save(_state.value) }
 
+    /** La biblioteca actual: para guardar las claves de una canción en cuanto se usa. */
+    @Volatile
+    private var library: Map<Long, Track> = emptyMap()
+
     @Synchronized
-    fun update(f: (UserData) -> UserData) { _state.value = f(_state.value) }
+    fun update(f: (UserData) -> UserData) { _state.value = withKeys(f(_state.value)) }
+
+    private fun refsOf(d: UserData): Set<Long> =
+        d.favorites + d.playlists.flatMap { it.trackIds } + d.plays.keys + d.lastPlayed.keys + d.queue.ids
+
+    /** Lo que se marca, se añade a una lista o se escucha guarda sus claves en el acto (no al escanear). */
+    private fun withKeys(d: UserData): UserData {
+        val lib = library
+        if (lib.isEmpty()) return d
+        val missing = refsOf(d).filter { it !in d.keys && it in lib }
+        if (missing.isEmpty()) return d
+        return d.copy(keys = d.keys + missing.associateWith { lib.getValue(it).stableKeys() })
+    }
 
     fun isFavorite(id: Long) = id in _state.value.favorites
     fun toggleFavorite(id: Long) = update { d -> d.copy(favorites = if (id in d.favorites) d.favorites - id else d.favorites + id) }
@@ -96,11 +112,11 @@ object UserStore {
     fun reconcile(tracks: List<Track>) {
         if (tracks.isEmpty()) return
         val byId = tracks.associateBy { it.id }
+        library = byId
         val idByKey = HashMap<String, Long>()
         for (t in tracks) for (k in t.stableKeys()) idByKey.putIfAbsent(k, t.id)
         update { d ->
-            val refs = d.favorites + d.playlists.flatMap { it.trackIds } + d.plays.keys + d.lastPlayed.keys + d.queue.ids
-            val m = remapIds(refs, byId.keys, d.keys, idByKey)
+            val m = remapIds(refsOf(d), byId.keys, d.keys, idByKey)
             fun f(id: Long) = m[id] ?: id
             val nd = if (m.isEmpty()) d else d.copy(
                 favorites = d.favorites.map(::f).toSet(),
@@ -109,7 +125,7 @@ object UserStore {
                 lastPlayed = d.lastPlayed.entries.groupBy({ f(it.key) }, { it.value }).mapValues { it.value.max() },
                 queue = d.queue.copy(ids = d.queue.ids.map(::f)),
             )
-            val newRefs = nd.favorites + nd.playlists.flatMap { it.trackIds } + nd.plays.keys + nd.lastPlayed.keys + nd.queue.ids
+            val newRefs = refsOf(nd)
             // Claves al día de lo que existe; las de lo que falta se guardan por si vuelve.
             val keys = newRefs.associateWith { id -> byId[id]?.stableKeys() ?: d.keys[id].orEmpty() }.filterValues { it.isNotEmpty() }
             if (m.isEmpty() && keys == d.keys) d else nd.copy(keys = keys)

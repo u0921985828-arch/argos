@@ -259,4 +259,26 @@ class DspTest {
         val t = thd(out, 2, 0, 40.0, sr, 24_000)
         assertTrue("THD $t", t < 0.01) // antes: 1,3 % (auditoría)
     }
+
+    @Test fun ondaCuadradaConPreajusteNoSeRecorta() {
+        val sr = 48_000
+        val sq = FloatArray(96_000 * 2) { i -> if (((i / 2) / (sr / 160)) % 2 == 0) 0.98f else -0.98f } // 80 Hz
+        for (name in listOf("Voz", "Nocturno", "Rock", "Graves")) {
+            val g = DspParams(bands = BUILTIN_PRESETS.toMap().getValue(name))
+            val p = g.copy(preampDb = com.eddie.surco.audio.autoPreampDb(g))
+            val out = runBlocks(p, sq, sr)
+            val clipped = out.count { abs(it) >= 0.999f }
+            assertEquals("$name recorta $clipped muestras", 0, clipped)
+            assertTrue(out.maxOf { abs(it) } <= 0.98f + 1e-3f)
+        }
+    }
+
+    @Test fun tonoConEcualizadorApagadoTambienSeCompensa() {
+        val sr = 48_000
+        val t = DspParams(eqOn = false, bassDb = 12f)
+        val p = t.copy(preampDb = com.eddie.surco.audio.autoPreampDb(t))
+        assertTrue(peakGainDb(p) <= 0.01)
+        val out = runBlocks(p, tone(listOf(60.0), 0.9f, 96_000, sr), sr)
+        assertTrue("THD ${thd(out, 2, 0, 60.0, sr, 16_000)}", thd(out, 2, 0, 60.0, sr, 16_000) < 1e-4)
+    }
 }

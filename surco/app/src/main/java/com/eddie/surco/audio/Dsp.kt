@@ -43,7 +43,8 @@ data class DspParams(
     val crossfeed: Int = 0,
     val limiter: Boolean = true,
 ) {
-    val eqActive: Boolean get() = eqOn && (bands.any { abs(it) > 0.01f } || abs(preampDb) > 0.01f)
+    val eqActive: Boolean
+        get() = (eqOn && bands.any { abs(it) > 0.01f }) || abs(if (eqOn || toneActive) preampDb else 0f) > 0.01f
     val toneActive: Boolean get() = abs(bassDb) > 0.01f || abs(trebleDb) > 0.01f
 
     /** Sin ningún efecto: la señal pasa intacta. */
@@ -120,10 +121,18 @@ fun buildFilters(p: DspParams, fs: Double): List<Biquad> = buildList {
     if (abs(p.trebleDb) > 0.01f && TREBLE_FREQ < fs * 0.45) add(Biquad.highShelf(TREBLE_FREQ, p.trebleDb.toDouble(), fs))
 }
 
+/**
+ * Preamplificación que de verdad se aplica: con el ecualizador encendido o con el tono movido
+ * (la automática compensa también el tono). Con todo apagado, ninguna.
+ */
+fun effectivePreampDb(p: DspParams): Float = if (p.eqOn || p.toneActive) p.preampDb else 0f
+
+private fun slotsActive(p: DspParams) = p.toneActive || (p.eqOn && p.bands.any { abs(it) > 0.01f })
+
 /** Respuesta total en dB (preamplificación incluida) en cada frecuencia de [freqs]. */
 fun responseDb(p: DspParams, freqs: DoubleArray, fs: Double = 48_000.0): DoubleArray {
     val filters = buildFilters(p, fs)
-    val pre = if (p.eqOn) p.preampDb.toDouble() else 0.0
+    val pre = effectivePreampDb(p).toDouble()
     return DoubleArray(freqs.size) { i -> pre + filters.sumOf { it.magnitudeDb(freqs[i], fs) } }
 }
 
@@ -143,7 +152,7 @@ private class Chain(val p: DspParams, private val fs: Int, private val ch: Int) 
     private val z1 = DoubleArray(slots.size * ch)
     private val z2 = DoubleArray(slots.size * ch)
     private val active: IntArray
-    private val preamp = if (p.eqOn) 10.0.pow(p.preampDb / 20.0) else 1.0
+    private val preamp = 10.0.pow(effectivePreampDb(p) / 20.0)
 
     private var cfOn = false
     private var cfA0Lo = 0.0; private var cfB1Lo = 0.0
@@ -153,7 +162,9 @@ private class Chain(val p: DspParams, private val fs: Int, private val ch: Int) 
 
     // Limitador con anticipación: solo si la cadena puede pasar de 0 dB (bandas o tono que suben
     // más de lo que baja la preamplificación). Mono y balance nunca suben: no lo activan.
-    private val limiting = p.limiter && peakGainDb(p) > 0.05
+    // Con filtros el pico puede crecer aunque la curva no pase de 0 dB (el desfase sube la cresta
+    // de una onda cuadrada): el limitador vigila siempre que haya filtros, y solo actúa si se pasa.
+    private val limiting = p.limiter && (slotsActive(p) || peakGainDb(p) > 0.05)
     // Sin anticipación: un retardo solo cuando limita cambiaría la latencia al encender o apagar
     // efectos, y el fundido entre configuraciones chasquearía (medido: ×8,7 la segunda diferencia).
     private val look = 0
