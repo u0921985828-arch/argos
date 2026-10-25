@@ -12,6 +12,7 @@ on:
       - '.github/workflows/build-surco.yml'
       - '.github/scripts/smoke-surco.sh'
       - '.github/scripts/lint-surco.py'
+      - '.github/scripts/diseno-surco.*'
 
 permissions:
   contents: read
@@ -89,6 +90,8 @@ jobs:
   smoke:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
@@ -132,7 +135,35 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          script: bash .github/scripts/smoke-surco.sh Surco.apk
+          # Después de la prueba, el recorrido de diseño con la letra normal y con la letra grande.
+          script: |
+            bash .github/scripts/smoke-surco.sh Surco.apk
+            bash .github/scripts/diseno-surco.sh capturas 1.0
+            bash .github/scripts/diseno-surco.sh capturas13 1.3
+
+      - name: Design checks
+        if: always()
+        run: |
+          pip install -q pillow
+          for d in capturas capturas13; do [ -d "$d" ] && python3 .github/scripts/diseno-surco.py "$d" || true; done
+
+      # Las capturas en una rama (un solo commit, se reescribe) para revisarlas sin descargar artefactos.
+      - name: Publish screenshots to the `capturas-surco` branch
+        if: always()
+        run: |
+          set -e
+          [ -d capturas ] || exit 0
+          work=$(mktemp -d)
+          cp -r capturas "$work/"; [ -d capturas13 ] && cp -r capturas13 "$work/"
+          cd "$work"
+          git init -q -b capturas-surco
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Capturas de Surco de ${GITHUB_SHA::8}"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" capturas-surco
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/upload-artifact@v4
         if: always()
