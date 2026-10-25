@@ -193,7 +193,11 @@ sleep 5
 adb exec-out screencap -p > reservado.png
 cayo "con el FLAC de 96 kHz"
 e=$(estado); echo "reservado 96 kHz mono: $e"
+adb logcat -d > logcat.txt || true
+# Formato con el que llega al mezclador (5 = PCM float, 1 = 16 bits).
+adb shell dumpsys media.audio_flinger > flinger.txt 2>/dev/null || true
+echo "pistas en audio_flinger:"; grep -iE "^ *(Type|[ A-Z]*[0-9]+ +(yes|no))" flinger.txt | head -8 || true
+grep -o "Surco salida: .*" logcat.txt 2>/dev/null | tail -3 || true
 echo "$e" | grep -qE 'state=(PLAYING|3)|\(3\)' || fallo "el FLAC de 96 kHz no suena ($e)"
 
-adb logcat -d > logcat.txt || true
 echo "Surco 2: biblioteca, etiquetas, favorita, cola, ecualizador, persistencia y 96 kHz mono sin caerse"

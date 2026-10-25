@@ -130,3 +130,4 @@ jobs:
             ui.xml
             logcat.txt
             crash.txt
+            flinger.txt
