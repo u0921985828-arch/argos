@@ -109,10 +109,11 @@ fun VerticalSlider(
 @Composable
 fun SurcoSlider(
     value: Float, onChange: (Float) -> Unit, modifier: Modifier = Modifier,
-    range: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 0, onFinished: (() -> Unit)? = null,
+    range: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 0, onFinished: (() -> Unit)? = null, fill: Boolean = true,
 ) {
     val source = remember { MutableInteractionSource() }
-    val colors = SliderDefaults.colors(thumbColor = Copper, activeTrackColor = Copper, inactiveTrackColor = Panel2)
+    // Sin relleno en los que tienen el cero en medio (tono, balance): a 0 dB la pista medio cobre parecía un valor.
+    val colors = SliderDefaults.colors(thumbColor = Copper, activeTrackColor = if (fill) Copper else Panel2, inactiveTrackColor = Panel2)
     Slider(
         value = value, onValueChange = onChange, modifier = modifier, valueRange = range, steps = steps,
         onValueChangeFinished = onFinished, interactionSource = source, colors = colors,
@@ -134,7 +135,7 @@ fun LabeledSlider(
             if (onReset != null && value != 0f) IconButton(onClick = onReset) { Icon(Icons.Default.Refresh, "Poner a 0", tint = Muted) }
             Text(valueText, color = Copper, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
         }
-        SurcoSlider(value = value, onChange = onChange, range = range, steps = steps)
+        SurcoSlider(value = value, onChange = onChange, range = range, steps = steps, fill = range.start != -range.endInclusive)
     }
 }
 
