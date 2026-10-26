@@ -65,3 +65,24 @@ Ahora, barra inferior por orden de uso diario:
 | 5 | MENOR | La línea «Salida» podía presumir de 24 bits con un decodificador de 16 o mostrar el formato de la siguiente canción | Lo dice («el decodificador de este móvil entrega 16 bits») y se oculta si la frecuencia no casa con la que suena |
 | 6 | MENOR | Un búfer vacío con orden de bytes equivocado rompía el contrato de DefaultAudioSink | Búfer en orden nativo desde el principio y los vacíos se aceptan sin pasar |
 | 7 | MENOR | «A la cola» en aleatorio se volvía «A continuación» si la actual era la última | «A la cola» llega sin índice y siempre va al final del orden |
+
+## Diseño (medido en el emulador)
+
+Recorrido de 29 pantallas con captura, con la letra normal y ×1,3; comprobador automático y revisión visual de un revisor que no hizo la interfaz.
+
+| # | Gravedad | Hallazgo | Resolución |
+|---|---|---|---|
+| 1 | FATAL | El título de «Sonando» y el de la pantalla de permiso salían en negro sobre fondo oscuro (1,1:1) | Fuera del `Scaffold` Compose pinta en negro: `SurcoTheme` fija el color de contenido a `Paper` |
+| 2 | FATAL | El deslizador de «Sonando» se veía en tres piezas (barra, hueco, punto) y los del ecualizador, punteados | `SurcoSlider`: pulgar redondo, pista continua, sin marcas; los de cero en medio, sin relleno |
+| 3 | GRAVE | La ficha técnica salía tres veces en «Sonando» | Línea de salida solo si recorta o cambia la señal; chips sin el grupo Archivo (siguen en «Más») |
+| 4 | GRAVE | «Seguir escuchando» repetía el minirreproductor | Solo cuando no hay nada cargado |
+| 5 | GRAVE | «Varios artistas» en casi todas las tarjetas | «Otra Banda, Banda Surco y 2 más», una sola función |
+| 6 | GRAVE | Dos colores de «seleccionado» y chips de 32–34 dp | `chipColors()` y 40 dp en los 9 sitios |
+| 7 | GRAVE | Ajustes como un manual y márgenes distintos | Una frase por opción; `OptionRow` a 20 dp con flecha |
+| 8 | GRAVE | Letra ×1,3: «Carpetas» fuera, títulos cortados, «Fuert/e» partido, buscador de dos líneas | Chips sin recuento (total en la cabecera), dos líneas, fila que desliza, una línea |
+| 9 | GRAVE | Tres cabeceras distintas en cuatro pestañas | `TabHeader` en las cuatro |
+| 10 | GRAVE | Primera apertura: botones que no hacen nada sin canciones; círculo vacío en permiso; listas vacías igual de destacadas | Solo el aviso; icono; listas vacías en gris e iconos que no dicen «oculto» |
+| 11 | MENOR | «0» de reinicio junto al valor; preajuste como nombre del botón EQ; etiqueta como «Más» | Icono de reinicio solo si hace falta; «EQ»; «⋮» |
+
+Medido: el comprobador final da 6 fallos con letra normal y 5 con ×1,3 en las capturas de partida, y 0 y 0 en las de ahora. El CI es estricto desde entonces.
+No aplicado: unificar radios en dos constantes (cosmético).

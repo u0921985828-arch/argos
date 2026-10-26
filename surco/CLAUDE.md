@@ -6,6 +6,8 @@ App nativa Android (Kotlin + Jetpack Compose + Media3). Lee todas las etiquetas 
 - **Surco 2.1**: salida sin recortar a 16 bits, auditoría independiente aplicada (`AUDITORIA.md`) y app en pestañas. Pruebas JVM (motor, PCM, letras, ReplayGain/R128/Opus, cola, búsqueda) + debug/release + prueba de humo en emulador con el APK de release.
 - Se compila en GitHub Actions (`.github/workflows/build-surco.yml` del repo `argos`, donde vive en `surco/`): el contenedor de desarrollo no llega a Google Maven ni al Android SDK. Cada push que toque `surco/` deja los APK en el artifact `surco-apk` y en la rama `apk-surco` (un solo commit, se reescribe).
 - Las partes puras se prueban también sin Android con `kotlinc` + JUnit (ver ESTADO.md).
+- **Sin errores**: Kotlin con `allWarningsAsErrors`; Android Lint con 0 errores y 0 avisos (`.github/scripts/lint-surco.py` tumba el CI); versiones fijadas como informativas en lint, con su motivo.
+- **Diseño medido**: tras la prueba de humo, `.github/scripts/diseno-surco.sh` recorre 29 pantallas con la letra normal y ×1,3, deja las capturas en la rama `capturas-surco` y `diseno-surco.py --estricto` tumba el CI con un toque < 40 dp, contraste < 4,5:1 (3:1 en grande), un solape real o algo fuera de pantalla.
 - El release va firmado con la clave de depuración del ejecutor, que cambia en cada compilación: para instalar uno nuevo encima hay que desinstalar el anterior. Una clave propia lo arregla.
 
 ## Sonido (lo importante)
@@ -37,7 +39,7 @@ AGP 8.7.3 · Kotlin 2.0.21 · Gradle 8.14.3 · Compose BOM 2024.12.01 · Media3 
 - `data/` — `LibraryScanner.kt` (MediaStore + jaudiotagger + Opus propio, `cleanText` quita nulos de WAV), `Disk.kt` (AtomicFile, un hilo de escritura, JSON roto apartado), `UserStore.kt` (favoritas, listas, escuchas, cola con aleatorio/repetición, `reconcile` por claves estables), `PureQueue.kt` (reanudar, claves, órdenes aleatorios), `PureText.kt` (búsqueda sin tildes), `PureOpus.kt`, `PureReplayGain.kt`, `Lyrics.kt`, `TagField.kt`, `Track.kt`.
 - `player/PlaybackService.kt` — ExoPlayer con un solo renderizador de audio; salta archivos rotos con aviso; ReplayGain; fundido solo al reanudar; aleatorio que empieza por la actual y «a continuación» que respeta su nombre; temporizador; escuchas; reanudar (fuera del hilo principal).
 - `player/PlayerConnection.kt` — controlador, cola en orden de reproducción, «Seguir escuchando».
-- `ui/` — `Home.kt` (Inicio, Biblioteca, Buscar, barra inferior), `Screens.kt` (Etiquetas, grupos, listas de canciones, `rememberOffMain`), `PlayerUi.kt` («Sonando», letra, cola, temporizador, velocidad, menú de canción, línea de salida), `EqualizerScreen.kt`, `LibraryScreens.kt` (listas y ajustes), `Controls.kt` (deslizadores accesibles), `Theme.kt` (portadas por bytes y tamaños).
+- `ui/` — `Home.kt` (Inicio, Biblioteca, Buscar, barra inferior), `Screens.kt` (Etiquetas, grupos, listas de canciones, `rememberOffMain`), `PlayerUi.kt` («Sonando», letra, cola, temporizador, velocidad, menú de canción, línea de salida), `EqualizerScreen.kt`, `LibraryScreens.kt` (listas y ajustes), `Controls.kt` (deslizadores accesibles, `SurcoSlider`: pulgar redondo y pista continua; el de Material 1.3 se veía en tres piezas), `Theme.kt` (portadas por bytes y tamaños; `chipColors`/`ChipHeight` para todos los chips; color de contenido `Paper`: fuera del Scaffold Compose pinta en negro).
 
 ## Pendiente
 - «Bit-perfect» por USB (Android 14+), fundido cruzado entre canciones, índice de letras en álbumes, Android Auto, edición de etiquetas.

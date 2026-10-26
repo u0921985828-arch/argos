@@ -9,6 +9,8 @@ on:
   push:
     paths:
       - 'surco/**'
+      # La documentación no recompila: un push de solo .md cancelaba la compilación en curso.
+      - '!surco/**/*.md'
       - '.github/workflows/build-surco.yml'
       - '.github/scripts/smoke-surco.sh'
       - '.github/scripts/lint-surco.py'
