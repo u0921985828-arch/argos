@@ -201,3 +201,14 @@ Encargo: «Los pop ups que se usan en el móvil se podrían modificar también?�
   - Foco del campo de nombre dentro de la hoja; sin franja huérfana con «Sonando» abierta y sin canción; sombra y borde en la franja.
 - CI: un push cambió la lambda final de `Notice.show` al parámetro nuevo `long` (no compilaba) → la acción vuelve a ser el último parámetro. El humo con música tardaba tanto en la persiana que «Prueba Dos» (20 s) se acababa → se prueba en pausa. Desde octubre de 2026 `ubuntu-latest` es 26.04: instalar ffmpeg tardó 30 min y la descarga del emulador se cortó → el humo va fijado en `ubuntu-24.04`.
 - CI verde (run 40376253523): notificación con «Marcar favorita» y «Activar aleatorio»; pulsado en la persiana → «Desactivar aleatorio» y vuelta; aviso «Añadida a favoritas» → Deshacer → otra vez «Añadida»; «Sonando» con 11 tocables; recorrido de 38 pantallas ×2 con diseño estricto 0 (también `aviso`); «OK (4 tests)». Caso reservado: la hoja «Lista nueva» queda encima del teclado (captura `18-lista-nueva`), revisado a ojo.
+
+## Surco 2.5 — «Sonando» opaca y adaptable
+Encargo (con captura del móvil real): «No es responsive no? Y el degradado a opaco no me mola mucho» y «el huecazo de aire que hay debajo del menú».
+- Causa: el fondo era un degradado que empezaba con alfa 0,55 y dejaba ver Inicio por debajo (el «Buenas noches» y una portada asomando); la portada era fija (380 dp) y lo que sobraba quedaba abajo.
+- Fondo liso y opaco: un 18 % del color de la portada sobre el de la app (empieza con el de la caché: al girar no pasa por el gris).
+- Vertical: la portada toma lo que dejan la barra y los mandos (que crecen con la letra del sistema); los mandos van abajo y lo que sobra se reparte arriba y abajo de la portada. Horizontal o tableta: portada a la izquierda y mandos a la derecha.
+- Revisión por ataque (1 importante, 2 menores), aplicada: en horizontal los huecos dejaban pasar toques a Inicio (`pointerInput` vacío en el fondo); la letra abierta se cerraba al girar (`rememberSaveable`); parpadeo del fondo al girar.
+- El diseño estricto cazó además que, en horizontal, TalkBack leía lo de Inicio que asomaba por los huecos → un nodo de accesibilidad (`paneTitle = "Sonando"`) que cubre toda la pantalla.
+- Prueba nueva FONDO en `diseno-surco.py` (bordes de un solo color en «Sonando», en horizontal y con letra); con la captura del móvil real y con la de antes falla. Captura en horizontal girando el emulador.
+- CI verde (run 40398712414): 39 pantallas ×2 con diseño estricto 0, incluido FONDO; humo y «OK (4 tests)».
+- Pendiente de la CI: instalar ffmpeg en el ejecutor de GitHub tarda ahora ~30 min (también en 24.04); habría que cachearlo o generar la música de prueba sin apt.
