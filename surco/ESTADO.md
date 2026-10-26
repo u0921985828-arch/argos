@@ -72,3 +72,20 @@ Encargo: «MODO ABSOLUTO / Sin errores».
 - Lint medido: 12 errores (3 ProduceStateDoesNotAssignValue, 9 UnsafeOptInUsageError) y 11 avisos (7 GradleDependency, OldTargetApi, ExportedService, 2 ObsoleteSdkInt) → corregidos o anotados.
 - Trampa: `::error::` se convierte en anotación y no sale en el log; el script imprime cada error también en claro.
 - Revisión por ataque: 1 FATAL (dos produceState ocultos por el tope de 10 anotaciones; ya corregido) y 2 MENORES (rutas cortadas en lint-surco.py; runs en paralelo que se pisaban `apk-surco`) → corregidos: rutas desde la raíz con `file=`/`line=`, y `concurrency` que cancela el run anterior de la misma rama.
+
+# Surco 2.1 — diseño
+
+Encargo: «¿Y de diseño?».
+
+## Criterios
+- C1: recorrido de 29 pantallas en el emulador con captura y volcado (`.github/scripts/diseno-surco.sh`), con la letra normal y ×1,3; las capturas quedan en la rama `capturas-surco`.
+- C2: comprobador medible (`.github/scripts/diseno-surco.py`): tamaño de lo tocable (< 40 dp falla; 40–47 aviso), contraste WCAG (4,5:1; 3:1 en grande), solapes reales entre tocables, nodos fuera de pantalla. Línea base: 82 fallos con letra normal, 16 con ×1,3 (antes de calibrar: casi todo eran solapes de los objetivos de 48 dp que Compose declara).
+- C3: revisión visual independiente (un revisor que no construyó la interfaz) con FATAL/GRAVE arreglados.
+- Caso reservado: letra del sistema ×1,3.
+
+## Hecho
+- Visto en las capturas (no en el código): el título de «Sonando» y el de la pantalla de permiso salían en NEGRO sobre fondo oscuro (contraste 1,1:1). Causa: fuera del `Scaffold` el color de contenido de Compose es negro. `SurcoTheme` lo fija a `Paper`.
+- Chips de etiquetas y de acciones de 34 dp → 40 dp mínimo y 8 dp de hueco; chips de «Explorar por etiquetas» a 40 dp.
+- «Más escuchadas» se cortaba con letra ×1,3 → dos líneas.
+- Filas de opción de Ajustes sin señal de que se pulsan → flecha a la derecha.
+- Calibración del comprobador: piezas de deslizador (< 10 dp) no cuentan; botón desactivado sin contraste; el botón de borrar dentro del campo de texto no solapa; «ajustado» (40–47 dp) solo avisa.
