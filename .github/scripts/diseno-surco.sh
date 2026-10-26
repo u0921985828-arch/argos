@@ -171,6 +171,10 @@ PY
 )
 [ -n "$mini" ] && adb shell input tap $mini
 sleep 2; cap sonando
+# En horizontal (girar el móvil): portada a un lado y mandos al otro, todo dentro de la pantalla.
+adb shell settings put system accelerometer_rotation 0
+adb shell settings put system user_rotation 1; sleep 3; cap sonando-horizontal
+adb shell settings put system user_rotation 0; sleep 3
 adb shell input swipe 540 1700 540 600 400; cap sonando-abajo
 ui; tap "Letra"; sleep 2; cap letra
 ui; tap "Letra"; sleep 1

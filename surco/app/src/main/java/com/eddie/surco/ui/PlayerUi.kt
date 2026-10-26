@@ -13,7 +13,8 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -79,7 +80,7 @@ import androidx.compose.material.icons.filled.GraphicEq
 import com.eddie.surco.data.parseKey
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -90,6 +91,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -227,26 +229,25 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
     // anterior hasta tener el nuevo, para que el fondo cambie con la animación y no pase por el gris.
     var tint by remember { mutableStateOf<Color?>(null) }
     LaunchedEffect(track.artKey) { tint = artColor(ctx, track) }
-    val top by animateColorAsState(tint?.copy(alpha = 0.55f) ?: Panel, tween(600), label = "fondo")
+    // Fondo liso y opaco: un toque del color de la portada sobre el fondo de la app. El degradado
+    // de antes empezaba transparente y dejaba ver Inicio por debajo.
+    val bg by animateColorAsState(tint?.let { lerp(Ink, it, 0.18f) } ?: Ink, tween(600), label = "fondo")
 
-    Column(
-        Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(top, Ink, Ink)))
-            .statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
+    val header: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { vm.nowPlayingOpen = false }) { Icon(Icons.Default.KeyboardArrowDown, "Cerrar", Modifier.size(30.dp)) }
             Text("SONANDO", color = Paper.copy(alpha = 0.7f), fontSize = 12.sp, letterSpacing = 1.6.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
             IconButton(onClick = { vm.sheet = SongSheetState(track, fromPlayer = true) }) { Icon(Icons.Default.MoreVert, "Más") }
         }
-        Spacer(Modifier.height(12.dp))
-        val artMod = Modifier.widthIn(max = 380.dp).fillMaxWidth().aspectRatio(1f)
+    }
+    // La portada (o la letra) a [size]: lo decide el hueco que deja la pantalla, no un tamaño fijo.
+    val artBlock: @Composable (Dp) -> Unit = { size ->
+        val artMod = Modifier.size(size)
         if (showLyrics) {
             LyricsPanel(vm, track, pos, artMod.clip(RoundedCornerShape(14.dp)).background(Panel.copy(alpha = 0.6f)))
         } else {
             Art(
-                track, 340.dp, corner = 14.dp,
+                track, size, corner = 14.dp,
                 // Deslizar a los lados cambia de canción. Solo horizontal: el vertical es de la pantalla,
                 // que con letra grande se desplaza (y se cierra con la flecha de arriba o «Atrás»).
                 modifier = artMod.pointerInput(track.id) {
@@ -258,80 +259,115 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
                 },
             )
         }
-        Spacer(Modifier.height(22.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(track.title, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(
-                    listOf(track.artist, track.album).filter { it.isNotBlank() }.joinToString(" — "),
-                    color = Muted, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.clickable { vm.goToArtist(track) },
-                )
+    }
+    val controls: @Composable () -> Unit = {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(track.title, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        listOf(track.artist, track.album).filter { it.isNotBlank() }.joinToString(" — "),
+                        color = Muted, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.clickable { vm.goToArtist(track) },
+                    )
+                }
+                IconButton(onClick = { toggleFavorite(track) }) {
+                    Icon(if (fav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, if (fav) "Quitar de favoritas" else "Favorita",
+                        tint = if (fav) Copper else Muted, modifier = Modifier.size(28.dp))
+                }
             }
-            IconButton(onClick = { toggleFavorite(track) }) {
-                Icon(if (fav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, if (fav) "Quitar de favoritas" else "Favorita",
-                    tint = if (fav) Copper else Muted, modifier = Modifier.size(28.dp))
+            // Formato, bits y salida solo si se piden (Ajustes → Interfaz): «Sonando» queda limpia.
+            if (prefs.techDetails) {
+                val q = qualityLine(track)
+                if (q.isNotEmpty()) {
+                    Text(q, color = Teal, fontSize = 12.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+                }
+                outputLine(track)?.let { Text(it, color = Muted, fontSize = 11.sp, lineHeight = 15.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth()) }
             }
-        }
-        // Formato, bits y salida solo si se piden (Ajustes → Interfaz): «Sonando» queda limpia.
-        if (prefs.techDetails) {
-            val q = qualityLine(track)
-            if (q.isNotEmpty()) {
-                Text(q, color = Teal, fontSize = 12.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+            Spacer(Modifier.height(10.dp))
+            SurcoSlider(
+                value = if (dragging) dragVal else if (dur > 0) (pos / dur.toFloat()).coerceIn(0f, 1f) else 0f,
+                onChange = { dragging = true; dragVal = it },
+                onFinished = { p.seek((dragVal * dur).toLong()); dragging = false },
+            )
+            Row(Modifier.fillMaxWidth()) {
+                Text(fmtTime(if (dragging) (dragVal * dur).toLong() else pos), color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                Spacer(Modifier.weight(1f))
+                Text("−" + fmtTime((dur - pos).coerceAtLeast(0)), color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
             }
-            outputLine(track)?.let { Text(it, color = Muted, fontSize = 11.sp, lineHeight = 15.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth()) }
-        }
-        Spacer(Modifier.height(10.dp))
-        SurcoSlider(
-            value = if (dragging) dragVal else if (dur > 0) (pos / dur.toFloat()).coerceIn(0f, 1f) else 0f,
-            onChange = { dragging = true; dragVal = it },
-            onFinished = { p.seek((dragVal * dur).toLong()); dragging = false },
-        )
-        Row(Modifier.fillMaxWidth()) {
-            Text(fmtTime(if (dragging) (dragVal * dur).toLong() else pos), color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-            Spacer(Modifier.weight(1f))
-            Text("−" + fmtTime((dur - pos).coerceAtLeast(0)), color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-        }
-        Spacer(Modifier.height(6.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { p.toggleShuffle() }, Modifier.semantics { stateDescription = if (p.shuffle) "Activado" else "Desactivado" }) {
-                Icon(Icons.Default.Shuffle, "Aleatorio", tint = if (p.shuffle) Copper else Muted)
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { p.toggleShuffle() }, Modifier.semantics { stateDescription = if (p.shuffle) "Activado" else "Desactivado" }) {
+                    Icon(Icons.Default.Shuffle, "Aleatorio", tint = if (p.shuffle) Copper else Muted)
+                }
+                IconButton(onClick = { p.prev() }, Modifier.size(56.dp)) { Icon(Icons.Default.SkipPrevious, "Anterior", Modifier.size(36.dp)) }
+                FilledIconButton(
+                    onClick = { p.toggle() }, modifier = Modifier.size(72.dp),
+                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = Copper, contentColor = Ink),
+                ) { Icon(if (p.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "Reproducir o pausar", Modifier.size(40.dp)) }
+                IconButton(onClick = { p.next() }, Modifier.size(56.dp)) { Icon(Icons.Default.SkipNext, "Siguiente", Modifier.size(36.dp)) }
+                IconButton(onClick = { p.cycleRepeat() }, Modifier.semantics {
+                    stateDescription = when (p.repeat) { Player.REPEAT_MODE_ONE -> "Una"; Player.REPEAT_MODE_ALL -> "Todas"; else -> "Desactivado" }
+                }) {
+                    Icon(
+                        if (p.repeat == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat, "Repetir",
+                        tint = if (p.repeat == Player.REPEAT_MODE_OFF) Muted else Copper,
+                    )
+                }
             }
-            IconButton(onClick = { p.prev() }, Modifier.size(56.dp)) { Icon(Icons.Default.SkipPrevious, "Anterior", Modifier.size(36.dp)) }
-            FilledIconButton(
-                onClick = { p.toggle() }, modifier = Modifier.size(72.dp),
-                colors = IconButtonDefaults.filledIconButtonColors(containerColor = Copper, contentColor = Ink),
-            ) { Icon(if (p.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "Reproducir o pausar", Modifier.size(40.dp)) }
-            IconButton(onClick = { p.next() }, Modifier.size(56.dp)) { Icon(Icons.Default.SkipNext, "Siguiente", Modifier.size(36.dp)) }
-            IconButton(onClick = { p.cycleRepeat() }, Modifier.semantics {
-                stateDescription = when (p.repeat) { Player.REPEAT_MODE_ONE -> "Una"; Player.REPEAT_MODE_ALL -> "Todas"; else -> "Desactivado" }
-            }) {
-                Icon(
-                    if (p.repeat == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat, "Repetir",
-                    tint = if (p.repeat == Player.REPEAT_MODE_OFF) Muted else Copper,
-                )
+            Spacer(Modifier.height(10.dp))
+            // Solo lo de cada día: letra y cola. Temporizador, velocidad, ecualizador y etiquetas, en «⋮».
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                ToolButton(Icons.Default.FormatQuote, "Letra", showLyrics) { showLyrics = !showLyrics }
+                ToolButton(Icons.AutoMirrored.Filled.QueueMusic, "Cola", false) { vm.queueOpen = true }
             }
-        }
-        Spacer(Modifier.height(10.dp))
-        // Solo lo de cada día: letra y cola. Temporizador, velocidad, ecualizador y etiquetas, en «⋮».
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            ToolButton(Icons.Default.FormatQuote, "Letra", showLyrics) { showLyrics = !showLyrics }
-            ToolButton(Icons.AutoMirrored.Filled.QueueMusic, "Cola", false) { vm.queueOpen = true }
-        }
-        // Lo que está activo y cambia cómo suena, a la vista y a un toque de quitarlo.
-        val active = buildList {
-            if (sleepTrack) add(Icons.Default.Timer to "Para al acabar")
-            else sleepEnd?.let { add(Icons.Default.Timer to "Para en ${sleepRemaining(it)}") }
-            if (prefs.speed != 1f) add(Icons.Default.Speed to "%.2f×".format(Locale("es"), prefs.speed).replace(",00", ""))
-        }
-        if (active.isNotEmpty()) {
-            Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                active.forEach { (icon, label) ->
-                    StatusPill(icon, label) { if (icon == Icons.Default.Timer) vm.sleepOpen = true else vm.speedOpen = true }
+            // Lo que está activo y cambia cómo suena, a la vista y a un toque de quitarlo.
+            val active = buildList {
+                if (sleepTrack) add(Icons.Default.Timer to "Para al acabar")
+                else sleepEnd?.let { add(Icons.Default.Timer to "Para en ${sleepRemaining(it)}") }
+                if (prefs.speed != 1f) add(Icons.Default.Speed to "%.2f×".format(Locale("es"), prefs.speed).replace(",00", ""))
+            }
+            if (active.isNotEmpty()) {
+                Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    active.forEach { (icon, label) ->
+                        StatusPill(icon, label) { if (icon == Icons.Default.Timer) vm.sleepOpen = true else vm.speedOpen = true }
+                    }
                 }
             }
         }
-        Spacer(Modifier.height(24.dp))
+    }
+
+    BoxWithConstraints(Modifier.fillMaxSize().background(bg).statusBarsPadding().navigationBarsPadding()) {
+        val w = maxWidth
+        val h = maxHeight
+        if (w > h && w >= 560.dp) {
+            // En horizontal o en tableta: portada a la izquierda y mandos a la derecha.
+            val art = minOf(h - 80.dp, w / 2 - 48.dp, 560.dp).coerceAtLeast(120.dp)
+            Column(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
+                header()
+                Row(Modifier.fillMaxWidth().weight(1f).padding(bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { artBlock(art) }
+                    Spacer(Modifier.width(32.dp))
+                    Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                        Column(Modifier.widthIn(max = 520.dp).verticalScroll(rememberScrollState())) { controls() }
+                    }
+                }
+            }
+        } else {
+            // En vertical: la portada se queda con lo que dejan la barra y los mandos (que crecen con
+            // la letra del sistema), y lo que sobra se reparte arriba y abajo. Si no cabe, se desplaza.
+            val chrome = 96.dp + 340.dp * LocalDensity.current.fontScale
+            val art = minOf(w - 48.dp, h - chrome, 560.dp).coerceAtLeast(160.dp)
+            Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).heightIn(min = h).padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween,
+            ) {
+                header()
+                artBlock(art)
+                Column(Modifier.widthIn(max = 560.dp).padding(bottom = 16.dp)) { controls() }
+            }
+        }
     }
 }
 

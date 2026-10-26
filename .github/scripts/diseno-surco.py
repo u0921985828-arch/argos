@@ -6,7 +6,8 @@ Para cada pantalla (NN-nombre.png + NN-nombre.xml):
   - CONTRASTE: texto por debajo de 4,5:1 (3:1 si es grande; se toma por grande una sola línea
     de 24 dp de alto o más, que equivale a unos 18 sp);
   - SALE: un nodo de Surco que se sale de la pantalla por los lados;
-  - SOLAPE: dos cosas tocables que se pisan sin estar una dentro de la otra.
+  - SOLAPE: dos cosas tocables que se pisan sin estar una dentro de la otra;
+  - FONDO: en «Sonando» (y su letra) los bordes no son de un solo color (degradado o transparencia).
 Escribe informe.txt en la carpeta y sale con 1 si hay algún fallo y se pasa --estricto.
 Uso: diseno-surco.py CARPETA [--estricto]
 """
@@ -131,6 +132,16 @@ for xmlf in sorted(glob.glob(os.path.join(carpeta, "*.xml"))):
                 menor = min((a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1]))
                 if ix * iy > menor / 3:
                     pant.append(f"  SOLAPE «{toc[i][1][:30]}» y «{toc[j][1][:30]}»")
+    # «Sonando» tapa la pantalla entera con un fondo liso: si los bordes cambian de color de arriba
+    # abajo, hay degradado o se ve lo de debajo (pasó: el degradado empezaba transparente).
+    if re.search(r"-(sonando|sonando-abajo|sonando-horizontal|letra)$", nombre):
+        rgb = img.convert("RGB")
+        for x in (2, W - 3):
+            col = [rgb.getpixel((x, y)) for y in range(int(H * 0.08), int(H * 0.95), 8)]
+            ref = sorted(col)[len(col) // 2]
+            malos = sum(1 for c in col if max(abs(c[k] - ref[k]) for k in range(3)) > 6)
+            if malos:
+                pant.append(f"  FONDO no liso en x={x}: {malos} de {len(col)} puntos lejos de #{ref[0]:02x}{ref[1]:02x}{ref[2]:02x}")
     pant = sorted(set(pant))
     fallos += len(pant)
     informe.append(f"{nombre}: {len(pant)}")
