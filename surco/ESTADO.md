@@ -191,3 +191,11 @@ Encargo: «Los pop ups que se usan en el móvil se podrían modificar también?�
 - `SurcoSheet` sobre `ModalBottomSheet`: fondo de la app, título grande, botones de 48 dp abajo (principal en el acento; lo que borra, en rojo). Se cierra deslizando o tocando fuera.
 - Avisos (`ui/Notice.kt`): uno a la vez, 3,5 s (6 s con acción), encima del minirreproductor; en «Sonando», arriba, para no tapar los mandos. El servicio usa la franja si la app se ve y Toast si no (una canción rota con la app cerrada sigue avisando).
 - Borrar una lista sigue pidiendo confirmación y además se puede deshacer.
+- Revisión por ataque (0 bloqueantes, 3 importantes, 6 menores), aplicada:
+  - «Deshacer»/«Ver» quedaban debajo de la cola y del menú de canción (cada hoja es su propia ventana) → cada hoja lleva su franja.
+  - Deshacer «quitar de la cola» en aleatorio la devolvía a otro sitio del orden → en aleatorio, aviso sin «Deshacer».
+  - La captura del aviso podía cogerlo saliendo (falso contraste) → se lanza desde el corazón del minirreproductor y dura 8 s con acción; caducidad propia del aviso (cambiar de pantalla no reinicia la cuenta) y 6 s para los largos.
+  - El canal «Música» no se aplicaba al actualizar (el de Media3 ya existía) → canal `musica` nuevo y se borra el viejo.
+  - La persiana plegada no enseña los botones propios → el humo despliega los ajustes rápidos.
+  - «Aleatorio activado» describía el estado, no la acción → «Desactivar aleatorio».
+  - Foco del campo de nombre dentro de la hoja; sin franja huérfana con «Sonando» abierta y sin canción; sombra y borde en la franja.
