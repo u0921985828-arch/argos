@@ -117,11 +117,28 @@ ui; tap "Favoritas"; sleep 2; cap favoritas
 back
 
 ui; tap "Inicio"; sleep 1; ui; tap "Ajustes"; sleep 2; cap ajustes
-adb shell input swipe 540 1700 540 600 400; cap ajustes-abajo
-ui; tap "Ecualizador y efectos" || { adb shell input swipe 540 600 540 1700 300; ui; tap "Ecualizador y efectos"; }
-sleep 2; cap ecualizador
+ui; tap "Sonido"; sleep 2; cap ajustes-sonido
+ui; tap "Ecualizador y efectos"; sleep 2; cap ecualizador
 adb shell input swipe 540 1700 540 600 400; cap ecualizador-abajo
 back; back
+ui; tap "Reproducción"; sleep 2; cap ajustes-reproduccion
+ui; tap "4 s"; sleep 1; cap ajustes-fundido
+ui; tap "No"; sleep 1; back
+ui; tap "Carpetas, audios cortos y volver a leer"; sleep 2; cap ajustes-biblioteca; back
+ui; tap "Interfaz"; sleep 2; cap ajustes-interfaz
+if [ "$ESCALA" != "1.0" ]; then
+    # Caso reservado: el acento elegido en la pasada anterior (Violeta) tiene que seguir tras reiniciar.
+    python3 - <<'PY' || { echo "::error::el acento Violeta no se conservó al reiniciar"; exit 1; }
+import sys, xml.etree.ElementTree as ET
+r = ET.parse("ui.xml").getroot()
+sys.exit(0 if any(n.get("content-desc") == "Violeta" and n.get("selected") == "true" for n in r.iter("node")) else 1)
+PY
+    echo "  acento Violeta conservado"
+fi
+adb shell input swipe 540 1700 540 600 400; cap ajustes-interfaz-abajo; back
+ui; tap "Tus escuchas"; sleep 2; cap ajustes-escuchas; back
+ui; tap "Acerca de Surco"; sleep 2; cap ajustes-acerca; back
+back
 ui; tap "Inicio"; sleep 1
 
 # «Sonando»: desde el minirreproductor (toca el título de la canción preparada).
@@ -147,11 +164,18 @@ ui; tap "Letra"; sleep 2; cap letra
 ui; tap "Letra"; sleep 1
 ui; tap "Cola"; sleep 2; cap cola
 back
-ui; tap "Dormir" || tap "Al final" || true; sleep 1; cap temporizador
+ui; tap "Más"; sleep 2; cap sonando-mas
+ui; tap "Temporizador"; sleep 1; cap temporizador
 back
-ui; tap "1×" || tapre "1" || true; sleep 1; cap velocidad
+ui; tap "Más"; sleep 2; ui; tap "Velocidad"; sleep 1; cap velocidad
 back
 ui; tap "Cerrar"; sleep 1
+if [ "$ESCALA" = "1.0" ]; then
+    # Para la pasada siguiente (caso reservado): acento Violeta, que tiene que sobrevivir al reinicio.
+    ui; tap "Ajustes"; sleep 2; ui; tap "Interfaz"; sleep 2; ui; tap "Violeta"; sleep 2
+    adb exec-out screencap -p > "$OUT/acento-violeta.png"
+    back; back
+fi
 
 # Sin permiso: la pantalla de bienvenida.
 adb shell am force-stop "$PKG"

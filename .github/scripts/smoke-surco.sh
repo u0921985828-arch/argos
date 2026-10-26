@@ -178,8 +178,37 @@ sleep 1
 tap "Otra Banda" || fallo "no encuentro el minirreproductor"
 sleep 2; ui
 grep -q 'text="SONANDO"' ui.xml || fallo "no se abrió «Sonando»"
-grep -q 'text="FLAC · 16 bits' ui.xml || fallo "«Sonando» no enseña la calidad del archivo"
 grep -q 'content-desc="Quitar de favoritas"' ui.xml || fallo "la favorita no quedó marcada"
+# «Sonando» limpia por defecto: sin líneas técnicas y con pocos mandos.
+grep -q 'text="FLAC · 16 bits' ui.xml && fallo "«Sonando» enseña los detalles técnicos sin pedirlos"
+n=$(grep -o 'clickable="true"' ui.xml | wc -l)
+echo "«Sonando»: $n elementos tocables (antes 16)"
+[ "$n" -le 12 ] || fallo "«Sonando» tiene $n elementos tocables (máximo 12)"
+adb exec-out screencap -p > sonando-limpia.png
+# Los detalles técnicos se piden en Ajustes → Interfaz.
+tap "Cerrar" || fallo "no encuentro «Cerrar» en «Sonando»"
+sleep 1
+for _ in 1 2 3; do ui; grep -q 'content-desc="Ajustes"' ui.xml && break; adb shell input keyevent KEYCODE_BACK; sleep 1; done
+tap "Ajustes" || fallo "no encuentro Ajustes en Inicio"
+sleep 2; ui
+tap "Interfaz" || fallo "no encuentro la sección Interfaz en Ajustes"
+sleep 2; ui
+tap "Detalles técnicos" || fallo "no encuentro «Detalles técnicos» en Interfaz"
+sleep 1; ui
+python3 - <<'PY' || fallo "«Detalles técnicos» no se activó"
+import sys, xml.etree.ElementTree as ET
+root = ET.parse("ui.xml").getroot()
+# La fila entera es el interruptor: el nodo marcable que contiene el título está marcado.
+ok = any(n.get("checkable") == "true" and n.get("checked") == "true" and any(c.get("text") == "Detalles técnicos" for c in n.iter("node"))
+         for n in root.iter("node"))
+sys.exit(0 if ok else 1)
+PY
+adb exec-out screencap -p > interfaz.png
+adb shell input keyevent KEYCODE_BACK; sleep 1
+adb shell input keyevent KEYCODE_BACK; sleep 1; ui
+tap "Otra Banda" || fallo "no encuentro el minirreproductor"
+sleep 2; ui
+grep -q 'text="FLAC · 16 bits' ui.xml || fallo "«Sonando» no enseña la calidad del archivo con los detalles técnicos puestos"
 # Un FLAC se decodifica en coma flotante y llega así al sistema (no se recorta a 16 bits).
 grep -q 'text="Salida: [^"]*coma flotante' ui.xml || fallo "«Sonando» no dice que el FLAC sale en coma flotante"
 adb exec-out screencap -p > sonando2.png
@@ -191,7 +220,9 @@ grep -q 'text="Vaciar"' ui.xml && grep -q 'text="2 canciones · 0 min"' ui.xml &
 adb exec-out screencap -p > cola.png
 adb shell input keyevent KEYCODE_BACK; sleep 1; ui
 
-tap "EQ" || fallo "no encuentro el botón del ecualizador"
+tap "Más" || fallo "no encuentro «Más» en «Sonando»"
+sleep 2; ui
+tap "Ecualizador" || fallo "no encuentro el ecualizador en el menú de «Sonando»"
 sleep 2; ui
 grep -q 'text="Ecualizador"' ui.xml && grep -q 'text="Graves y agudos"' ui.xml || fallo "no se abrió el ecualizador"
 tap "Graves" || fallo "no encuentro el preajuste Graves"
@@ -217,11 +248,14 @@ grep -q 'content-desc="Reproducir o pausar"' ui.xml && grep -q 'text="Prueba Dos
 adb exec-out screencap -p > inicio2.png
 tap "Ajustes" || fallo "no encuentro Ajustes en Inicio"
 sleep 2; ui
-tap "Ecualizador y efectos" || fallo "no encuentro el ecualizador en Ajustes"
+tap "Sonido" || fallo "no encuentro la sección Sonido en Ajustes"
+sleep 2; ui
+tap "Ecualizador y efectos" || fallo "no encuentro el ecualizador en Ajustes → Sonido"
 sleep 2; ui
 # El subtítulo bajo «Ecualizador» es el preajuste activo (el chip «Graves» está siempre).
 sub=$(grep -o 'text="[^"]*"' ui.xml | grep -v '^text=""$' | grep -A1 '^text="Ecualizador"$' | sed -n 2p || true)
 [ "$sub" = 'text="Graves"' ] || fallo "el preajuste Graves no se guardó (subtítulo: $sub)"
+adb shell input keyevent KEYCODE_BACK; sleep 1
 adb shell input keyevent KEYCODE_BACK; sleep 1
 adb shell input keyevent KEYCODE_BACK; sleep 1; ui
 tap "Favoritas" || fallo "no encuentro la lista Favoritas"

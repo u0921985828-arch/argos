@@ -34,7 +34,8 @@ sealed interface Screen {
     data class Smart(val list: SmartList) : Screen
     data class PlaylistView(val id: Long) : Screen
     data object Playlists : Screen
-    data object Settings : Screen
+    /** Ajustes: sin página, la lista de secciones. */
+    data class Settings(val page: com.eddie.surco.ui.SettingsPage? = null) : Screen
     data object Equalizer : Screen
     data object Library : Screen
     data object Tags : Screen
@@ -51,7 +52,7 @@ enum class AlbumSort(val label: String) { TITLE("A–Z"), ARTIST("Artista"), YEA
 enum class LibraryTab(val label: String) { SONGS("Canciones"), ALBUMS("Álbumes"), ARTISTS("Artistas"), FOLDERS("Carpetas") }
 
 /** Menú de una canción; si viene de una lista, dónde está en ella (para poder quitarla). */
-data class SongSheetState(val track: Track, val playlistId: Long? = null, val playlistIndex: Int = -1)
+data class SongSheetState(val track: Track, val playlistId: Long? = null, val playlistIndex: Int = -1, val fromPlayer: Boolean = false)
 
 class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     private val scanner = LibraryScanner(app)

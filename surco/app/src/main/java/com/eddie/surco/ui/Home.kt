@@ -58,6 +58,19 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import kotlinx.coroutines.launch
+import com.eddie.surco.data.letterIndex
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
@@ -77,6 +90,7 @@ import com.eddie.surco.LibraryViewModel
 import com.eddie.surco.Screen
 import com.eddie.surco.SongSheetState
 import com.eddie.surco.Tab
+import com.eddie.surco.audio.SurcoSettings
 import com.eddie.surco.data.Group
 import com.eddie.surco.data.SmartList
 import com.eddie.surco.data.TagField
@@ -181,6 +195,7 @@ private fun greeting(): String = when (Calendar.getInstance().get(Calendar.HOUR_
 @Composable
 fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, byId: Map<Long, Track>, progress: Pair<Int, Int>?) {
     val user by UserStore.state.collectAsState()
+    val prefs by SurcoSettings.state.collectAsState()
     val albums = rememberAlbums(tracks)
     val recent = rememberOffMain(tracks, user.lastPlayed, albums, initial = emptyList()) {
         tracks.filter { it.id in user.lastPlayed }.sortedByDescending { user.lastPlayed[it.id] ?: 0 }
@@ -195,7 +210,7 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, byId: Map<Long, Track>
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
             TabHeader(greeting(), "${songs(tracks.size)} · ${fmtTotal(tracks.sumOf { it.durationMs })}") {
-                IconButton(onClick = { vm.push(Screen.Settings) }) { Icon(Icons.Default.Settings, "Ajustes", tint = Paper) }
+                IconButton(onClick = { vm.push(Screen.Settings()) }) { Icon(Icons.Default.Settings, "Ajustes", tint = Paper) }
             }
         }
         // Sin canciones, el aviso y nada más: un «Mezclar todo» que no hace nada despista.
@@ -248,21 +263,22 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, byId: Map<Long, Track>
                 QuickAction(Icons.Default.Star, "Más escuchadas", Modifier.weight(1f)) { vm.push(Screen.Smart(SmartList.MOST_PLAYED)) }
             }
         }
-        if (recent.isNotEmpty()) {
+        // Cada sección se puede quitar en Ajustes → Interfaz → Inicio.
+        if (prefs.homeRecent && recent.isNotEmpty()) {
             item { SectionLabel("Escuchado hace poco") }
             item { AlbumRow(vm, recent) }
         }
-        if (added.isNotEmpty()) {
+        if (prefs.homeAdded && added.isNotEmpty()) {
             item { SectionLabel("Añadido hace poco") }
             item { AlbumRow(vm, added) }
         }
-        if (top.isNotEmpty()) {
+        if (prefs.homeTop && top.isNotEmpty()) {
             item { SectionLabel("Lo que más suena") }
             itemsIndexed(top, key = { _, t -> "top-${t.id}" }) { i, t ->
                 SongRow(t, null, t.id == vm.player.currentId, onClick = { vm.player.play(top, i) }, onLong = { vm.sheet = SongSheetState(t) })
             }
         }
-        item {
+        if (prefs.homeExplore) item {
             SectionLabel("Explorar por etiquetas")
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
@@ -337,7 +353,8 @@ fun LibraryScreen(vm: LibraryViewModel, tracks: List<Track>) {
             }
         }
         when (vm.libraryTab) {
-            LibraryTab.SONGS -> LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
+            LibraryTab.SONGS -> WithLetters(songsSorted.map { it.title }, headerItems = 1) { state ->
+              LazyColumn(state = state, contentPadding = PaddingValues(bottom = 16.dp)) {
                 item {
                     Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         QuickAction(Icons.Default.PlayArrow, "Reproducir", Modifier.weight(1f)) { vm.player.play(songsSorted, 0) }
@@ -347,6 +364,7 @@ fun LibraryScreen(vm: LibraryViewModel, tracks: List<Track>) {
                 itemsIndexed(songsSorted, key = { _, t -> t.id }) { i, t ->
                     SongRow(t, null, t.id == vm.player.currentId, onClick = { vm.player.play(songsSorted, i) }, onLong = { vm.sheet = SongSheetState(t) })
                 }
+              }
             }
             LibraryTab.ALBUMS -> LazyVerticalGrid(
                 GridCells.Adaptive(150.dp), contentPadding = PaddingValues(16.dp),
@@ -369,8 +387,8 @@ fun LibraryScreen(vm: LibraryViewModel, tracks: List<Track>) {
 }
 
 @Composable
-private fun GroupList(vm: LibraryViewModel, field: TagField, groups: List<Group>, round: Boolean) {
-    LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
+private fun GroupList(vm: LibraryViewModel, field: TagField, groups: List<Group>, round: Boolean) = WithLetters(groups.map { it.bucket.label }) { state ->
+    LazyColumn(state = state, contentPadding = PaddingValues(vertical = 8.dp)) {
         items(groups, key = { it.bucket.key }) { g ->
             Row(
                 Modifier.fillMaxWidth().clickable { vm.openTag(field, g.bucket.key, g.bucket.label) }.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -383,6 +401,47 @@ private fun GroupList(vm: LibraryViewModel, field: TagField, groups: List<Group>
                     Text("${songs(g.tracks.size)} · ${fmtTotal(g.totalMs)}", color = Muted, fontSize = 13.sp)
                 }
                 IconButton(onClick = { vm.player.play(g.tracks.inAlbumOrder(), 0) }) { Icon(Icons.Default.PlayArrow, "Reproducir", tint = Muted) }
+            }
+        }
+    }
+}
+
+/**
+ * Lista con índice de letras a la derecha (desde 40 elementos: en una lista corta solo estorba).
+ * Se toca o se arrastra por las letras y la lista salta a la primera de cada una.
+ */
+@Composable
+private fun WithLetters(labels: List<String>, headerItems: Int = 0, list: @Composable (LazyListState) -> Unit) {
+    val state = rememberLazyListState()
+    val index = remember(labels) { letterIndex(labels) }
+    Box(Modifier.fillMaxSize()) {
+        list(state)
+        if (labels.size >= 40 && index.size > 1) {
+            val scope = rememberCoroutineScope()
+            val letters = index.keys.toList()
+            var picked by remember { mutableStateOf<Char?>(null) }
+            fun pick(y: Float, h: Int) {
+                val c = letters[((y / h.coerceAtLeast(1)) * letters.size).toInt().coerceIn(0, letters.lastIndex)]
+                if (c != picked) { picked = c; scope.launch { state.scrollToItem(index.getValue(c) + headerItems) } }
+            }
+            Column(
+                Modifier.align(Alignment.CenterEnd).fillMaxHeight(0.9f).width(28.dp)
+                    .semantics { contentDescription = "Índice de letras" }
+                    .pointerInput(letters) {
+                        detectTapGestures { pick(it.y, size.height); picked = null }
+                    }
+                    .pointerInput(letters) {
+                        detectVerticalDragGestures(onDragEnd = { picked = null }, onDragCancel = { picked = null }) { ch, _ -> ch.consume(); pick(ch.position.y, size.height) }
+                    },
+                verticalArrangement = Arrangement.SpaceEvenly, horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                letters.forEach { c -> Text("$c", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = if (c == picked) Copper else Muted) }
+            }
+            // La letra en grande mientras se arrastra: se ve a dónde se va.
+            picked?.let { c ->
+                Box(Modifier.align(Alignment.Center).size(72.dp).clip(RoundedCornerShape(16.dp)).background(Panel2), contentAlignment = Alignment.Center) {
+                    Text("$c", fontSize = 36.sp, fontWeight = FontWeight.Bold, color = Copper)
+                }
             }
         }
     }

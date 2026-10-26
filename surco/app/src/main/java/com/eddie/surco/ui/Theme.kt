@@ -45,7 +45,14 @@ import kotlin.math.abs
 val Ink = Color(0xFF101216)
 val Panel = Color(0xFF181B21)
 val Panel2 = Color(0xFF20242C)
-val Copper = Color(0xFFE08A4B)
+/**
+ * Color de acento, elegido en Ajustes → Interfaz (o sacado de la portada). Es estado de Compose:
+ * cambiarlo repinta todo lo que lo usa. `Copper` es su nombre de siempre en el código.
+ */
+object Accent {
+    var color by mutableStateOf(Color(0xFFE08A4B))
+}
+val Copper: Color get() = Accent.color
 val Teal = Color(0xFF6FB3A8)
 val Paper = Color(0xFFECE7E1)
 val Muted = Color(0xFF8E939C)
@@ -64,7 +71,7 @@ private val Scheme = darkColorScheme(
 )
 
 @Composable
-fun SurcoTheme(content: @Composable () -> Unit) = MaterialTheme(colorScheme = Scheme) {
+fun SurcoTheme(content: @Composable () -> Unit) = MaterialTheme(colorScheme = Scheme.copy(primary = Copper)) {
     // Fuera del Scaffold (la pantalla «Sonando» y la de permiso) el color de contenido por defecto
     // es NEGRO: el título salía ilegible sobre el fondo oscuro. Medido en el recorrido de diseño.
     CompositionLocalProvider(LocalContentColor provides Paper, content = content)

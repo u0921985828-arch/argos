@@ -37,6 +37,8 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -141,8 +143,10 @@ fun LabeledSlider(
 
 @Composable
 fun SwitchRow(title: String, subtitle: String? = null, checked: Boolean, onChange: (Boolean) -> Unit) {
+    // Toda la fila cambia el interruptor (no solo el interruptor, que es un blanco pequeño).
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
+            .heightIn(min = 48.dp).padding(horizontal = 20.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -151,7 +155,7 @@ fun SwitchRow(title: String, subtitle: String? = null, checked: Boolean, onChang
         }
         Spacer(Modifier.width(12.dp))
         Switch(
-            checked = checked, onCheckedChange = onChange,
+            checked = checked, onCheckedChange = null,
             colors = SwitchDefaults.colors(checkedThumbColor = Ink, checkedTrackColor = Copper),
         )
     }

@@ -10,7 +10,10 @@ import android.provider.MediaStore
 import android.widget.Toast
 import androidx.media3.common.PlaybackException
 import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
+import com.eddie.surco.data.AlbumRef
+import com.eddie.surco.data.crossfadeGain
 import com.eddie.surco.data.currentFirstOrder
+import com.eddie.surco.data.fadesBetween
 import com.eddie.surco.data.insertIntoOrder
 import com.google.common.util.concurrent.SettableFuture
 import kotlinx.coroutines.Dispatchers
@@ -68,6 +71,9 @@ class PlaybackService : MediaSessionService() {
     private var fadeMul = 1f
     private var sleepMul = 1f
     private var fadeTarget = 1f
+    // Fundido entre canciones: baja al final y sube al empezar la siguiente.
+    private var xfadeMul = 1f
+    private var xfadeIn = false
 
     // Conteo de escuchas
     private var listenedId: String? = null
@@ -97,6 +103,8 @@ class PlaybackService : MediaSessionService() {
             .build()
         exo.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                // Sube al empezar solo si llega sola (no al saltar a mano) y si la anterior bajó.
+                xfadeIn = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && lastFadedOut
                 applyReplayGain()
                 saveQueue()
                 listenedId = null // también con «Repetir una»: es otra escucha
@@ -175,11 +183,37 @@ class PlaybackService : MediaSessionService() {
             SleepTimer.endOfTrack.collect { exo.pauseAtEndOfMediaItems = it }
         }
         handler.post(tick)
+        handler.post(xfadeTick)
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo) = session
 
-    private fun applyVolume() { exo.volume = (rgGain * fadeMul * sleepMul).coerceIn(0f, 1f) }
+    private fun applyVolume() { exo.volume = (rgGain * fadeMul * sleepMul * xfadeMul).coerceIn(0f, 1f) }
+
+    private fun albumOf(item: MediaItem?): AlbumRef? = item?.let {
+        AlbumRef(it.mediaMetadata.albumTitle?.toString().orEmpty(), it.mediaMetadata.extras?.getString(EXTRA_DIR).orEmpty())
+    }
+
+    /** ¿Baja al final la que suena? Si hay siguiente y no es del mismo disco (cuando se respetan). */
+    private var lastFadedOut = false
+    private fun fadesOut(p: com.eddie.surco.audio.Prefs): Boolean {
+        val next = exo.nextMediaItemIndex
+        if (next == C.INDEX_UNSET) return false
+        return fadesBetween(albumOf(exo.currentMediaItem), albumOf(exo.getMediaItemAt(next)), p.crossfadeKeepAlbums)
+    }
+
+    private val xfadeTick = object : Runnable {
+        override fun run() {
+            val p = SurcoSettings.state.value
+            val g = if (p.crossfadeSec > 0 && exo.isPlaying) {
+                val out = fadesOut(p)
+                lastFadedOut = out
+                crossfadeGain(exo.currentPosition, exo.duration.takeIf { it != C.TIME_UNSET } ?: 0L, p.crossfadeSec * 1000L, xfadeIn, out)
+            } else if (p.crossfadeSec > 0) xfadeMul else 1f
+            if (g != xfadeMul) { xfadeMul = g; applyVolume() }
+            handler.postDelayed(this, 50)
+        }
+    }
 
     private fun applyReplayGain() {
         val mode = SurcoSettings.state.value.replayGain

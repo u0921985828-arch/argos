@@ -32,6 +32,8 @@ data class Track(
 ) {
     val uri: Uri get() = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
     val folder: String get() = File(path).parentFile?.name ?: ""
+    /** Carpeta con su ruta completa: dos «CD1» de discos distintos no son la misma. */
+    val dir: String get() = File(path).parent ?: ""
     val artKey: Long get() = if (albumId > 0) albumId else -id
 
     fun x(key: String): String = extra[key].orEmpty()

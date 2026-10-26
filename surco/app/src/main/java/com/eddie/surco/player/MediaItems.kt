@@ -14,6 +14,8 @@ import com.eddie.surco.data.keptQueue
 
 const val EXTRA_RG_TRACK = "rg_track"
 const val EXTRA_RG_ALBUM = "rg_album"
+/** Carpeta del archivo: con el álbum dice si dos canciones son del mismo disco (fundido entre canciones). */
+const val EXTRA_DIR = "dir"
 
 /** La canción como elemento de la cola. La URI va también en requestMetadata: el MediaController no la transmite. */
 fun Track.toMediaItem(): MediaItem {
@@ -21,6 +23,7 @@ fun Track.toMediaItem(): MediaItem {
     val extras = Bundle().apply {
         x("rg_track").toFloatOrNull()?.let { putFloat(EXTRA_RG_TRACK, it) }
         x("rg_album").toFloatOrNull()?.let { putFloat(EXTRA_RG_ALBUM, it) }
+        putString(EXTRA_DIR, dir)
     }
     return MediaItem.Builder()
         .setMediaId(id.toString())

@@ -33,7 +33,30 @@ data class Prefs(
     val minDurationSec: Int = 0,
     /** La preamplificación baja sola lo que suban bandas y tono. */
     val autoPreamp: Boolean = true,
+    /** Fundido entre canciones, en segundos (0 = sin fundido). */
+    val crossfadeSec: Int = 0,
+    /** Sin fundido dentro del mismo disco: los discos sin pausas siguen sin pausas. */
+    val crossfadeKeepAlbums: Boolean = true,
+    /** Color de acento (nombre de [ACCENTS] o «Del disco»). */
+    val accent: String = "Cobre",
+    /** Formato, bits y salida en «Sonando». Apagado: la pantalla queda limpia. */
+    val techDetails: Boolean = false,
+    /** Pantalla encendida mientras «Sonando» está abierta. */
+    val keepScreenOn: Boolean = false,
+    /** Secciones de Inicio. */
+    val homeRecent: Boolean = true,
+    val homeAdded: Boolean = true,
+    val homeTop: Boolean = true,
+    val homeExplore: Boolean = true,
+    /** Carpetas (ruta completa) que no entran en la biblioteca. */
+    val excludedFolders: Set<String> = emptySet(),
 )
+
+/** Colores de acento fijos (0xRRGGBB), todos con contraste ≥ 4,5:1 sobre el fondo. «Del disco» sale de la portada. */
+val ACCENTS = linkedMapOf(
+    "Cobre" to 0xE08A4B, "Azul" to 0x5FA8E8, "Verde" to 0x5DBB7E, "Rosa" to 0xE8789F, "Violeta" to 0xA98BEB, "Ámbar" to 0xE2B13C,
+)
+const val ACCENT_FROM_ART = "Del disco"
 
 /**
  * Ajustes compartidos entre la interfaz y el servicio (mismo proceso). El procesador de
@@ -88,6 +111,10 @@ object SurcoSettings {
         put("replayGain", p.replayGain.name); put("skipSilence", p.skipSilence)
         put("speed", p.speed.toDouble()); put("keepPitch", p.keepPitch); put("fade", p.fade)
         put("minDuration", p.minDurationSec); put("autoPreamp", p.autoPreamp)
+        put("crossfade", p.crossfadeSec); put("crossfadeKeepAlbums", p.crossfadeKeepAlbums)
+        put("accent", p.accent); put("techDetails", p.techDetails); put("keepScreenOn", p.keepScreenOn)
+        put("homeRecent", p.homeRecent); put("homeAdded", p.homeAdded); put("homeTop", p.homeTop); put("homeExplore", p.homeExplore)
+        put("excluded", JSONArray(p.excludedFolders.toList()))
     }
 
     private fun floats(a: JSONArray?): List<Float>? = a?.let { arr -> List(arr.length()) { arr.optDouble(it, 0.0).toFloat() } }
@@ -114,6 +141,14 @@ object SurcoSettings {
             fade = o.optBoolean("fade", true),
             minDurationSec = o.optInt("minDuration", 0),
             autoPreamp = o.optBoolean("autoPreamp", true),
+            crossfadeSec = o.optInt("crossfade", 0).coerceIn(0, 12),
+            crossfadeKeepAlbums = o.optBoolean("crossfadeKeepAlbums", true),
+            accent = o.optString("accent", def.accent).takeIf { it in ACCENTS || it == ACCENT_FROM_ART } ?: def.accent,
+            techDetails = o.optBoolean("techDetails", false),
+            keepScreenOn = o.optBoolean("keepScreenOn", false),
+            homeRecent = o.optBoolean("homeRecent", true), homeAdded = o.optBoolean("homeAdded", true),
+            homeTop = o.optBoolean("homeTop", true), homeExplore = o.optBoolean("homeExplore", true),
+            excludedFolders = o.optJSONArray("excluded")?.let { a -> List(a.length()) { a.optString(it) }.filter { it.isNotBlank() }.toSet() } ?: emptySet(),
         )
     }
 }

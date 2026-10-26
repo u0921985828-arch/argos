@@ -75,6 +75,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -175,7 +177,16 @@ fun MiniPlayer(vm: LibraryViewModel, track: Track) {
             Box(Modifier.fillMaxWidth(if (dur > 0) (pos / dur.toFloat()).coerceIn(0f, 1f) else 0f).height(2.dp).background(Copper))
         }
         Row(
-            Modifier.fillMaxWidth().clickable { vm.nowPlayingOpen = true }.padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+            Modifier.fillMaxWidth().clickable { vm.nowPlayingOpen = true }
+                // Deslizar a los lados cambia de canción, como en la portada de «Sonando».
+                .pointerInput(track.id) {
+                    var acc = 0f
+                    detectHorizontalDragGestures(
+                        onDragEnd = { if (acc < -100) vm.player.next() else if (acc > 100) vm.player.prev(); acc = 0f },
+                        onDragCancel = { acc = 0f },
+                    ) { ch, d -> ch.consume(); acc += d }
+                }
+                .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Art(track, 44.dp, modifier = Modifier.size(44.dp))
@@ -184,7 +195,7 @@ fun MiniPlayer(vm: LibraryViewModel, track: Track) {
                 Text(track.title, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
                 Text(track.artist.ifBlank { "Desconocido" }, color = Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            IconButton(onClick = { UserStore.toggleFavorite(track.id) }) {
+            IconButton(onClick = { UserStore.toggleFavorite(track.id) }, Modifier.semantics { stateDescription = if (fav) "Marcada" else "Sin marcar" }) {
                 Icon(if (fav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, "Favorita", tint = if (fav) Copper else Muted)
             }
             IconButton(onClick = { vm.player.toggle() }) {
@@ -225,7 +236,7 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { vm.nowPlayingOpen = false }) { Icon(Icons.Default.KeyboardArrowDown, "Cerrar", Modifier.size(30.dp)) }
             Text("SONANDO", color = Paper.copy(alpha = 0.7f), fontSize = 12.sp, letterSpacing = 1.6.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-            IconButton(onClick = { vm.sheet = SongSheetState(track) }) { Icon(Icons.Default.MoreVert, "Más") }
+            IconButton(onClick = { vm.sheet = SongSheetState(track, fromPlayer = true) }) { Icon(Icons.Default.MoreVert, "Más") }
         }
         Spacer(Modifier.height(12.dp))
         val artMod = Modifier.widthIn(max = 380.dp).fillMaxWidth().aspectRatio(1f)
@@ -234,12 +245,20 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
         } else {
             Art(
                 track, 340.dp, corner = 14.dp,
+                // Deslizar a los lados cambia de canción; hacia abajo, cierra «Sonando».
                 modifier = artMod.pointerInput(track.id) {
-                    var acc = 0f
-                    detectHorizontalDragGestures(
-                        onDragEnd = { if (acc < -120) p.next() else if (acc > 120) p.prev(); acc = 0f },
-                        onDragCancel = { acc = 0f },
-                    ) { ch, d -> ch.consume(); acc += d }
+                    var dx = 0f; var dy = 0f
+                    detectDragGestures(
+                        onDragEnd = {
+                            when {
+                                dy > 160 && dy > kotlin.math.abs(dx) -> vm.nowPlayingOpen = false
+                                dx < -120 -> p.next()
+                                dx > 120 -> p.prev()
+                            }
+                            dx = 0f; dy = 0f
+                        },
+                        onDragCancel = { dx = 0f; dy = 0f },
+                    ) { ch, d -> ch.consume(); dx += d.x; dy += d.y }
                 },
             )
         }
@@ -258,14 +277,14 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
                     tint = if (fav) Copper else Muted, modifier = Modifier.size(28.dp))
             }
         }
-        val q = qualityLine(track)
-        if (q.isNotEmpty()) {
-            Text(q, color = Teal, fontSize = 12.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+        // Formato, bits y salida solo si se piden (Ajustes → Interfaz): «Sonando» queda limpia.
+        if (prefs.techDetails) {
+            val q = qualityLine(track)
+            if (q.isNotEmpty()) {
+                Text(q, color = Teal, fontSize = 12.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+            }
+            outputLine(track)?.let { Text(it, color = Muted, fontSize = 11.sp, lineHeight = 15.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth()) }
         }
-        // La línea de salida solo cuando dice algo que la calidad del archivo no dice: que se
-        // recorta a 16 bits o que algo cambia la señal. El resto sigue en Ajustes.
-        outputLine(track)?.takeIf { "16 bits" in it.substringAfter("·") || "con efectos" in it || "ReplayGain" in it || "×" in it }
-            ?.let { Text(it, color = Muted, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth()) }
         Spacer(Modifier.height(10.dp))
         SurcoSlider(
             value = if (dragging) dragVal else if (dur > 0) (pos / dur.toFloat()).coerceIn(0f, 1f) else 0f,
@@ -279,14 +298,18 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
         }
         Spacer(Modifier.height(6.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { p.toggleShuffle() }) { Icon(Icons.Default.Shuffle, "Aleatorio", tint = if (p.shuffle) Copper else Muted) }
+            IconButton(onClick = { p.toggleShuffle() }, Modifier.semantics { stateDescription = if (p.shuffle) "Activado" else "Desactivado" }) {
+                Icon(Icons.Default.Shuffle, "Aleatorio", tint = if (p.shuffle) Copper else Muted)
+            }
             IconButton(onClick = { p.prev() }, Modifier.size(56.dp)) { Icon(Icons.Default.SkipPrevious, "Anterior", Modifier.size(36.dp)) }
             FilledIconButton(
                 onClick = { p.toggle() }, modifier = Modifier.size(72.dp),
                 colors = IconButtonDefaults.filledIconButtonColors(containerColor = Copper, contentColor = Ink),
             ) { Icon(if (p.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "Reproducir o pausar", Modifier.size(40.dp)) }
             IconButton(onClick = { p.next() }, Modifier.size(56.dp)) { Icon(Icons.Default.SkipNext, "Siguiente", Modifier.size(36.dp)) }
-            IconButton(onClick = { p.cycleRepeat() }) {
+            IconButton(onClick = { p.cycleRepeat() }, Modifier.semantics {
+                stateDescription = when (p.repeat) { Player.REPEAT_MODE_ONE -> "Una"; Player.REPEAT_MODE_ALL -> "Todas"; else -> "Desactivado" }
+            }) {
                 Icon(
                     if (p.repeat == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat, "Repetir",
                     tint = if (p.repeat == Player.REPEAT_MODE_OFF) Muted else Copper,
@@ -294,24 +317,24 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
             }
         }
         Spacer(Modifier.height(10.dp))
-        // Herramientas
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        // Solo lo de cada día: letra y cola. Temporizador, velocidad, ecualizador y etiquetas, en «⋮».
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             ToolButton(Icons.Default.FormatQuote, "Letra", showLyrics) { showLyrics = !showLyrics }
             ToolButton(Icons.AutoMirrored.Filled.QueueMusic, "Cola", false) { vm.queueOpen = true }
-            ToolButton(Icons.Default.Equalizer, "EQ", prefs.dsp.eqOn && prefs.dsp.eqActive) {
-                vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.Equalizer)
-            }
-            val sleepLabel = when {
-                sleepTrack -> "Al final"
-                sleepEnd != null -> sleepRemaining(sleepEnd!!)
-                else -> "Dormir"
-            }
-            ToolButton(Icons.Default.Timer, sleepLabel, sleepEnd != null || sleepTrack) { vm.sleepOpen = true }
-            ToolButton(Icons.Default.Speed, "%.2f×".format(Locale("es"), prefs.speed).replace(",00", "").replace("0×", "×"), prefs.speed != 1f) { vm.speedOpen = true }
         }
-        Spacer(Modifier.height(18.dp))
-        // Sin el grupo Archivo: la calidad ya está en la línea teal y la ficha completa, en «Más».
-        TagChips(vm, track, exceptGroup = "Archivo")
+        // Lo que está activo y cambia cómo suena, a la vista y a un toque de quitarlo.
+        val active = buildList {
+            if (sleepTrack) add(Icons.Default.Timer to "Para al acabar")
+            else sleepEnd?.let { add(Icons.Default.Timer to "Para en ${sleepRemaining(it)}") }
+            if (prefs.speed != 1f) add(Icons.Default.Speed to "%.2f×".format(Locale("es"), prefs.speed).replace(",00", ""))
+        }
+        if (active.isNotEmpty()) {
+            Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                active.forEach { (icon, label) ->
+                    StatusPill(icon, label) { if (icon == Icons.Default.Timer) vm.sleepOpen = true else vm.speedOpen = true }
+                }
+            }
+        }
         Spacer(Modifier.height(24.dp))
     }
 }
@@ -576,7 +599,16 @@ fun SongSheet(vm: LibraryViewModel, s: SongSheetState) {
                     if (q.isNotEmpty()) Text(q, color = Teal, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
                 }
             }
-            Spacer(Modifier.height(14.dp))
+            // Desde «Sonando», primero lo de la escucha (a la vista sin desplegar la hoja).
+            if (s.fromPlayer) {
+                Spacer(Modifier.height(14.dp))
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ActionChip(Icons.Default.Equalizer, "Ecualizador") { close(); vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.Equalizer) }
+                    ActionChip(Icons.Default.Timer, "Temporizador") { close(); vm.sleepOpen = true }
+                    ActionChip(Icons.Default.Speed, "Velocidad") { close(); vm.speedOpen = true }
+                }
+                SectionLabel("Esta canción")
+            } else Spacer(Modifier.height(14.dp))
             FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ActionChip(Icons.Default.SkipNext, "A continuación") { vm.player.playNext(listOf(track)); close() }
                 ActionChip(Icons.AutoMirrored.Filled.QueueMusic, "A la cola") { vm.player.enqueue(listOf(track)); close() }
@@ -602,6 +634,20 @@ fun SongSheet(vm: LibraryViewModel, s: SongSheetState) {
                 }
             }
         }
+    }
+}
+
+/** Estado activo (temporizador, velocidad) bajo los mandos de «Sonando»: un toque lo abre. */
+@Composable
+private fun StatusPill(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Row(
+        Modifier.clip(RoundedCornerShape(20.dp)).background(Panel).clickable(onClick = onClick)
+            .heightIn(min = 40.dp).padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = Copper, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(label, fontSize = 13.sp, color = Copper)
     }
 }
 

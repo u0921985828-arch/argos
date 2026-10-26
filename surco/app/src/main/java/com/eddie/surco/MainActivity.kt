@@ -34,6 +34,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.runtime.DisposableEffect
+import com.eddie.surco.audio.ACCENTS
+import com.eddie.surco.audio.ACCENT_FROM_ART
+import com.eddie.surco.data.legibleAccent
+import com.eddie.surco.ui.Accent
+import com.eddie.surco.ui.artColor
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -56,6 +65,7 @@ import com.eddie.surco.ui.PlaylistScreen
 import com.eddie.surco.ui.PlaylistsScreen
 import com.eddie.surco.ui.QueueSheet
 import com.eddie.surco.ui.SettingsScreen
+import com.eddie.surco.ui.SettingsPageScreen
 import com.eddie.surco.ui.SleepDialog
 import com.eddie.surco.ui.SmartScreen
 import com.eddie.surco.ui.SongSheet
@@ -85,6 +95,9 @@ private fun Root(vm: LibraryViewModel = viewModel()) {
         if (Build.VERSION.SDK_INT >= 33) arrayOf(audioPerm, Manifest.permission.POST_NOTIFICATIONS) else arrayOf(audioPerm)
     }
     LaunchedEffect(Unit) { if (!granted) launcher.launch(perms) }
+    // Acento fijo de Ajustes → Interfaz («Del disco» lo pone App con la portada que suena).
+    val accent = SurcoSettings.state.collectAsState().value.accent
+    LaunchedEffect(accent) { ACCENTS[accent]?.let { Accent.color = Color(0xFF000000.toInt() or it) } }
     // Si se da (o se quita) el permiso desde Ajustes del sistema, se nota al volver.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { granted = check() }
     LaunchedEffect(granted) { if (granted) vm.scan() }
@@ -102,11 +115,29 @@ private fun App(vm: LibraryViewModel) {
     val all by vm.tracks.collectAsStateWithLifecycle()
     val progress by vm.progress.collectAsStateWithLifecycle()
     val prefs by SurcoSettings.state.collectAsState()
-    val tracks = remember(all, prefs.minDurationSec) {
-        if (prefs.minDurationSec <= 0) all else all.filter { it.durationMs <= 0 || it.durationMs >= prefs.minDurationSec * 1000L }
+    val tracks = remember(all, prefs.minDurationSec, prefs.excludedFolders) {
+        all.filter {
+            (prefs.minDurationSec <= 0 || it.durationMs <= 0 || it.durationMs >= prefs.minDurationSec * 1000L) &&
+                (prefs.excludedFolders.isEmpty() || it.dir !in prefs.excludedFolders)
+        }
     }
     val byId = remember(all) { all.associateBy { it.id } }
     val current = vm.player.currentId?.let { byId[it] ?: vm.player.currentAsTrack() }
+
+    // «Del disco»: el acento sale de la portada que suena, aclarado hasta que se lea sobre el fondo.
+    val ctx = LocalContext.current
+    LaunchedEffect(prefs.accent, current?.artKey) {
+        if (prefs.accent != ACCENT_FROM_ART) return@LaunchedEffect
+        val c = current?.let { artColor(ctx, it) }
+        Accent.color = if (c == null) Color(0xFF000000.toInt() or ACCENTS.getValue("Cobre"))
+        else Color(0xFF000000.toInt() or legibleAccent(c.toArgb() and 0xFFFFFF, 0x101216))
+    }
+    // Pantalla encendida con «Sonando» abierta, si se pide.
+    val view = LocalView.current
+    DisposableEffect(prefs.keepScreenOn, vm.nowPlayingOpen) {
+        view.keepScreenOn = prefs.keepScreenOn && vm.nowPlayingOpen
+        onDispose { view.keepScreenOn = false }
+    }
 
     // Al abrir sin nada sonando, deja preparada la cola de la última vez.
     // Solo con la lista ya consultada a MediaStore: con la caché podría restaurar canciones borradas.
@@ -140,7 +171,7 @@ private fun App(vm: LibraryViewModel) {
                     is Screen.Smart -> SmartScreen(vm, s.list, tracks)
                     is Screen.PlaylistView -> PlaylistScreen(vm, s.id, byId)
                     Screen.Playlists -> PlaylistsScreen(vm, tracks)
-                    Screen.Settings -> SettingsScreen(vm)
+                    is Screen.Settings -> s.page?.let { SettingsPageScreen(vm, it) } ?: SettingsScreen(vm)
                     Screen.Equalizer -> EqualizerScreen(vm)
                 }
             }
