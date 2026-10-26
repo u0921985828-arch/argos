@@ -12,8 +12,8 @@ android {
         applicationId = "com.eddie.surco"
         minSdk = 26
         targetSdk = 35
-        versionCode = 22
-        versionName = "2.2"
+        versionCode = 23
+        versionName = "2.3"
         // Prueba en el emulador que navega la biblioteca como lo hace Android Auto (androidTest/).
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
