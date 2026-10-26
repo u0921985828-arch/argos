@@ -31,6 +31,8 @@ android {
     }
     // Ningún aviso de Kotlin pasa: un aviso de hoy es el error de mañana.
     kotlinOptions { jvmTarget = "17"; allWarningsAsErrors = true }
+    // La salida de las pruebas en el log del CI: así se ve si la de LRCLIB habló con el servicio o se saltó.
+    testOptions { unitTests.all { it.testLogging.showStandardStreams = true } }
     lint {
         // El informe se lee en CI (.github/scripts/lint-surco.py), que falla con cualquier error.
         abortOnError = false

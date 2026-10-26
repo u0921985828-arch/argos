@@ -71,6 +71,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.launch
 import com.eddie.surco.data.letterIndex
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
@@ -414,9 +415,11 @@ private fun GroupList(vm: LibraryViewModel, field: TagField, groups: List<Group>
 private fun WithLetters(labels: List<String>, headerItems: Int = 0, list: @Composable (LazyListState) -> Unit) {
     val state = rememberLazyListState()
     val index = remember(labels) { letterIndex(labels) }
+    val show = labels.size >= 40 && index.size > 1
     Box(Modifier.fillMaxSize()) {
-        list(state)
-        if (labels.size >= 40 && index.size > 1) {
+        // Con índice, la lista deja libre su franja: si no, las letras tapan el «⋮» de cada fila.
+        Box(Modifier.fillMaxSize().padding(end = if (show) 28.dp else 0.dp)) { list(state) }
+        if (show) {
             val scope = rememberCoroutineScope()
             val letters = index.keys.toList()
             var picked by remember { mutableStateOf<Char?>(null) }
@@ -427,15 +430,18 @@ private fun WithLetters(labels: List<String>, headerItems: Int = 0, list: @Compo
             Column(
                 Modifier.align(Alignment.CenterEnd).fillMaxHeight(0.9f).width(28.dp)
                     .semantics { contentDescription = "Índice de letras" }
-                    .pointerInput(letters) {
+                    // Con la clave del índice entero: al releer la biblioteca, las posiciones cambian.
+                    .pointerInput(index) {
                         detectTapGestures { pick(it.y, size.height); picked = null }
                     }
-                    .pointerInput(letters) {
+                    .pointerInput(index) {
                         detectVerticalDragGestures(onDragEnd = { picked = null }, onDragCancel = { picked = null }) { ch, _ -> ch.consume(); pick(ch.position.y, size.height) }
                     },
                 verticalArrangement = Arrangement.SpaceEvenly, horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                letters.forEach { c -> Text("$c", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = if (c == picked) Copper else Muted) }
+                // Tamaño fijo, sin la escala de letra del sistema: 28 letras tienen que caber en la columna.
+                val size = with(LocalDensity.current) { 11.dp.toSp() }
+                letters.forEach { c -> Text("$c", fontSize = size, lineHeight = size, fontWeight = FontWeight.SemiBold, color = if (c == picked) Copper else Muted) }
             }
             // La letra en grande mientras se arrastra: se ve a dónde se va.
             picked?.let { c ->

@@ -130,7 +130,8 @@ private fun App(vm: LibraryViewModel) {
         if (prefs.accent != ACCENT_FROM_ART) return@LaunchedEffect
         val c = current?.let { artColor(ctx, it) }
         Accent.color = if (c == null) Color(0xFF000000.toInt() or ACCENTS.getValue("Cobre"))
-        else Color(0xFF000000.toInt() or legibleAccent(c.toArgb() and 0xFFFFFF, 0x101216))
+        // Contra Panel2, el fondo más claro sobre el que va el acento (pestaña activa, píldoras).
+        else Color(0xFF000000.toInt() or legibleAccent(c.toArgb() and 0xFFFFFF, 0x20242C))
     }
     // Pantalla encendida con «Sonando» abierta, si se pide.
     val view = LocalView.current

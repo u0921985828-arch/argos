@@ -112,3 +112,12 @@ Encargo: «Quiero que mejores el reproductor a niveles exagerados, la UI debe se
 - El acento es estado de Compose detrás de `Copper` (un getter): cambiarlo repinta todo sin tocar los cien sitios que lo usan. «Del disco» se aclara (manteniendo el tono) hasta 4,5:1 sobre el fondo.
 - `SwitchRow`: la fila entera es el interruptor (antes solo el interruptor, un blanco pequeño).
 - Pendiente a propósito: Android Auto, edición de etiquetas, salida bit-perfect por USB (sin aparato para medirla), cruce con solape.
+- Letras de LRCLIB (pedidas por Eddie a mitad de tarea): opcionales y apagadas por defecto (Ajustes → Biblioteca), con caché en disco (lo encontrado para siempre, «no está» 7 días), búsqueda exacta y después por artista y título filtrada por duración (± 3 s). Cliente y JSON sin Android, probados en JVM y contra el servicio de verdad en el CI (`SURCO_RED=1`). Permiso INTERNET solo para esto; la privacidad de Acerca de lo dice.
+- Revisión por ataque (1 FATAL, 3 GRAVES, 6 MENORES), todo aplicado salvo lo marcado:
+  - FATAL: el recorrido miraba `selected` en la muestra de color; con rol de botón de opción Compose publica `checked`. → se miran los dos.
+  - El índice de letras tapaba el «⋮» de cada fila → la lista deja libre su franja; letras en orden de alfabeto (# primero, Ñ tras N), tamaño fijo (con letra ×1,3 se pisaban) y la clave del gesto es el índice entero (al releer la biblioteca saltaba a sitios viejos).
+  - «Del disco» solo se medía contra el fondo; contra Panel2 (pestaña activa, píldoras) bajaba a 3,8:1 → se mide contra Panel2; las portadas grises o en blanco y negro dan el acento de siempre (antes, un salmón inventado).
+  - Fundido con «Repetir una» dependía de la canción vecina → sin fundido al repetir una; saltar a mano durante un fundido entra entera; volver al principio a mano no funde; duración desconocida o corta (MP3 VBR) ya no apaga la cola; tick a 50 ms solo cerca de los bordes (500 ms en medio) y sin mandar cambios de volumen de menos de medio punto.
+  - Arrastrar la portada hacia abajo para cerrar se comía el desplazamiento de «Sonando» con letra grande → vuelve a ser solo horizontal.
+  - La prueba de humo dejaba puestos los detalles técnicos y el recorrido capturaba «Sonando» con ellos → el recorrido los quita antes.
+  - No aplicado: carpeta con ruta vacía no se puede excluir (no existe en MediaStore); «Tus escuchas» cuenta también las carpetas excluidas (a propósito: son escuchas reales).

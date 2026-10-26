@@ -16,12 +16,15 @@ import kotlin.math.pow
  * suena a −3 dB, no a −6, y el oído no nota el bache.
  */
 fun crossfadeGain(posMs: Long, durMs: Long, fadeMs: Long, fadeIn: Boolean, fadeOut: Boolean): Float {
-    if (fadeMs <= 0 || durMs <= 0) return 1f
-    // En canciones cortas el fundido no pasa de un cuarto de la canción por cada lado.
-    val f = min(fadeMs, durMs / 4).coerceAtLeast(1)
+    if (fadeMs <= 0) return 1f
+    // En canciones cortas el fundido no pasa de un cuarto de la canción por cada lado. Sin
+    // duración (aún no se sabe) solo puede subir al empezar.
+    val f = (if (durMs > 0) min(fadeMs, durMs / 4) else fadeMs).coerceAtLeast(1)
     var g = 1.0
     if (fadeIn && posMs < f) g = min(g, curve(posMs.toDouble() / f))
-    if (fadeOut && durMs - posMs < f) g = min(g, curve((durMs - posMs).toDouble() / f))
+    // Pasada la duración (un MP3 VBR sin cabecera la calcula corta) la duración miente: no se
+    // apaga la cola de la canción.
+    if (fadeOut && durMs > 0 && posMs <= durMs && durMs - posMs < f) g = min(g, curve((durMs - posMs).toDouble() / f))
     return g.coerceIn(0.0, 1.0).toFloat()
 }
 
@@ -50,10 +53,17 @@ fun indexLetter(label: String): Char {
     return if (c in 'A'..'Z') c else '#'
 }
 
-/** Para cada letra presente, la primera posición de la lista (ya ordenada) que empieza por ella. */
+private const val ALPHABET = "#ABCDEFGHIJKLMNÑOPQRSTUVWXYZ"
+
+/**
+ * Para cada letra presente, la primera posición de la lista (ya ordenada) que empieza por ella,
+ * en el orden del alfabeto (# primero, Ñ tras la N), aunque la lista ponga antes «(…» o «¿…».
+ */
 fun letterIndex(labels: List<String>): LinkedHashMap<Char, Int> {
+    val first = HashMap<Char, Int>()
+    labels.forEachIndexed { i, s -> first.putIfAbsent(indexLetter(s), i) }
     val out = LinkedHashMap<Char, Int>()
-    labels.forEachIndexed { i, s -> out.putIfAbsent(indexLetter(s), i) }
+    ALPHABET.forEach { c -> first[c]?.let { out[c] = it } }
     return out
 }
 
@@ -75,9 +85,12 @@ fun contrast(a: Int, b: Int): Double {
  * aclara (manteniendo el tono) hasta que el texto de color sobre el fondo y el texto [ink] sobre
  * el color pasen de [min]. Un color apagado o muy oscuro sale con más luz; el tono se conserva.
  */
-fun legibleAccent(rgb: Int, ink: Int, min: Double = 4.5): Int {
+fun legibleAccent(rgb: Int, ink: Int, min: Double = 4.5, fallback: Int = 0xE08A4B): Int {
     var (h, s, l) = rgbToHsl(rgb)
-    s = s.coerceAtLeast(0.45) // gris de portada → sin color de acento: se le da algo de saturación
+    // Una portada en blanco y negro o gris no tiene tono: inventarle uno (rojo, el tono 0) sale
+    // salmón. Se queda el acento de siempre.
+    if (s < 0.15) return fallback
+    s = s.coerceAtLeast(0.45)
     l = l.coerceIn(0.45, 0.85)
     var c = hslToRgb(h, s, l)
     var guard = 0

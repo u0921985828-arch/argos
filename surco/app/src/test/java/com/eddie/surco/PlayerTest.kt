@@ -15,6 +15,8 @@ import org.junit.Test
 
 class PlayerTest {
     private val ink = 0x101216
+    /** El fondo más claro sobre el que va el acento (pestaña activa, píldoras): el caso peor. */
+    private val panel2 = 0x20242C
 
     @Test fun fundidoBajaAlFinalYSubeAlEmpezar() {
         val dur = 200_000L; val f = 6_000L
@@ -35,7 +37,11 @@ class PlayerTest {
         // 8 s de fundido en una canción de 10 s: como mucho un cuarto por cada lado.
         assertEquals(1f, crossfadeGain(5_000, 10_000, 8_000, true, true), 1e-4f)
         assertTrue(crossfadeGain(2_400, 10_000, 8_000, true, true) < 1f)
-        assertEquals(1f, crossfadeGain(0, 0, 8_000, true, true), 1e-4f)
+        // Sin duración aún: solo sube al empezar.
+        assertEquals(0f, crossfadeGain(0, 0, 8_000, true, true), 1e-4f)
+        assertEquals(1f, crossfadeGain(9_000, 0, 8_000, true, true), 1e-4f)
+        // Duración corta por error (MP3 VBR): pasada la duración no se queda en silencio.
+        assertEquals(1f, crossfadeGain(205_000, 200_000, 6_000, true, true), 1e-4f)
         assertEquals(1f, crossfadeGain(0, 10_000, 0, true, true), 1e-4f)
     }
 
@@ -61,20 +67,28 @@ class PlayerTest {
         val idx = letterIndex(listOf("Ábaco", "Abeja", "Bravo", "Burro", "Zorro"))
         assertEquals(listOf('A', 'B', 'Z'), idx.keys.toList())
         assertEquals(listOf(0, 2, 4), idx.values.toList())
+        // En orden de alfabeto aunque la lista ponga antes un «(» o deje «¿» y «Ñ» al final.
+        val raro = letterIndex(listOf("(Intro)", "Abeja", "Nube", "Zorro", "¿Qué?", "Ñandú", "1999"))
+        assertEquals(listOf('#', 'A', 'I', 'N', 'Ñ', 'Q', 'Z'), raro.keys.toList())
+        assertEquals(6, raro['#']); assertEquals(0, raro['I']); assertEquals(5, raro['Ñ'])
     }
 
     @Test fun acentosLegiblesDeCualquierPortada() {
         // Colores reales de portadas: negro, gris, azul marino, rojo oscuro, amarillo, blanco.
         for (c in listOf(0x000000, 0x777777, 0x0A1A4A, 0x5A0A0A, 0xF2D21B, 0xFFFFFF, 0x1E7F3A, 0x6A00FF)) {
-            val a = legibleAccent(c, ink)
-            assertTrue("acento ${Integer.toHexString(a)} de ${Integer.toHexString(c)}: ${contrast(a, ink)}", contrast(a, ink) >= 4.5)
+            val a = legibleAccent(c, panel2)
+            assertTrue("acento ${Integer.toHexString(a)} de ${Integer.toHexString(c)}: ${contrast(a, panel2)}", contrast(a, panel2) >= 4.5)
+            assertTrue(contrast(a, ink) >= 4.5)
         }
+        // Blanco, negro y gris no tienen tono: el acento de siempre, no un salmón inventado.
+        assertEquals(0xE08A4B, legibleAccent(0x000000, panel2))
+        assertEquals(0xE08A4B, legibleAccent(0x808080, panel2))
     }
 
     @Test fun acentosFijosLegibles() {
         // Los de Ajustes → Interfaz: texto del acento sobre el fondo y texto del fondo sobre el acento.
         for (c in listOf(0xE08A4B, 0x5FA8E8, 0x5DBB7E, 0xE8789F, 0xA98BEB, 0xE2B13C)) {
-            assertTrue(Integer.toHexString(c), contrast(c, ink) >= 4.5)
+            assertTrue(Integer.toHexString(c), contrast(c, ink) >= 4.5 && contrast(c, panel2) >= 4.5)
         }
     }
 

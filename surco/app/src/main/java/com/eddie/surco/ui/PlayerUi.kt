@@ -75,7 +75,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -245,20 +244,14 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
         } else {
             Art(
                 track, 340.dp, corner = 14.dp,
-                // Deslizar a los lados cambia de canción; hacia abajo, cierra «Sonando».
+                // Deslizar a los lados cambia de canción. Solo horizontal: el vertical es de la pantalla,
+                // que con letra grande se desplaza (y se cierra con la flecha de arriba o «Atrás»).
                 modifier = artMod.pointerInput(track.id) {
-                    var dx = 0f; var dy = 0f
-                    detectDragGestures(
-                        onDragEnd = {
-                            when {
-                                dy > 160 && dy > kotlin.math.abs(dx) -> vm.nowPlayingOpen = false
-                                dx < -120 -> p.next()
-                                dx > 120 -> p.prev()
-                            }
-                            dx = 0f; dy = 0f
-                        },
-                        onDragCancel = { dx = 0f; dy = 0f },
-                    ) { ch, d -> ch.consume(); dx += d.x; dy += d.y }
+                    var acc = 0f
+                    detectHorizontalDragGestures(
+                        onDragEnd = { if (acc < -120) p.next() else if (acc > 120) p.prev(); acc = 0f },
+                        onDragCancel = { acc = 0f },
+                    ) { ch, d -> ch.consume(); acc += d }
                 },
             )
         }

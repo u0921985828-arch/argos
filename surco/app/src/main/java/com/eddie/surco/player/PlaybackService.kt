@@ -105,6 +105,9 @@ class PlaybackService : MediaSessionService() {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 // Sube al empezar solo si llega sola (no al saltar a mano) y si la anterior bajó.
                 xfadeIn = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && lastFadedOut
+                // Saltar a mano (o elegir otra en la cola) durante un fundido: la nueva entra entera.
+                if (!xfadeIn && xfadeMul != 1f) { xfadeMul = 1f; applyVolume() }
+                lastFadedOut = false
                 applyReplayGain()
                 saveQueue()
                 listenedId = null // también con «Repetir una»: es otra escucha
@@ -116,6 +119,8 @@ class PlaybackService : MediaSessionService() {
             override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
                 // Volver al principio de la misma canción también cuenta como otra escucha.
                 if (reason == Player.DISCONTINUITY_REASON_SEEK && newPosition.positionMs < 1000) listenedId = null
+                // Volver al principio a mano no es una entrada en fundido.
+                if (reason == Player.DISCONTINUITY_REASON_SEEK) xfadeIn = false
             }
             override fun onPlayerError(error: PlaybackException) = skipBroken(error)
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
@@ -197,6 +202,8 @@ class PlaybackService : MediaSessionService() {
     /** ¿Baja al final la que suena? Si hay siguiente y no es del mismo disco (cuando se respetan). */
     private var lastFadedOut = false
     private fun fadesOut(p: com.eddie.surco.audio.Prefs): Boolean {
+        // «Repetir una» vuelve a la misma: Media3 da como siguiente la de la cola (trata ONE como OFF).
+        if (exo.repeatMode == Player.REPEAT_MODE_ONE) return false
         val next = exo.nextMediaItemIndex
         if (next == C.INDEX_UNSET) return false
         return fadesBetween(albumOf(exo.currentMediaItem), albumOf(exo.getMediaItemAt(next)), p.crossfadeKeepAlbums)
@@ -205,13 +212,21 @@ class PlaybackService : MediaSessionService() {
     private val xfadeTick = object : Runnable {
         override fun run() {
             val p = SurcoSettings.state.value
-            val g = if (p.crossfadeSec > 0 && exo.isPlaying) {
-                val out = fadesOut(p)
-                lastFadedOut = out
-                crossfadeGain(exo.currentPosition, exo.duration.takeIf { it != C.TIME_UNSET } ?: 0L, p.crossfadeSec * 1000L, xfadeIn, out)
-            } else if (p.crossfadeSec > 0) xfadeMul else 1f
-            if (g != xfadeMul) { xfadeMul = g; applyVolume() }
-            handler.postDelayed(this, 50)
+            val fadeMs = p.crossfadeSec * 1000L
+            var busy = false
+            val g = if (fadeMs > 0 && exo.isPlaying) {
+                val pos = exo.currentPosition
+                val dur = exo.duration.takeIf { it != C.TIME_UNSET } ?: 0L
+                // Cerca del final o del principio, cada 50 ms; en medio de la canción, cada 500.
+                val nearEnd = dur > 0 && dur - pos < fadeMs + 600
+                busy = nearEnd || (xfadeIn && pos < fadeMs + 600)
+                val out = nearEnd && fadesOut(p)
+                if (nearEnd) lastFadedOut = out
+                crossfadeGain(pos, dur, fadeMs, xfadeIn, out)
+            } else if (fadeMs > 0) xfadeMul else 1f
+            // Pasos de menos de medio punto no se oyen y cada cambio de volumen viaja a cada mando.
+            if (kotlin.math.abs(g - xfadeMul) >= 0.005f || (g == 1f && xfadeMul != 1f) || (g == 0f && xfadeMul != 0f)) { xfadeMul = g; applyVolume() }
+            handler.postDelayed(this, if (busy) 50 else 500)
         }
     }
 

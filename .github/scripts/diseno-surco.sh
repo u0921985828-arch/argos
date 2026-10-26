@@ -124,17 +124,24 @@ back; back
 ui; tap "Reproducción"; sleep 2; cap ajustes-reproduccion
 ui; tap "4 s"; sleep 1; cap ajustes-fundido
 ui; tap "No"; sleep 1; back
-ui; tap "Carpetas, audios cortos y volver a leer"; sleep 2; cap ajustes-biblioteca; back
+ui; tap "Carpetas, letras de internet y audios cortos"; sleep 2; cap ajustes-biblioteca; back
 ui; tap "Interfaz"; sleep 2; cap ajustes-interfaz
 if [ "$ESCALA" != "1.0" ]; then
     # Caso reservado: el acento elegido en la pasada anterior (Violeta) tiene que seguir tras reiniciar.
     python3 - <<'PY' || { echo "::error::el acento Violeta no se conservó al reiniciar"; exit 1; }
 import sys, xml.etree.ElementTree as ET
 r = ET.parse("ui.xml").getroot()
-sys.exit(0 if any(n.get("content-desc") == "Violeta" and n.get("selected") == "true" for n in r.iter("node")) else 1)
+# Rol de botón de opción: Compose lo publica como checked, no como selected.
+sys.exit(0 if any(n.get("content-desc") == "Violeta" and "true" in (n.get("checked"), n.get("selected")) for n in r.iter("node")) else 1)
 PY
     echo "  acento Violeta conservado"
 fi
+# La prueba de humo deja puestos los detalles técnicos: se quitan para capturar «Sonando» como sale por defecto.
+python3 - <<'PY' && { tap "Detalles técnicos"; sleep 1; echo "  detalles técnicos quitados"; }
+import sys, xml.etree.ElementTree as ET
+r = ET.parse("ui.xml").getroot()
+sys.exit(0 if any(n.get("checked") == "true" and any(c.get("text") == "Detalles técnicos" for c in n.iter("node")) for n in r.iter("node")) else 1)
+PY
 adb shell input swipe 540 1700 540 600 400; cap ajustes-interfaz-abajo; back
 ui; tap "Tus escuchas"; sleep 2; cap ajustes-escuchas; back
 ui; tap "Acerca de Surco"; sleep 2; cap ajustes-acerca; back
