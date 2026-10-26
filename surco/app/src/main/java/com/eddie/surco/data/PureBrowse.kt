@@ -44,6 +44,10 @@ data class BrowseNode(
     val browsable: Boolean = !playable,
 )
 
+/** Palabras de relleno al pedir música en voz alta (español e inglés). */
+private val STOP = setOf("de", "del", "el", "la", "los", "las", "y", "en", "por", "pon", "ponme", "reproduce", "escuchar", "cancion", "canciones",
+    "musica", "surco", "by", "the", "and", "play", "song", "songs", "music", "on", "in", "of", "from")
+
 object BrowseIds {
     const val ROOT = "raiz"
     const val HOME = "inicio"
@@ -151,11 +155,16 @@ class BrowseTree(private val songs: List<BrowseSong>, private val smart: List<Br
     fun search(query: String, limit: Int = 50): List<BrowseSong> {
         val q = fold(query).trim()
         if (q.isEmpty()) return emptyList()
-        val words = q.split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
+        val all = q.split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
+        // Lo que se dice al hablar y no está en las etiquetas: «pon Bohemian Rhapsody de Queen».
+        val words = all.filter { it !in STOP }.ifEmpty { all }
         if (words.isEmpty()) return emptyList()
         // Cada palabra dicha tiene que empezar una palabra de la canción: «a» no casa con «banda».
         fun hay(s: BrowseSong) = fold("${s.title} ${s.artist} ${s.album}").split(Regex("[^\\p{L}\\p{N}]+"))
-        val hits = songs.filter { s -> val h = hay(s); words.all { w -> h.any { it.startsWith(w) } } }
+        fun matched(s: BrowseSong): Int { val h = hay(s); return words.count { w -> h.any { it.startsWith(w) } } }
+        var hits = songs.filter { matched(it) == words.size }
+        // Si nada casa con todo (el asistente añade palabras), las que casen con casi todo.
+        if (hits.isEmpty() && words.size >= 3) hits = songs.filter { matched(it) >= words.size - 1 }
         // Primero lo que casa con el título entero; después, por artista y álbum.
         return hits.sortedWith(compareBy({ fold(it.title) != q }, { fold(it.artist) != q }, { fold(it.album) != q }, { fold(it.album) }, { it.discNo }, { it.trackNo }))
             .take(limit)

@@ -80,7 +80,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        voiceQuery(intent)
+        // Solo la primera vez: al recrearse (giro, cambio de tema) el intent sigue siendo el mismo.
+        if (savedInstanceState == null) voiceQuery(intent)
         setContent { SurcoTheme { Root() } }
     }
 
@@ -155,9 +156,10 @@ private fun App(vm: LibraryViewModel) {
     // «Pon … en Surco»: con la biblioteca ya consultada, suena lo que case con la frase.
     val voice by PendingVoice.query.collectAsStateWithLifecycle()
     val ready by vm.fresh.collectAsStateWithLifecycle()
-    LaunchedEffect(voice, ready, tracks) {
+    LaunchedEffect(voice, ready, tracks, vm.player.controller) {
         val q = voice ?: return@LaunchedEffect
-        if (!ready || tracks.isEmpty()) return@LaunchedEffect
+        // Sin controlador conectado, play() no haría nada y la frase se perdería.
+        if (!ready || tracks.isEmpty() || vm.player.controller == null) return@LaunchedEffect
         PendingVoice.query.value = null
         val hits = if (q.isBlank()) emptyList() else tracks.filter { matchesFolded(searchHay(it), q) }
         if (hits.isEmpty()) vm.player.play(tracks, 0, shuffled = true) else vm.player.play(hits, 0)

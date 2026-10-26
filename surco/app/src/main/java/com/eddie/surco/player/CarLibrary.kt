@@ -1,8 +1,6 @@
 package com.eddie.surco.player
 
-import android.content.ContentUris
 import android.content.Context
-import android.net.Uri
 import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -28,11 +26,13 @@ import java.io.File
  */
 class CarLibrary(private val ctx: Context) {
     @Volatile private var built: Pair<Long, Built>? = null
+    private val lock = Any()
 
     class Built(val tree: BrowseTree, val byId: Map<Long, Track>)
 
     /** Llamar fuera del hilo principal: lee la caché del disco. */
-    fun get(): Built {
+    fun get(): Built { synchronized(lock) {
+        // Al conectar, el coche pide las cuatro pestañas a la vez: se lee el disco una sola vez.
         built?.let { (at, b) -> if (System.currentTimeMillis() - at < 30_000) return b }
         val prefs = SurcoSettings.state.value
         val store = AnalysisStore(ctx)
@@ -59,14 +59,13 @@ class CarLibrary(private val ctx: Context) {
         val b = Built(BrowseTree(songs, smart, playlists), tracks.associateBy { it.id })
         built = System.currentTimeMillis() to b
         return b
-    }
-
-    fun invalidate() { built = null }
+    } }
 
     /** Un nodo del árbol como elemento de Media3 (con su portada y el estilo de cuadrícula o lista). */
     fun toItem(n: BrowseNode, byId: Map<Long, Track>): MediaItem {
         val t = n.songId?.let { byId[it] }
-        val art = t?.takeIf { it.albumId > 0 }?.let { ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), it.albumId) }
+        // Por el proveedor de Surco: el coche no tiene permiso para leer MediaStore.
+        val art = t?.let { ArtProvider.uri(it.id) }
         val extras = Bundle().apply {
             if (n.browsable) {
                 putInt(CONTENT_STYLE_BROWSABLE, if (n.grid) STYLE_GRID else STYLE_LIST)

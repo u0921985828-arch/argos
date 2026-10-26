@@ -141,3 +141,10 @@ Encargo: «¿Android Auto?».
 - Álbumes en cuadrícula y lo demás en lista (indicaciones de estilo de contenido de Android Auto).
 - La prueba del coche corre contra el APK de depuración (la prueba comparte Media3 con la app; con R8 los nombres no casan), instalado encima del de release con la misma firma para conservar la biblioteca ya leída.
 - Sin probar en un coche ni en el Desktop Head Unit (no hay en el CI). Para verlo en un coche con un APK que no viene de Play: Android Auto → Ajustes → pulsar 10 veces en «Versión» → Desarrollador → «Fuentes desconocidas».
+- Revisión por ataque (3 GRAVES, 5 MENORES), aplicada:
+  - La voz con «de», «by», «the»… no encontraba nada y una lista vacía paraba lo que sonaba y vaciaba la cola → palabras de relleno fuera, «casi todo» si nada casa con todo, título/artista/álbum del asistente si los da, y error (no lista vacía) sin coincidencia.
+  - La frase del asistente se repetía al recrearse la actividad y se perdía sin controlador → solo en la primera creación y esperando al controlador.
+  - La prueba solo recorría el protocolo de Media3, no el de Android Auto → segunda prueba con el MediaBrowser del sistema (`MediaBrowserService`), tocar por id y pedir por voz, y que una frase sin coincidencia no vacíe la cola. Corre dentro del proceso de la app (es una prueba instrumentada), pero por el mismo enlace que el coche.
+  - El aleatorio se heredaba al tocar un disco en el coche → se quita, como en la app.
+  - El coche no puede leer portadas de MediaStore → `ArtProvider` (`content://com.eddie.surco.arte/<id>`, JPEG de 512 px en caché, solo lectura).
+  - Lectura del árbol con cerrojo (el coche pide cuatro pestañas a la vez); futuros que fallan en vez de quedarse colgados con el servicio cerrándose; logcat de la prueba guardado.

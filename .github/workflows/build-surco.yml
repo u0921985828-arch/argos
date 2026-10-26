@@ -186,3 +186,4 @@ jobs:
             flinger.txt
             salida.txt
             auto.txt
+            auto-logcat.txt

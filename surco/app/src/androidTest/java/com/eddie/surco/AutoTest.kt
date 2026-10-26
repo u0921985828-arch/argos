@@ -1,6 +1,9 @@
 package com.eddie.surco
 
 import android.content.ComponentName
+import android.media.browse.MediaBrowser as LegacyBrowser
+import android.media.session.MediaController as LegacyController
+import android.util.Log
 import android.os.Handler
 import android.os.HandlerThread
 import androidx.media3.common.MediaItem
@@ -89,6 +92,63 @@ class AutoTest {
             Thread.sleep(300)
         }
         assertEquals("2|1|${second.mediaMetadata.title}|${Player.STATE_READY}", state)
-        println("Android Auto (navegador de Media3): pestañas ${tabs.size}, álbumes ${albums.size}, búsqueda ${hits.size}, suena «${second.mediaMetadata.title}» en su disco")
+        Log.i("SurcoAuto", "navegador de Media3: pestañas ${tabs.size}, álbumes ${albums.size}, búsqueda ${hits.size}, suena «${second.mediaMetadata.title}» en su disco")
+    }
+
+    /**
+     * El camino por el que entra Android Auto de verdad: el MediaBrowser del sistema (protocolo
+     * antiguo, `MediaBrowserService`), y los mandos de transporte: tocar por id y pedir por voz.
+     */
+    @Test fun caminoDeAndroidAuto() {
+        val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+        val connected = CountDownLatch(1)
+        val legacy = onLooper {
+            LegacyBrowser(ctx, ComponentName(ctx.packageName, "com.eddie.surco.player.PlaybackService"), object : LegacyBrowser.ConnectionCallback() {
+                override fun onConnected() { connected.countDown() }
+            }, null).apply { connect() }
+        }
+        assertTrue("el navegador del sistema no conecta", connected.await(20, TimeUnit.SECONDS))
+        fun children(id: String): List<LegacyBrowser.MediaItem> {
+            val done = CountDownLatch(1)
+            var out: List<LegacyBrowser.MediaItem> = emptyList()
+            onLooper {
+                legacy.subscribe(id, object : LegacyBrowser.SubscriptionCallback() {
+                    override fun onChildrenLoaded(parentId: String, children: MutableList<LegacyBrowser.MediaItem>) { out = children.toList(); done.countDown() }
+                })
+            }
+            assertTrue("sin hijos de $id", done.await(20, TimeUnit.SECONDS))
+            onLooper { legacy.unsubscribe(id) }
+            return out
+        }
+        val tabs = children(onLooper { legacy.root })
+        assertEquals(listOf("Para ti", "Listas", "Álbumes", "Artistas"), tabs.map { it.description.title.toString() })
+        val disco = children("albumes").first { it.description.title.toString() == "Disco de Prueba" }
+        val songs = children(disco.mediaId!!)
+        assertEquals(2, songs.size)
+        assertTrue(songs.all { it.isPlayable })
+
+        val controller = onLooper { LegacyController(ctx, legacy.sessionToken) }
+        fun waitTitle(t: String): String {
+            val deadline = System.currentTimeMillis() + 20_000
+            var now = ""
+            while (System.currentTimeMillis() < deadline) {
+                now = onLooper { controller.metadata?.description?.title?.toString().orEmpty() }
+                if (now == t) break
+                Thread.sleep(300)
+            }
+            return now
+        }
+        // Tocar en el coche: la 2.ª del disco.
+        onLooper { controller.transportControls.playFromMediaId(songs[1].mediaId, null) }
+        assertEquals(songs[1].description.title.toString(), waitTitle(songs[1].description.title.toString()))
+        // «Pon Prueba Dos de Otra Banda en Surco».
+        onLooper { controller.transportControls.playFromSearch("pon prueba dos de otra banda", null) }
+        assertEquals("Prueba Dos", waitTitle("Prueba Dos"))
+        // Una frase sin coincidencia no vacía la cola ni corta lo que suena.
+        onLooper { controller.transportControls.playFromSearch("zzzz qqqq", null) }
+        Thread.sleep(2000)
+        assertEquals("Prueba Dos", onLooper { controller.metadata?.description?.title?.toString() })
+        onLooper { controller.transportControls.pause(); legacy.disconnect() }
+        Log.i("SurcoAuto", "camino de Android Auto: pestañas ${tabs.size}, disco ${songs.size}, toque y voz bien")
     }
 }

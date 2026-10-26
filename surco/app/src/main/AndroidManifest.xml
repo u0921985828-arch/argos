@@ -57,6 +57,13 @@
             </intent-filter>
         </service>
 
+        <!-- Portadas para Android Auto, que no puede leer MediaStore (solo lectura, solo portadas). -->
+        <provider
+            android:name=".player.ArtProvider"
+            android:authorities="com.eddie.surco.arte"
+            android:exported="true"
+            tools:ignore="ExportedContentProvider" />
+
         <!-- Botones multimedia (Bluetooth, auriculares) con la app cerrada: reanudan la última cola. -->
         <receiver
             android:name="androidx.media3.session.MediaButtonReceiver"

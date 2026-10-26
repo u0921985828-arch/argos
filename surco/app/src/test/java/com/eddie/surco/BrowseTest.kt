@@ -68,6 +68,11 @@ class BrowseTest {
         assertEquals(listOf(2L, 1L), tree.search("DISCO A").map { it.id }) // sin tildes ni mayúsculas
         assertTrue(tree.search("   ").isEmpty())
         assertTrue(tree.search("nada que ver").isEmpty())
+        // Lo que se dice al hablar: «pon Uno de Banda A», «play Dos by Banda A».
+        assertEquals(listOf(1L), tree.search("pon uno de banda a").map { it.id })
+        assertEquals(listOf(2L), tree.search("play Dos by Banda A").map { it.id })
+        // El asistente añade una palabra que no está: con casi todo basta.
+        assertEquals(listOf(3L), tree.search("tres banda b remasterizada").map { it.id })
     }
 
     @Test fun nodosSueltos() {

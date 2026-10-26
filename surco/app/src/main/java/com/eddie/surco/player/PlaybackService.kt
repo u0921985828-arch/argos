@@ -56,6 +56,7 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.min
 import kotlin.math.pow
@@ -75,6 +76,8 @@ class PlaybackService : MediaLibraryService() {
     /** Lo hace [block] fuera del hilo principal y devuelve su futuro (el coche no puede esperar al disco). */
     private fun <T> later(block: () -> T): ListenableFuture<T> {
         val f = SettableFuture.create<T>()
+        // Con el servicio ya cerrándose, la corrutina no llegaría a correr y el futuro no acabaría nunca.
+        if (!scope.isActive) { f.setException(IllegalStateException("servicio cerrado")); return f }
         scope.launch { runCatching { withContext(Dispatchers.IO) { block() } }.onSuccess { f.set(it) }.onFailure { f.setException(it) } }
         return f
     }
@@ -159,11 +162,22 @@ class PlaybackService : MediaLibraryService() {
                     mediaItems: MutableList<MediaItem>,
                 ): ListenableFuture<MutableList<MediaItem>> {
                     // «Pon … en Surco» (asistente de voz): llega solo la frase, sin canción.
-                    val voice = mediaItems.singleOrNull()?.takeIf { it.requestMetadata.mediaUri == null && it.mediaId.isBlank() }
-                        ?.requestMetadata?.searchQuery
-                    if (voice != null) return later {
+                    val req = mediaItems.singleOrNull()?.takeIf { it.requestMetadata.mediaUri == null && it.mediaId.isBlank() }?.requestMetadata
+                    val voice = req?.searchQuery
+                    if (req != null && voice != null) return later {
                         val b = car.get()
-                        val hits = if (voice.isBlank()) b.tree.playContext(BrowseIds.SHUFFLE_ALL)?.first.orEmpty().shuffled() else b.tree.search(voice).map { it.id }
+                        // El asistente a veces separa título, artista y álbum: si los da, mandan sobre la frase.
+                        val ex = req.extras
+                        val parts = listOfNotNull(ex?.getString(MediaStore.EXTRA_MEDIA_TITLE), ex?.getString(MediaStore.EXTRA_MEDIA_ARTIST), ex?.getString(MediaStore.EXTRA_MEDIA_ALBUM))
+                            .filter { it.isNotBlank() }
+                        val hits = when {
+                            parts.isNotEmpty() -> b.tree.search(parts.joinToString(" ")).ifEmpty { b.tree.search(voice) }.map { it.id }
+                            voice.isBlank() -> b.tree.playContext(BrowseIds.SHUFFLE_ALL)?.first.orEmpty().shuffled()
+                            else -> b.tree.search(voice).map { it.id }
+                        }
+                        // Sin nada que case, error: una lista vacía pararía lo que suena y vaciaría la cola.
+                        if (hits.isEmpty()) throw UnsupportedOperationException("nada casa con «$voice»")
+                        handler.post { exo.shuffleModeEnabled = false }
                         hits.mapNotNull { b.byId[it]?.toMediaItem() }.toMutableList()
                     }
                     return Futures.immediateFuture(
@@ -191,6 +205,9 @@ class PlaybackService : MediaLibraryService() {
                     }
                     return later {
                         val (list, at, shuffle) = car.get().resolve(id) ?: throw UnsupportedOperationException(id)
+                        // Como en la app: un disco o una lista suenan en su orden (aunque el aleatorio
+                        // estuviera puesto); «Mezclar todo» ya llega mezclado.
+                        handler.post { exo.shuffleModeEnabled = false }
                         val items = (if (shuffle) list.shuffled() else list).map { it.toMediaItem() }
                         MediaSession.MediaItemsWithStartPosition(items, if (shuffle) 0 else at, C.TIME_UNSET)
                     }
