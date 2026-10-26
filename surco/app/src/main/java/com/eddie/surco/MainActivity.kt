@@ -8,6 +8,10 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
+import android.app.SearchManager
+import android.provider.MediaStore
+import com.eddie.surco.data.matchesFolded
+import com.eddie.surco.ui.searchHay
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -76,9 +80,23 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        voiceQuery(intent)
         setContent { SurcoTheme { Root() } }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        voiceQuery(intent)
+    }
+
+    /** «Pon … en Surco» del asistente: la frase llega en el intent y la recoge App al tener la biblioteca. */
+    private fun voiceQuery(i: Intent?) {
+        if (i?.action == MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH) PendingVoice.query.value = i.getStringExtra(SearchManager.QUERY).orEmpty()
+    }
 }
+
+/** Frase pendiente del asistente de voz («» = poner lo que sea: todo en aleatorio). */
+object PendingVoice { val query = kotlinx.coroutines.flow.MutableStateFlow<String?>(null) }
 
 private val audioPerm = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
 
@@ -133,6 +151,17 @@ private fun App(vm: LibraryViewModel) {
         Accent.color = if (c == null) Color(0xFF000000.toInt() or ACCENTS.getValue("Cobre"))
         // Contra Panel2, el fondo más claro sobre el que va el acento (pestaña activa, píldoras).
         else Color(0xFF000000.toInt() or legibleAccent(c.toArgb() and 0xFFFFFF, 0x20242C))
+    }
+    // «Pon … en Surco»: con la biblioteca ya consultada, suena lo que case con la frase.
+    val voice by PendingVoice.query.collectAsStateWithLifecycle()
+    val ready by vm.fresh.collectAsStateWithLifecycle()
+    LaunchedEffect(voice, ready, tracks) {
+        val q = voice ?: return@LaunchedEffect
+        if (!ready || tracks.isEmpty()) return@LaunchedEffect
+        PendingVoice.query.value = null
+        val hits = if (q.isBlank()) emptyList() else tracks.filter { matchesFolded(searchHay(it), q) }
+        if (hits.isEmpty()) vm.player.play(tracks, 0, shuffled = true) else vm.player.play(hits, 0)
+        vm.nowPlayingOpen = true
     }
     // Pantalla encendida con «Sonando» abierta, si se pide.
     val view = LocalView.current

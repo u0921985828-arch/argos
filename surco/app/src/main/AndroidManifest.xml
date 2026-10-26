@@ -30,7 +30,17 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- «Ok Google, pon … en Surco»: el asistente abre Surco con la frase. -->
+            <intent-filter>
+                <action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
+
+        <!-- Android Auto: Surco sale entre las aplicaciones de música del coche. -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
 
         <service
             android:name=".player.PlaybackService"
@@ -38,9 +48,12 @@
             android:foregroundServiceType="mediaPlayback"
             tools:ignore="ExportedService">
             <!-- Exportado a propósito: así lo encuentran los mandos del sistema, Bluetooth y los
-                 relojes. Es lo que pide MediaSessionService; solo expone los mandos de reproducción. -->
+                 relojes y Android Auto. Es lo que pide MediaLibraryService; expone los mandos y la biblioteca para navegarla. -->
             <intent-filter>
+                <action android:name="androidx.media3.session.MediaLibraryService" />
                 <action android:name="androidx.media3.session.MediaSessionService" />
+                <!-- Android Auto y los mandos antiguos navegan la biblioteca por aquí. -->
+                <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
 

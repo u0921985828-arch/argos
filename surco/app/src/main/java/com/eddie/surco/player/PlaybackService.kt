@@ -34,7 +34,15 @@ import com.eddie.surco.audio.SurcoExtractorsFactory
 import androidx.media3.exoplayer.RenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaSessionService
+import androidx.media3.session.LibraryResult
+import androidx.media3.session.MediaLibraryService
+import androidx.media3.session.MediaLibraryService.LibraryParams
+import androidx.media3.session.MediaLibraryService.MediaLibrarySession
+import androidx.media3.common.MediaMetadata
+import android.os.Bundle
+import com.google.common.collect.ImmutableList
+import com.eddie.surco.data.BrowseIds
+import com.eddie.surco.data.BrowseNode
 import com.eddie.surco.MainActivity
 import com.eddie.surco.audio.ReplayGainMode
 import com.eddie.surco.audio.SurcoAudioRenderer
@@ -59,8 +67,16 @@ import kotlin.math.pow
 const val RG_HEADROOM_DB = 6f
 
 @OptIn(UnstableApi::class)
-class PlaybackService : MediaSessionService() {
-    private var session: MediaSession? = null
+class PlaybackService : MediaLibraryService() {
+    private var session: MediaLibrarySession? = null
+    private val car by lazy { CarLibrary(this) }
+
+    /** Lo hace [block] fuera del hilo principal y devuelve su futuro (el coche no puede esperar al disco). */
+    private fun <T> later(block: () -> T): ListenableFuture<T> {
+        val f = SettableFuture.create<T>()
+        scope.launch { runCatching { withContext(Dispatchers.IO) { block() } }.onSuccess { f.set(it) }.onFailure { f.setException(it) } }
+        return f
+    }
     private lateinit var exo: ExoPlayer
     private val handler = Handler(Looper.getMainLooper())
     private val scope = MainScope()
@@ -135,22 +151,108 @@ class PlaybackService : MediaSessionService() {
             this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        session = MediaSession.Builder(this, FadingPlayer(exo))
-            .setSessionActivity(open)
-            .setCallback(object : MediaSession.Callback {
+        session = MediaLibrarySession.Builder(this, FadingPlayer(exo), object : MediaLibrarySession.Callback {
                 override fun onAddMediaItems(
                     mediaSession: MediaSession,
                     controller: MediaSession.ControllerInfo,
                     mediaItems: MutableList<MediaItem>,
-                ): ListenableFuture<MutableList<MediaItem>> = Futures.immediateFuture(
-                    // La URI no viaja por el controlador: se toma de requestMetadata o, si no, del
-                    // mediaId, que es el _ID de MediaStore. Lo que no tenga ninguna de las dos se descarta.
-                    mediaItems.mapNotNull { item ->
-                        val uri = item.requestMetadata.mediaUri
-                            ?: item.mediaId.toLongOrNull()?.let { ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, it) }
-                        uri?.let { item.buildUpon().setUri(it).build() }
-                    }.toMutableList()
-                )
+                ): ListenableFuture<MutableList<MediaItem>> {
+                    // «Pon … en Surco» (asistente de voz): llega solo la frase, sin canción.
+                    val voice = mediaItems.singleOrNull()?.takeIf { it.requestMetadata.mediaUri == null && it.mediaId.isBlank() }
+                        ?.requestMetadata?.searchQuery
+                    if (voice != null) return later {
+                        val b = car.get()
+                        val hits = if (voice.isBlank()) b.tree.playContext(BrowseIds.SHUFFLE_ALL)?.first.orEmpty().shuffled() else b.tree.search(voice).map { it.id }
+                        hits.mapNotNull { b.byId[it]?.toMediaItem() }.toMutableList()
+                    }
+                    return Futures.immediateFuture(
+                        // La URI no viaja por el controlador: se toma de requestMetadata o, si no, del
+                        // mediaId, que es el _ID de MediaStore. Lo que no tenga ninguna de las dos se descarta.
+                        mediaItems.mapNotNull { item ->
+                            val uri = item.requestMetadata.mediaUri
+                                ?: item.mediaId.toLongOrNull()?.let { ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, it) }
+                            uri?.let { item.buildUpon().setUri(it).build() }
+                        }.toMutableList()
+                    )
+                }
+
+                // Tocar una canción en el coche: suena su carpeta (álbum, lista, artista…) desde ella.
+                override fun onSetMediaItems(
+                    mediaSession: MediaSession,
+                    controller: MediaSession.ControllerInfo,
+                    mediaItems: MutableList<MediaItem>,
+                    startIndex: Int,
+                    startPositionMs: Long,
+                ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+                    val id = mediaItems.singleOrNull()?.mediaId
+                    if (id == null || (!id.contains("|t:") && id != BrowseIds.SHUFFLE_ALL)) {
+                        return super.onSetMediaItems(mediaSession, controller, mediaItems, startIndex, startPositionMs)
+                    }
+                    return later {
+                        val (list, at, shuffle) = car.get().resolve(id) ?: throw UnsupportedOperationException(id)
+                        val items = (if (shuffle) list.shuffled() else list).map { it.toMediaItem() }
+                        MediaSession.MediaItemsWithStartPosition(items, if (shuffle) 0 else at, C.TIME_UNSET)
+                    }
+                }
+
+                override fun onGetLibraryRoot(
+                    session: MediaLibrarySession, browser: MediaSession.ControllerInfo, params: LibraryParams?,
+                ): ListenableFuture<LibraryResult<MediaItem>> {
+                    val extras = Bundle().apply {
+                        putInt(CarLibrary.CONTENT_STYLE_BROWSABLE, CarLibrary.STYLE_LIST)
+                        putInt(CarLibrary.CONTENT_STYLE_PLAYABLE, CarLibrary.STYLE_LIST)
+                    }
+                    val root = MediaItem.Builder().setMediaId(BrowseIds.ROOT).setMediaMetadata(
+                        MediaMetadata.Builder().setTitle("Surco").setIsBrowsable(true).setIsPlayable(false)
+                            .setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_MIXED).build(),
+                    ).build()
+                    return Futures.immediateFuture(LibraryResult.ofItem(root, LibraryParams.Builder().setExtras(extras).build()))
+                }
+
+                override fun onGetChildren(
+                    session: MediaLibrarySession, browser: MediaSession.ControllerInfo, parentId: String,
+                    page: Int, pageSize: Int, params: LibraryParams?,
+                ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = later {
+                    val b = car.get()
+                    val nodes = b.tree.children(parentId) ?: return@later LibraryResult.ofError<ImmutableList<MediaItem>>(LibraryResult.RESULT_ERROR_BAD_VALUE)
+                    val from = (page.toLong() * pageSize).coerceAtMost(nodes.size.toLong()).toInt()
+                    val to = (from.toLong() + pageSize).coerceAtMost(nodes.size.toLong()).toInt()
+                    LibraryResult.ofItemList(nodes.subList(from, to).map { car.toItem(it, b.byId) }, params)
+                }
+
+                override fun onGetItem(
+                    session: MediaLibrarySession, browser: MediaSession.ControllerInfo, mediaId: String,
+                ): ListenableFuture<LibraryResult<MediaItem>> = later {
+                    val b = car.get()
+                    b.tree.item(mediaId)?.let { LibraryResult.ofItem(car.toItem(it, b.byId), null) }
+                        ?: LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
+                }
+
+                override fun onSearch(
+                    session: MediaLibrarySession, browser: MediaSession.ControllerInfo, query: String, params: LibraryParams?,
+                ): ListenableFuture<LibraryResult<Void>> {
+                    // Se cuenta fuera del hilo principal y se avisa desde él (es el hilo de la sesión).
+                    val f = SettableFuture.create<LibraryResult<Void>>()
+                    scope.launch {
+                        val n = runCatching { withContext(Dispatchers.IO) { car.get().tree.search(query).size } }.getOrDefault(0)
+                        session.notifySearchResultChanged(browser, query, n, params)
+                        f.set(LibraryResult.ofVoid())
+                    }
+                    return f
+                }
+
+                override fun onGetSearchResult(
+                    session: MediaLibrarySession, browser: MediaSession.ControllerInfo, query: String,
+                    page: Int, pageSize: Int, params: LibraryParams?,
+                ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = later {
+                    val b = car.get()
+                    val hits = b.tree.search(query)
+                    val from = (page.toLong() * pageSize).coerceAtMost(hits.size.toLong()).toInt()
+                    val to = (from.toLong() + pageSize).coerceAtMost(hits.size.toLong()).toInt()
+                    LibraryResult.ofItemList(hits.subList(from, to).map { s ->
+                        car.toItem(BrowseNode(BrowseIds.song(CarLibrary.SEARCH + query, s.id), s.title, s.artist, playable = true, songId = s.id), b.byId)
+                    }, params)
+                }
 
                 // Reanudar desde la notificación, el Bluetooth o el sistema tras cerrar la app.
                 // Se lee la caché fuera del hilo principal y se descarta lo que ya no existe.
@@ -174,6 +276,7 @@ class PlaybackService : MediaSessionService() {
                     return result
                 }
             })
+            .setSessionActivity(open)
             .build()
 
         // Ajustes que viven en el reproductor

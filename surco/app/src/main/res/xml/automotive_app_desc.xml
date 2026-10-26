@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Surco en Android Auto: aplicación de música (navegar, buscar y reproducir desde el coche). -->
+<automotiveApp>
+    <uses name="media" />
+</automotiveApp>

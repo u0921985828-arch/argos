@@ -124,3 +124,20 @@ Encargo: «Quiero que mejores el reproductor a niveles exagerados, la UI debe se
 - Catálogo por BPM y tonalidad (pedido a mitad de tarea): análisis en el móvil de las canciones sin esas etiquetas (`data/PureAnalysis.kt`: tempo por autocorrelación de ataques con peine y desempate de doble tiempo; tonalidad por cromagrama con Goertzel y perfiles de Krumhansl–Kessler; `data/AudioAnalyzer.kt` decodifica 30 s desde el 30 % a ~11 kHz mono; `data/AnalysisStore.kt` guarda por ruta y fecha). La etiqueta manda: solo se rellena lo que falta. Tonalidades normalizadas («Am», «A minor», «8A», «1m», «La menor» son la misma) y ordenadas por la rueda Camelot; sección «Ritmo y tono» en Etiquetas, BPM y Tonalidad en Inicio y como orden de cualquier lista; «Para mezclar» en el menú de una canción (tonalidad vecina en la rueda y ±6 % de tempo, también a mitad o al doble).
   - Medido en JVM: batería sintética a 90, 100, 120, 128, 140 y 174 BPM → ±1 BPM; Do mayor, La menor armónica y Re mayor por acordes → acierto; 18 formas de escribir una tonalidad.
   - Dos desvíos: con logaritmo puro de la energía, el charles sobre silencio pesaba como el bombo y 90 BPM salía 180,5 → compresión suave respecto a la media. Con ventanas de 11 ms, 128 BPM salía 64 (el pico caía entre dos ventanas) → ventanas de 5 ms y pico buscado a ±1.
+
+# Surco 2.3 — Android Auto
+
+Encargo: «¿Android Auto?».
+
+## Criterios
+- C1: un navegador de Media3 (el protocolo de Android Auto) conectado desde FUERA de la app, en el emulador, ve 4 pestañas (Para ti, Listas, Álbumes, Artistas), entra en «Disco de Prueba» (2 canciones reproducibles), encuentra «Prueba Dos» buscando y, al tocar la 2.ª del disco, suena el disco entero desde ella (`androidTest/AutoTest.kt` + `.github/scripts/auto-surco.sh`). Base: el servicio era `MediaSessionService` (sin árbol: Auto no lista Surco).
+- C2: árbol, contexto de reproducción y búsqueda probados en JVM (`BrowseTest`).
+- C3: CI verde (compilación sin avisos, lint 0, humo, diseño estricto) con el servicio nuevo.
+- Caso reservado: la búsqueda por voz («pon … en Surco») por el camino de Media3 sin canción (solo la frase) y por el intent del asistente en el móvil.
+
+## Decisiones
+- `MediaLibraryService` con el árbol armado de la caché que deja la app (no relee etiquetas en el coche), con los mismos filtros (carpetas excluidas, audios cortos) y lo analizado; se rehace como mucho cada 30 s.
+- Tocar una canción en el coche hace sonar su carpeta desde ella (`onSetMediaItems`), como en la app; «Mezclar todo» la biblioteca en aleatorio.
+- Álbumes en cuadrícula y lo demás en lista (indicaciones de estilo de contenido de Android Auto).
+- La prueba del coche corre contra el APK de depuración (la prueba comparte Media3 con la app; con R8 los nombres no casan), instalado encima del de release con la misma firma para conservar la biblioteca ya leída.
+- Sin probar en un coche ni en el Desktop Head Unit (no hay en el CI). Para verlo en un coche con un APK que no viene de Play: Android Auto → Ajustes → pulsar 10 veces en «Versión» → Desarrollador → «Fuentes desconocidas».
