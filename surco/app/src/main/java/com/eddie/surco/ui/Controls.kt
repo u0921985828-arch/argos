@@ -31,6 +31,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -94,6 +100,27 @@ fun VerticalSlider(
     }
 }
 
+/**
+ * Deslizador de Surco: pulgar redondo y pista continua. El de Material 1.3 pinta una barra con
+ * hueco, un punto de parada al final y una marca por cada paso: en «Sonando» se veían tres piezas
+ * sueltas y en el ecualizador pistas punteadas.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SurcoSlider(
+    value: Float, onChange: (Float) -> Unit, modifier: Modifier = Modifier,
+    range: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 0, onFinished: (() -> Unit)? = null,
+) {
+    val source = remember { MutableInteractionSource() }
+    val colors = SliderDefaults.colors(thumbColor = Copper, activeTrackColor = Copper, inactiveTrackColor = Panel2)
+    Slider(
+        value = value, onValueChange = onChange, modifier = modifier, valueRange = range, steps = steps,
+        onValueChangeFinished = onFinished, interactionSource = source, colors = colors,
+        thumb = { SliderDefaults.Thumb(interactionSource = source, colors = colors, thumbSize = DpSize(20.dp, 20.dp)) },
+        track = { SliderDefaults.Track(sliderState = it, colors = colors, drawStopIndicator = null, drawTick = { _, _ -> }, thumbTrackGapSize = 0.dp) },
+    )
+}
+
 /** Fila de ajuste con título, valor a la derecha y deslizador debajo. */
 @Composable
 fun LabeledSlider(
@@ -103,13 +130,11 @@ fun LabeledSlider(
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(title, fontSize = 15.sp, modifier = Modifier.weight(1f))
-            if (onReset != null) TextButton(onClick = onReset, modifier = Modifier.heightIn(min = 44.dp)) { Text("0", color = Muted) }
+            // Volver a 0 con un icono y solo cuando hace falta: un «0» junto al valor se leía como dos cifras.
+            if (onReset != null && value != 0f) IconButton(onClick = onReset) { Icon(Icons.Default.Refresh, "Poner a 0", tint = Muted) }
             Text(valueText, color = Copper, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
         }
-        Slider(
-            value = value, onValueChange = onChange, valueRange = range, steps = steps,
-            colors = SliderDefaults.colors(thumbColor = Copper, activeTrackColor = Copper, inactiveTrackColor = Panel2),
-        )
+        SurcoSlider(value = value, onChange = onChange, range = range, steps = steps)
     }
 }
 
@@ -153,18 +178,17 @@ fun NameDialog(title: String, initial: String = "", confirm: String = "Guardar",
 /** Fila pulsable de una opción con texto secundario. */
 @Composable
 fun OptionRow(title: String, subtitle: String? = null, onClick: () -> Unit) {
+    // Fila a 20 dp del borde, como los demás títulos de Ajustes (el TextButton empezaba a 14 dp).
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-        horizontalArrangement = Arrangement.Start, verticalAlignment = Alignment.CenterVertically,
+        Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 48.dp).padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        TextButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.weight(1f)) {
-                Text(title, color = Paper, fontSize = 15.sp)
-                if (subtitle != null) Text(subtitle, color = Muted, fontSize = 12.sp)
-            }
-            // La flecha dice que abre algo: sin ella se confundía con los textos fijos de Ajustes.
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Muted)
+        Column(Modifier.weight(1f)) {
+            Text(title, color = Paper, fontSize = 15.sp)
+            if (subtitle != null) Text(subtitle, color = Muted, fontSize = 12.sp, lineHeight = 15.sp)
         }
+        // La flecha dice que abre algo: sin ella se confundía con los textos fijos de Ajustes.
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Muted)
     }
 }
 

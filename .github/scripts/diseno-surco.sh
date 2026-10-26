@@ -107,7 +107,7 @@ ui; tap "Ordenar"; cap album-ordenar; back
 
 ui; tap "Etiquetas"; sleep 2; cap etiquetas
 adb shell input swipe 540 1700 540 600 400; cap etiquetas-abajo
-ui; tap "Género" || tap "Década"; sleep 2; cap grupos
+adb shell input swipe 540 600 540 1900 300; sleep 1; ui; tap "Género" || tap "Década"; sleep 2; cap grupos
 ui; tap "Rock" || true; sleep 2; cap grupo-canciones
 
 ui; tap "Listas"; sleep 2; cap listas

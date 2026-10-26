@@ -42,7 +42,6 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -118,7 +117,7 @@ fun BottomNav(vm: LibraryViewModel) {
 
 /** Cabecera de una pestaña: título grande y acciones a la derecha. */
 @Composable
-private fun TabHeader(title: String, subtitle: String?, actions: @Composable () -> Unit = {}) {
+fun TabHeader(title: String, subtitle: String?, actions: @Composable () -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, fontSize = 30.sp, fontWeight = FontWeight.Black, color = Paper)
@@ -135,9 +134,14 @@ private fun rememberAlbums(tracks: List<Track>): Map<String, Group> =
 
 private fun albumKey(t: Track) = TagField.ALBUM.buckets(t).firstOrNull()?.key
 
-private fun albumArtist(g: Group): String {
-    val names = g.tracks.map { it.albumArtist.ifBlank { it.artist } }.distinct()
-    return if (names.size == 1) names[0].ifBlank { "Desconocido" } else "Varios artistas"
+/** «Otra Banda, Banda Surco y 2 más»: un nombre real antes que «Varios artistas». */
+fun albumArtist(g: Group): String {
+    val names = g.tracks.map { it.albumArtist.ifBlank { it.artist } }.filter { it.isNotBlank() }.distinct()
+    return when {
+        names.isEmpty() -> "Desconocido"
+        names.size <= 2 -> names.joinToString(", ")
+        else -> names.take(2).joinToString(", ") + " y ${names.size - 2} más"
+    }
 }
 
 fun sortAlbums(list: List<Group>, sort: AlbumSort): List<Group> = when (sort) {
@@ -160,7 +164,7 @@ private fun AlbumCard(vm: LibraryViewModel, g: Group, size: Dp = 148.dp, modifie
                 colors = IconButtonDefaults.filledIconButtonColors(containerColor = Copper, contentColor = Ink),
             ) { Icon(Icons.Default.PlayArrow, "Reproducir ${g.bucket.label}") }
         }
-        Text(g.bucket.label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        Text(g.bucket.label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 17.sp,
             modifier = Modifier.padding(top = 6.dp, start = 2.dp, end = 2.dp))
         Text(albumArtist(g), color = Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 2.dp))
@@ -194,6 +198,16 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, byId: Map<Long, Track>
                 IconButton(onClick = { vm.push(Screen.Settings) }) { Icon(Icons.Default.Settings, "Ajustes", tint = Paper) }
             }
         }
+        // Sin canciones, el aviso y nada más: un «Mezclar todo» que no hace nada despista.
+        if (tracks.isEmpty() && progress == null) {
+            item {
+                Text(
+                    "No hay canciones en el móvil todavía. Copia música a la memoria y vuelve a abrir Surco (o Ajustes → Volver a leer).",
+                    color = Muted, modifier = Modifier.padding(24.dp),
+                )
+            }
+            return@LazyColumn
+        }
         item { SearchPill(vm) }
         // Debajo del buscador: si apareciera encima, empujaría el buscador justo cuando se va a tocar.
         if (progress != null) item {
@@ -207,7 +221,8 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, byId: Map<Long, Track>
             }
         }
         // Seguir donde se dejó: lo primero, porque es lo que más se hace al abrir.
-        if (resume != null && !vm.player.isPlaying) item {
+        // Solo cuando no hay minirreproductor: con una canción cargada en pausa salían los dos, iguales.
+        if (resume != null && vm.player.currentId == null) item {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(16.dp))
                     .background(Panel).clickable { vm.player.resume(byId) }.padding(12.dp),
@@ -255,16 +270,10 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, byId: Map<Long, Track>
             ) {
                 // 40 dp de alto (los chips de Material miden 32): es lo que se toca con el pulgar.
                 listOf(TagField.GENRE, TagField.DECADE, TagField.MOOD, TagField.QUALITY, TagField.FOLDER).forEach { f ->
-                    FilterChip(selected = false, onClick = { vm.push(Screen.Groups(f)) }, label = { Text(f.label) }, modifier = Modifier.height(40.dp))
+                    FilterChip(selected = false, onClick = { vm.push(Screen.Groups(f)) }, label = { Text(f.label) }, colors = chipColors(), modifier = Modifier.height(ChipHeight))
                 }
-                FilterChip(selected = false, onClick = { vm.selectTab(Tab.TAGS) }, label = { Text("Todas…") }, modifier = Modifier.height(40.dp))
+                FilterChip(selected = false, onClick = { vm.selectTab(Tab.TAGS) }, label = { Text("Todas…") }, colors = chipColors(), modifier = Modifier.height(ChipHeight))
             }
-        }
-        if (tracks.isEmpty() && progress == null) item {
-            Text(
-                "No hay canciones en el móvil todavía. Copia música a la memoria y vuelve a abrir Surco (o Ajustes → Volver a leer).",
-                color = Muted, modifier = Modifier.padding(24.dp),
-            )
         }
     }
 }
@@ -312,18 +321,18 @@ fun LibraryScreen(vm: LibraryViewModel, tracks: List<Track>) {
     val folders = rememberOffMain(tracks, initial = emptyList()) { groupTracks(tracks, TagField.FOLDER).sortedBy { fold(it.bucket.label) } }
     val songsSorted = rememberOffMain(tracks, initial = emptyList()) { tracks.sortedBy { fold(it.title) } }
     Column(Modifier.fillMaxSize()) {
-        TabHeader("Biblioteca", null)
+        TabHeader("Biblioteca", "${songs(tracks.size)} · ${albums.size} álbumes · ${artists.size} artistas")
         SearchPill(vm)
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             LibraryTab.entries.forEach { t ->
-                val n = when (t) { LibraryTab.SONGS -> tracks.size; LibraryTab.ALBUMS -> albums.size; LibraryTab.ARTISTS -> artists.size; LibraryTab.FOLDERS -> folders.size }
+                // Sin recuento en el chip: con letra grande «Carpetas» quedaba fuera de pantalla.
                 FilterChip(
                     selected = vm.libraryTab == t, onClick = { vm.libraryTab = t },
-                    label = { Text("${t.label} $n") },
-                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Copper, selectedLabelColor = Ink),
+                    label = { Text(t.label) },
+                    colors = chipColors(), modifier = Modifier.height(ChipHeight),
                 )
             }
         }
@@ -346,7 +355,7 @@ fun LibraryScreen(vm: LibraryViewModel, tracks: List<Track>) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         AlbumSort.entries.forEach { o ->
-                            FilterChip(selected = vm.albumSort == o, onClick = { vm.albumSort = o }, label = { Text(o.label) })
+                            FilterChip(selected = vm.albumSort == o, onClick = { vm.albumSort = o }, label = { Text(o.label) }, colors = chipColors(), modifier = Modifier.height(ChipHeight))
                         }
                     }
                 }
@@ -401,7 +410,7 @@ fun SearchScreen(vm: LibraryViewModel, tracks: List<Track>) {
             OutlinedTextField(
                 value = vm.query, onValueChange = { vm.query = it },
                 modifier = Modifier.weight(1f).focusRequester(req),
-                placeholder = { Text("Buscar en cualquier etiqueta") },
+                placeholder = { Text("Buscar en cualquier etiqueta", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 leadingIcon = { Icon(Icons.Default.Search, null) },
                 trailingIcon = { if (vm.query.isNotEmpty()) IconButton(onClick = { vm.query = "" }) { Icon(Icons.Default.Clear, "Borrar") } },
                 singleLine = true, shape = RoundedCornerShape(14.dp),

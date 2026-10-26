@@ -41,6 +41,8 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
@@ -48,7 +50,6 @@ import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
-import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
@@ -61,8 +62,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -226,7 +225,7 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { vm.nowPlayingOpen = false }) { Icon(Icons.Default.KeyboardArrowDown, "Cerrar", Modifier.size(30.dp)) }
             Text("SONANDO", color = Paper.copy(alpha = 0.7f), fontSize = 12.sp, letterSpacing = 1.6.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-            IconButton(onClick = { vm.sheet = SongSheetState(track) }) { Icon(Icons.Default.Sell, "Todas las etiquetas") }
+            IconButton(onClick = { vm.sheet = SongSheetState(track) }) { Icon(Icons.Default.MoreVert, "Más") }
         }
         Spacer(Modifier.height(12.dp))
         val artMod = Modifier.widthIn(max = 380.dp).fillMaxWidth().aspectRatio(1f)
@@ -263,13 +262,15 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
         if (q.isNotEmpty()) {
             Text(q, color = Teal, fontSize = 12.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
         }
-        outputLine(track)?.let { Text(it, color = Muted, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth()) }
+        // La línea de salida solo cuando dice algo que la calidad del archivo no dice: que se
+        // recorta a 16 bits o que algo cambia la señal. El resto sigue en Ajustes.
+        outputLine(track)?.takeIf { "16 bits" in it.substringAfter("·") || "con efectos" in it || "ReplayGain" in it || "×" in it }
+            ?.let { Text(it, color = Muted, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth()) }
         Spacer(Modifier.height(10.dp))
-        Slider(
+        SurcoSlider(
             value = if (dragging) dragVal else if (dur > 0) (pos / dur.toFloat()).coerceIn(0f, 1f) else 0f,
-            onValueChange = { dragging = true; dragVal = it },
-            onValueChangeFinished = { p.seek((dragVal * dur).toLong()); dragging = false },
-            colors = SliderDefaults.colors(thumbColor = Copper, activeTrackColor = Copper, inactiveTrackColor = Panel2),
+            onChange = { dragging = true; dragVal = it },
+            onFinished = { p.seek((dragVal * dur).toLong()); dragging = false },
         )
         Row(Modifier.fillMaxWidth()) {
             Text(fmtTime(if (dragging) (dragVal * dur).toLong() else pos), color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
@@ -297,7 +298,7 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             ToolButton(Icons.Default.FormatQuote, "Letra", showLyrics) { showLyrics = !showLyrics }
             ToolButton(Icons.AutoMirrored.Filled.QueueMusic, "Cola", false) { vm.queueOpen = true }
-            ToolButton(Icons.Default.Equalizer, if (prefs.dsp.eqOn && prefs.dsp.eqActive) prefs.preset else "EQ", prefs.dsp.eqOn && prefs.dsp.eqActive) {
+            ToolButton(Icons.Default.Equalizer, "EQ", prefs.dsp.eqOn && prefs.dsp.eqActive) {
                 vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.Equalizer)
             }
             val sleepLabel = when {
@@ -309,7 +310,8 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
             ToolButton(Icons.Default.Speed, "%.2f×".format(Locale("es"), prefs.speed).replace(",00", "").replace("0×", "×"), prefs.speed != 1f) { vm.speedOpen = true }
         }
         Spacer(Modifier.height(18.dp))
-        TagChips(vm, track)
+        // Sin el grupo Archivo: la calidad ya está en la línea teal y la ficha completa, en «Más».
+        TagChips(vm, track, exceptGroup = "Archivo")
         Spacer(Modifier.height(24.dp))
     }
 }
@@ -534,9 +536,10 @@ fun AddToPlaylistDialog(vm: LibraryViewModel, tracks: List<Track>) {
 /** Etiquetas pulsables: cada una abre las canciones que la comparten. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun TagChips(vm: LibraryViewModel, track: Track) {
-    val chips = remember(track) {
-        TagField.entries.flatMap { f -> f.buckets(track).filter { it.label != "Desconocido" && it.label != "Sin año" }.map { f to it } }
+fun TagChips(vm: LibraryViewModel, track: Track, exceptGroup: String? = null) {
+    val chips = remember(track, exceptGroup) {
+        TagField.entries.filter { it.group != exceptGroup }
+            .flatMap { f -> f.buckets(track).filter { it.label != "Desconocido" && it.label != "Sin año" }.map { f to it } }
     }
     // 40 dp de alto y 8 dp de hueco: así los objetivos de toque (48 dp) de dos filas no se pisan.
     FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -620,7 +623,9 @@ fun PermissionScreen(blocked: Boolean, onAsk: () -> Unit) {
         Modifier.fillMaxSize().background(Ink).padding(32.dp),
         verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(Modifier.size(72.dp).clip(CircleShape).background(Copper))
+        Box(Modifier.size(72.dp).clip(CircleShape).background(Copper), contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.LibraryMusic, null, tint = Ink, modifier = Modifier.size(36.dp))
+        }
         Spacer(Modifier.height(24.dp))
         Text("Surco necesita acceso a tu música", fontSize = 20.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
         Spacer(Modifier.height(8.dp))

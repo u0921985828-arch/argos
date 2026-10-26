@@ -19,7 +19,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -31,6 +30,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -87,11 +87,11 @@ fun EqualizerScreen(vm: LibraryViewModel) {
                         selected = prefs.preset == name && d.eqOn,
                         onClick = { SurcoSettings.update { it.copy(dsp = it.dsp.copy(bands = bands, eqOn = true), preset = name) } },
                         label = { Text(name) },
-                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Copper, selectedLabelColor = Ink),
+                        colors = chipColors(), modifier = Modifier.height(ChipHeight),
                     )
                 }
                 item {
-                    FilterChip(selected = false, onClick = { saving = true }, label = { Text("+ Guardar") })
+                    FilterChip(selected = false, onClick = { saving = true }, label = { Text("+ Guardar") }, colors = chipColors(), modifier = Modifier.height(ChipHeight))
                 }
             }
 
@@ -161,12 +161,13 @@ fun EqualizerScreen(vm: LibraryViewModel) {
             Text("Crossfeed para auriculares", fontSize = 15.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
             Text("Mezcla un poco de cada canal en el otro, como unos altavoces: cansa menos con grabaciones muy separadas.",
                 color = Muted, fontSize = 12.sp, lineHeight = 15.sp, modifier = Modifier.padding(horizontal = 20.dp))
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Desliza: con letra grande «Fuerte» se partía en dos líneas dentro del chip.
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 CROSSFEED_LEVELS.indices.forEach { lvl ->
                     FilterChip(
                         selected = d.crossfeed == lvl, onClick = { SurcoSettings.updateDsp { it.copy(crossfeed = lvl) } },
-                        label = { Text(CROSSFEED_NAMES[lvl]) },
-                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Copper, selectedLabelColor = Ink),
+                        label = { Text(CROSSFEED_NAMES[lvl], maxLines = 1, softWrap = false) },
+                        colors = chipColors(), modifier = Modifier.height(ChipHeight),
                     )
                 }
             }

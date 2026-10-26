@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -48,6 +49,12 @@ val Copper = Color(0xFFE08A4B)
 val Teal = Color(0xFF6FB3A8)
 val Paper = Color(0xFFECE7E1)
 val Muted = Color(0xFF8E939C)
+
+/** Un solo lenguaje de «seleccionado» para todos los chips: cobre con texto tinta. */
+@Composable
+fun chipColors() = FilterChipDefaults.filterChipColors(selectedContainerColor = Copper, selectedLabelColor = Ink)
+/** Altura de chip: los de Material miden 32 dp; 40 es lo que se toca con el pulgar. */
+val ChipHeight = 40.dp
 
 private val Scheme = darkColorScheme(
     primary = Copper, onPrimary = Ink, secondary = Teal, onSecondary = Ink,

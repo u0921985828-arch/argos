@@ -54,7 +54,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -95,12 +94,7 @@ import kotlinx.coroutines.withContext
 fun TagsScreen(vm: LibraryViewModel, tracks: List<Track>) {
     val fields = rememberOffMain(tracks, initial = emptyList()) { availableFields(tracks) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
-        item {
-            Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp)) {
-                Text("Etiquetas", fontSize = 30.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onBackground)
-                Text("Tu música ordenada por lo que dicen sus archivos: personas, obra, tiempo y calidad.", color = Muted, fontSize = 13.sp)
-            }
-        }
+        item { TabHeader("Etiquetas", "Tu música ordenada por lo que dicen sus archivos") }
         fields.groupBy { it.first.group }.forEach { (section, list) ->
             item(key = "sec-$section") { SectionLabel(section) }
             item(key = "grid-$section") {
@@ -126,7 +120,7 @@ private fun FieldCard(field: TagField, groups: List<Group>, modifier: Modifier, 
     Column(
         modifier.clip(RoundedCornerShape(14.dp)).background(Panel).clickable(onClick = onClick).padding(14.dp),
     ) {
-        Text(field.label, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(field.label, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 18.sp)
         Text("${groups.size}", color = Copper, fontSize = 26.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
         Text(top, color = Muted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 15.sp)
     }
@@ -168,8 +162,8 @@ fun GroupsScreen(vm: LibraryViewModel, field: TagField, tracks: List<Track>) {
     Column(Modifier.fillMaxSize()) {
         TopBar(field.label, "${all.size} grupos", onBack = { vm.pop() })
         Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = !byCount, onClick = { byCount = false }, label = { Text(if (numeric) "Por orden" else "A – Z") })
-            FilterChip(selected = byCount, onClick = { byCount = true }, label = { Text("Más canciones") })
+            FilterChip(selected = !byCount, onClick = { byCount = false }, label = { Text(if (numeric) "Por orden" else "A – Z") }, colors = chipColors(), modifier = Modifier.height(ChipHeight))
+            FilterChip(selected = byCount, onClick = { byCount = true }, label = { Text("Más canciones") }, colors = chipColors(), modifier = Modifier.height(ChipHeight))
         }
         val showArt = field in setOf(TagField.ALBUM, TagField.ARTIST, TagField.ALBUM_ARTIST, TagField.FOLDER)
         val max = remember(all) { all.maxOfOrNull { it.tracks.size } ?: 1 }
@@ -183,7 +177,7 @@ fun GroupsScreen(vm: LibraryViewModel, field: TagField, tracks: List<Track>) {
                     if (showArt) { Art(g.tracks.first(), 48.dp, corner = if (field == TagField.ALBUM) 6.dp else 24.dp, modifier = Modifier.size(48.dp)); Spacer(Modifier.width(14.dp)) }
                     Column(Modifier.weight(1f)) {
                         Text(g.bucket.label, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        val sub = if (field == TagField.ALBUM) albumArtistOf(g) + " · " else ""
+                        val sub = if (field == TagField.ALBUM) albumArtist(g) + " · " else ""
                         Text("$sub${songs(g.tracks.size)} · ${fmtTotal(g.totalMs)}", color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (!showArt) {
                             Spacer(Modifier.height(5.dp))
@@ -199,10 +193,6 @@ fun GroupsScreen(vm: LibraryViewModel, field: TagField, tracks: List<Track>) {
     }
 }
 
-private fun albumArtistOf(g: Group): String {
-    val names = g.tracks.map { it.albumArtist.ifBlank { it.artist } }.distinct()
-    return if (names.size == 1) names[0].ifBlank { "Desconocido" } else "Varios artistas"
-}
 
 private fun List<Track>.sortedForAlbum() = sortedWith(compareBy({ it.album.lowercase() }, { it.discNo }, { it.trackNo }, { it.title.lowercase() }))
 
