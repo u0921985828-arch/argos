@@ -55,7 +55,8 @@ object Notice {
     @Volatile var visible = false
 
     /** Con acción hay que tener tiempo de leerla y llegar al botón; un texto largo, de leerlo. */
-    fun show(text: String, action: String? = null, onAction: (() -> Unit)? = null, long: Boolean = false) {
+    // La acción va la última: así se escribe como lambda al final («show("…", "Deshacer") { … }»).
+    fun show(text: String, action: String? = null, long: Boolean = false, onAction: (() -> Unit)? = null) {
         val act = action?.takeIf { onAction != null }
         val ms = if (act != null) 8000 else if (long) 6000 else 4000
         _current.value = Item(++next, text, act, onAction, SystemClock.uptimeMillis() + ms)
