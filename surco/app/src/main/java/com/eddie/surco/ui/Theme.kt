@@ -106,6 +106,9 @@ private suspend fun loadArt(ctx: android.content.Context, t: Track, px: Int): Im
 private val colorCache = LruCache<Long, Any>(200)
 
 /** Color dominante de la portada (para el fondo de «Sonando»), o null si no hay portada. */
+/** El color ya calculado de la portada, sin esperar (null si aún no se sabe). */
+fun cachedArtColor(t: Track): Color? = colorCache.get(t.artKey) as? Color
+
 suspend fun artColor(ctx: android.content.Context, t: Track): Color? = withContext(Dispatchers.Default) {
     colorCache.get(t.artKey)?.let { return@withContext it as? Color }
     val c = runCatching {

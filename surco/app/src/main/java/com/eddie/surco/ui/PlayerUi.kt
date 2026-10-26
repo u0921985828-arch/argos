@@ -73,6 +73,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.stateDescription
@@ -216,7 +217,8 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
     val (pos, dur) = rememberPosition(vm, 250)
     var dragging by remember { mutableStateOf(false) }
     var dragVal by remember { mutableFloatStateOf(0f) }
-    var showLyrics by remember { mutableStateOf(false) }
+    // Saveable: al girar el móvil la actividad se recrea y la letra abierta seguía cerrándose.
+    var showLyrics by rememberSaveable { mutableStateOf(false) }
     val p = vm.player
     val ctx = LocalContext.current
     val prefs by SurcoSettings.state.collectAsState()
@@ -227,7 +229,8 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
 
     // Sin produceState: lint (K2) no ve la asignación a value y lo da por error. Se queda el color
     // anterior hasta tener el nuevo, para que el fondo cambie con la animación y no pase por el gris.
-    var tint by remember { mutableStateOf<Color?>(null) }
+    // Empieza con el de la caché: al girar, el fondo no pasa por el gris.
+    var tint by remember { mutableStateOf(cachedArtColor(track)) }
     LaunchedEffect(track.artKey) { tint = artColor(ctx, track) }
     // Fondo liso y opaco: un toque del color de la portada sobre el fondo de la app. El degradado
     // de antes empezaba transparente y dejaba ver Inicio por debajo.
@@ -337,7 +340,9 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
         }
     }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(bg).statusBarsPadding().navigationBarsPadding()) {
+    // pointerInput vacío: el fondo se queda los toques de los huecos (en horizontal hay varios); si
+    // no, llegaban a Inicio, que está debajo, y podían poner otra canción sin que se viera.
+    BoxWithConstraints(Modifier.fillMaxSize().background(bg).pointerInput(Unit) {}.statusBarsPadding().navigationBarsPadding()) {
         val w = maxWidth
         val h = maxHeight
         if (w > h && w >= 560.dp) {
