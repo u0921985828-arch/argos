@@ -46,6 +46,9 @@ jobs:
       # ejecutor; el debug, por si R8 rompe algo de jaudiotagger.
       - name: Build APKs
         working-directory: surco
+        # SURCO_RED=1: la prueba de LRCLIB pregunta al servicio de verdad (el ejecutor tiene red).
+        env:
+          SURCO_RED: "1"
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon testDebugUnitTest assembleDebug assembleRelease lintDebug

@@ -362,14 +362,16 @@ private fun ToolButton(icon: ImageVector, label: String, active: Boolean, onClic
 @Composable
 fun LyricsPanel(vm: LibraryViewModel, track: Track, pos: Long, modifier: Modifier) {
     var lyrics by remember(track.id) { mutableStateOf<Lyrics?>(null) }
-    LaunchedEffect(track.id) { lyrics = withContext(Dispatchers.IO) { vm.loadLyrics(track) } }
+    // «Buscando» hasta que la búsqueda acaba de verdad (con LRCLIB puede tardar unos segundos).
     var loaded by remember(track.id) { mutableStateOf(false) }
-    LaunchedEffect(track.id) { delay(1500); loaded = true }
+    LaunchedEffect(track.id) { lyrics = withContext(Dispatchers.IO) { vm.loadLyrics(track) }; loaded = true }
+    val online = SurcoSettings.state.collectAsState().value.onlineLyrics
     Box(modifier, contentAlignment = Alignment.Center) {
         val l = lyrics
         if (l == null) {
             Text(
-                if (loaded) "Esta canción no tiene letra.\n\nSurco lee la etiqueta LYRICS del archivo (también en formato LRC sincronizado) y, si el sistema lo permite, un .lrc con el mismo nombre."
+                if (loaded) "Esta canción no tiene letra.\n\nSurco lee la etiqueta LYRICS del archivo (también en LRC sincronizado) y un .lrc con el mismo nombre" +
+                    (if (online) "; en lrclib.net tampoco está." else ".\n\nTambién puede buscarla en internet: Ajustes → Biblioteca → Letras de internet.")
                 else "Buscando la letra…",
                 color = Muted, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(24.dp),
             )

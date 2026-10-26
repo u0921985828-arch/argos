@@ -48,6 +48,8 @@ data class Prefs(
     val homeAdded: Boolean = true,
     val homeTop: Boolean = true,
     val homeExplore: Boolean = true,
+    /** Si una canción no trae letra, buscarla en LRCLIB (sale artista, título, álbum y duración). */
+    val onlineLyrics: Boolean = false,
     /** Carpetas (ruta completa) que no entran en la biblioteca. */
     val excludedFolders: Set<String> = emptySet(),
 )
@@ -114,7 +116,7 @@ object SurcoSettings {
         put("crossfade", p.crossfadeSec); put("crossfadeKeepAlbums", p.crossfadeKeepAlbums)
         put("accent", p.accent); put("techDetails", p.techDetails); put("keepScreenOn", p.keepScreenOn)
         put("homeRecent", p.homeRecent); put("homeAdded", p.homeAdded); put("homeTop", p.homeTop); put("homeExplore", p.homeExplore)
-        put("excluded", JSONArray(p.excludedFolders.toList()))
+        put("excluded", JSONArray(p.excludedFolders.toList())); put("onlineLyrics", p.onlineLyrics)
     }
 
     private fun floats(a: JSONArray?): List<Float>? = a?.let { arr -> List(arr.length()) { arr.optDouble(it, 0.0).toFloat() } }
@@ -148,6 +150,7 @@ object SurcoSettings {
             keepScreenOn = o.optBoolean("keepScreenOn", false),
             homeRecent = o.optBoolean("homeRecent", true), homeAdded = o.optBoolean("homeAdded", true),
             homeTop = o.optBoolean("homeTop", true), homeExplore = o.optBoolean("homeExplore", true),
+            onlineLyrics = o.optBoolean("onlineLyrics", false),
             excludedFolders = o.optJSONArray("excluded")?.let { a -> List(a.length()) { a.optString(it) }.filter { it.isNotBlank() }.toSet() } ?: emptySet(),
         )
     }

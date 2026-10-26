@@ -147,7 +147,7 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun loadLyrics(t: Track): Lyrics? = scanner.loadLyrics(t)
+    fun loadLyrics(t: Track): Lyrics? = scanner.loadLyrics(t, online = SurcoSettings.state.value.onlineLyrics)
 
     fun goToAlbum(t: Track) = TagField.ALBUM.buckets(t).firstOrNull()?.let { openTag(TagField.ALBUM, it.key, it.label) }
     fun goToArtist(t: Track) = TagField.ARTIST.buckets(t).firstOrNull()?.let { openTag(TagField.ARTIST, it.key, it.label) }

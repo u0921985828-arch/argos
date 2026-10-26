@@ -67,7 +67,7 @@ import java.util.Locale
 enum class SettingsPage(val title: String, val subtitle: String, val icon: ImageVector) {
     SOUND("Sonido", "Ecualizador, ReplayGain y calidad de salida", Icons.Default.Equalizer),
     PLAYBACK("Reproducción", "Fundidos, velocidad, temporizador y silencios", Icons.Default.PlayCircle),
-    LIBRARY("Biblioteca", "Carpetas, audios cortos y volver a leer", Icons.Default.LibraryMusic),
+    LIBRARY("Biblioteca", "Carpetas, letras de internet y audios cortos", Icons.Default.LibraryMusic),
     LOOK("Interfaz", "Color, Inicio, detalles técnicos y pantalla", Icons.Default.Palette),
     STATS("Tus escuchas", "Lo que más suena, en cifras", Icons.Default.BarChart),
     ABOUT("Acerca de Surco", "Privacidad y versión", Icons.Default.Info),
@@ -192,6 +192,11 @@ private fun LibraryPage(vm: LibraryViewModel) {
     SettingTitle("Ocultar audios cortos", "Notas de voz, tonos y avisos fuera de la biblioteca.")
     ChipChoice(listOf(0 to "No", 30 to "< 30 s", 60 to "< 1 min"), prefs.minDurationSec) { s -> SurcoSettings.update { it.copy(minDurationSec = s) } }
     OptionRow("Volver a leer todas las etiquetas", "Útil si has editado etiquetas con otro programa") { vm.scan(force = true); vm.pop() }
+    SwitchRow(
+        "Letras de internet (LRCLIB)",
+        "Si una canción no trae letra, se busca en lrclib.net (muchas, sincronizadas). Solo sale artista, título, álbum y duración.",
+        prefs.onlineLyrics,
+    ) { on -> SurcoSettings.update { it.copy(onlineLyrics = on) } }
     SectionLabel("Carpetas")
     Text("Las que se apagan no salen en la biblioteca ni en la búsqueda. No se borra nada.",
         color = Muted, fontSize = 12.sp, lineHeight = 15.sp, modifier = Modifier.padding(horizontal = 20.dp))
@@ -297,7 +302,12 @@ private fun RankRow(rank: Int, title: String, value: String, onClick: () -> Unit
 // ---------- Acerca de ----------
 @Composable
 private fun AboutPage() {
-    SettingTitle("Privacidad", "Surco no usa internet. Las escuchas, favoritas, listas y ajustes se guardan solo en este móvil.")
+    val online = SurcoSettings.state.collectAsState().value.onlineLyrics
+    SettingTitle(
+        "Privacidad",
+        (if (online) "Surco solo usa internet para buscar letras en lrclib.net (artista, título, álbum y duración). "
+        else "Surco no usa internet. ") + "Las escuchas, favoritas, listas y ajustes se guardan solo en este móvil.",
+    )
     SettingTitle("Versión", SURCO_VERSION)
     SettingTitle("Formatos", "MP3, AAC, FLAC, ALAC, Opus, Vorbis y WAV (también en coma flotante). Letras de la etiqueta LYRICS o de un .lrc al lado.")
 }

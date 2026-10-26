@@ -204,7 +204,30 @@ class LibraryScanner(private val ctx: Context) {
      * Letra de la canción: primero un .lrc con el mismo nombre al lado (en Android 13+ solo se
      * puede leer si el sistema lo deja, así que es un extra), después la etiqueta incrustada.
      */
-    fun loadLyrics(t: Track): Lyrics? {
+    fun loadLyrics(t: Track, online: Boolean = false): Lyrics? =
+        localLyrics(t) ?: if (online) onlineLyrics(t) else null
+
+    /**
+     * LRCLIB, con caché en disco: lo encontrado se guarda para siempre y «no está» se recuerda
+     * 7 días (sin eso, cada vez que se abre la letra de una canción rara se preguntaría otra vez).
+     */
+    private fun onlineLyrics(t: Track): Lyrics? {
+        val dur = (t.durationMs / 1000).toInt()
+        if (t.artist.isBlank() || t.title.isBlank() || dur <= 0) return null
+        val dir = File(ctx.filesDir, "letras").apply { mkdirs() }
+        val key = java.security.MessageDigest.getInstance("SHA-1")
+            .digest("${t.artist}|${t.title}|$dur".lowercase().toByteArray()).joinToString("") { "%02x".format(it) }
+        val f = File(dir, "$key.lrc")
+        if (f.exists() && (f.length() > 0 || System.currentTimeMillis() - f.lastModified() < 7 * 86_400_000L)) {
+            return parseLyrics(runCatching { f.readText() }.getOrDefault(""), "LRCLIB")
+        }
+        // Sin red no se guarda nada: se volverá a probar la próxima vez.
+        val r = fetchLrclib(t.artist, t.title, t.album, dur, ::httpGet)
+        if (r != null) runCatching { f.writeText(r) }
+        return r?.let { parseLyrics(it, "LRCLIB") }
+    }
+
+    private fun localLyrics(t: Track): Lyrics? {
         val audio = File(t.path)
         val lrc = File(audio.parentFile, audio.nameWithoutExtension + ".lrc")
         runCatching { if (lrc.canRead()) parseLyrics(lrc.readText(), "archivo .lrc")?.let { return it } }
