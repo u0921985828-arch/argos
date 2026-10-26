@@ -83,8 +83,8 @@ for xmlf in sorted(glob.glob(os.path.join(carpeta, "*.xml"))):
         tocable = n.get("clickable") == "true" or n.get("long-clickable") == "true" or n.get("checkable") == "true"
         visible = b[1] < H and b[3] > 0 and b[3] - b[1] > 2 and b[2] - b[0] > 2
         if tocable and visible:
-            # El botón de borrar vive dentro del campo de texto: no es un solape.
-            if not n.get("class", "").endswith("EditText"): toc.append((b, etiqueta))
+            # El botón de borrar vive dentro del campo de texto: no es un solape. Lo recortado por
+            # el borde de una lista que se desplaza tampoco (asoma por debajo de la cabecera).
             # Recortado por el borde de la pantalla o de una lista que se desplaza: no es su tamaño real.
             cortado = b[1] <= 0 or b[3] >= H - 1 or b[0] <= 0 or b[2] >= W - 1
             m = padre.get(n)
@@ -93,6 +93,7 @@ for xmlf in sorted(glob.glob(os.path.join(carpeta, "*.xml"))):
                     c = bounds(m)
                     cortado = b[0] <= c[0] or b[1] <= c[1] or b[2] >= c[2] or b[3] >= c[3]
                 m = padre.get(m)
+            if not n.get("class", "").endswith("EditText") and not cortado: toc.append((b, etiqueta))
             # Lo de menos de 10 dp es una pieza de un deslizador (pulgar, pista), no un botón.
             # Compose amplía solo el área de toque de lo pequeño hasta 48 dp (si no hay otro
             # tocable más cerca), así que de 40 a 47 dp se avisa sin contar como fallo.
