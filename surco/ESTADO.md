@@ -173,3 +173,4 @@ Encargo: «Quiero widgets también».
   - «Reproducir» sin nada que reanudar abría un servicio sin cola y Android lo cerraba → sin canción, el botón abre Surco.
   - Actualizaciones desordenadas (una corrutina por evento en paralelo) → un solo hilo y se pinta el último estado; un fallo del widget no tira el servicio de música; sin widgets en el aparato no pasa nada.
   - Favorita: color y acción se fijan siempre (el lanzador reaplica sobre lo anterior). Portada y acento, una vez por canción; la caché de la biblioteca solo se lee si cambia la canción guardada. Textos en recursos.
+- CI verde (run 40339727282): «OK (4 tests)» — widget: enseña «Prueba Dos», reproducir y pausar desde el widget; Android Auto por los dos caminos; diseño estricto 0 y 0. Capturas de los tres tamaños revisadas a ojo.
