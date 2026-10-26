@@ -173,6 +173,9 @@ cayo "al reproducir"
 echo "sesión multimedia: $(estado) (3 = sonando)"
 
 # --- Surco 2.5: notificación de música con botones propios (favorita y aleatorio) ---
+# En pausa: con música la persiana tarda en volcarse y «Prueba Dos» (20 s) se acabaría antes de
+# seguir. La notificación sigue ahí en pausa.
+adb shell input keyevent KEYCODE_MEDIA_PAUSE; sleep 1
 notif() { adb shell dumpsys notification --noredact 2>/dev/null | tr -d '\r'; }
 for _ in 1 2 3 4 5; do notif > notif.txt; grep -q 'Marcar favorita\|Quitar de favoritas' notif.txt && break; sleep 1; done
 grep -q 'Marcar favorita' notif.txt || { grep -n -A12 'pkg=com.eddie.surco' notif.txt | head -60; fallo "la notificación no lleva el botón «Marcar favorita»"; }
