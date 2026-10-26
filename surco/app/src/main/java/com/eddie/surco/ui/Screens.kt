@@ -8,7 +8,6 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -259,13 +258,14 @@ fun PlaylistScreen(vm: LibraryViewModel, id: Long, byId: Map<Long, Track>) {
             DropdownMenuItem(text = { Text("Borrar la lista") }, onClick = { close(); deleting = true })
         })
     if (renaming) NameDialog("Nombre de la lista", initial = pl.name, onDismiss = { renaming = false }) { n -> UserStore.renamePlaylist(id, n); renaming = false }
-    if (deleting) AlertDialog(
-        onDismissRequest = { deleting = false }, containerColor = Panel,
-        title = { Text("¿Borrar «${pl.name}»?") },
-        text = { Text("Las canciones no se tocan; solo desaparece la lista.") },
-        confirmButton = { TextButton(onClick = { deleting = false; UserStore.deletePlaylist(id); vm.pop() }) { Text("Borrar") } },
-        dismissButton = { TextButton(onClick = { deleting = false }) { Text("Cancelar") } },
-    )
+    if (deleting) ConfirmSheet("¿Borrar «${pl.name}»?", "Las canciones no se tocan; solo desaparece la lista.", "Borrar lista",
+        onDismiss = { deleting = false }) {
+        deleting = false
+        val gone = pl
+        val at = UserStore.state.value.playlists.indexOfFirst { it.id == id }
+        UserStore.deletePlaylist(id); vm.pop()
+        Notice.show("Lista «${gone.name}» borrada", "Deshacer") { UserStore.restorePlaylist(gone, at) }
+    }
 }
 
 /** Lista de canciones con orden, reproducir, aleatorio, a la cola y a una lista. */
@@ -312,7 +312,10 @@ fun SongListScreen(
             Box {
                 IconButton(onClick = { moreMenu = true }) { Icon(Icons.Default.MoreVert, "Más") }
                 DropdownMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
-                    DropdownMenuItem(text = { Text("Todo a la cola") }, onClick = { moreMenu = false; vm.player.enqueue(tracksSorted) }, enabled = list.isNotEmpty())
+                    DropdownMenuItem(text = { Text("Todo a la cola") }, onClick = {
+                        moreMenu = false; vm.player.enqueue(tracksSorted)
+                        Notice.show("${songs(tracksSorted.size)} a la cola", "Ver cola") { vm.queueOpen = true }
+                    }, enabled = list.isNotEmpty())
                     DropdownMenuItem(text = { Text("Todo a una lista") }, onClick = { moreMenu = false; vm.addTo = tracksSorted }, enabled = list.isNotEmpty())
                     menu?.invoke { moreMenu = false }
                 }

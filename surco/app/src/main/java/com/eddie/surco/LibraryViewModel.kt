@@ -195,6 +195,15 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     fun goToAlbum(t: Track) = TagField.ALBUM.buckets(t).firstOrNull()?.let { openTag(TagField.ALBUM, it.key, it.label) }
     fun goToArtist(t: Track) = TagField.ARTIST.buckets(t).firstOrNull()?.let { openTag(TagField.ARTIST, it.key, it.label) }
 
+    /** Desde un aviso («Ver»): la lista, en su pestaña, cerrando lo que la tape. */
+    fun openPlaylist(id: Long) {
+        sheet = null
+        nowPlayingOpen = false
+        queueOpen = false
+        selectTab(Tab.LISTS)
+        push(Screen.PlaylistView(id))
+    }
+
     fun openTag(field: TagField, key: String, label: String) {
         sheet = null
         nowPlayingOpen = false

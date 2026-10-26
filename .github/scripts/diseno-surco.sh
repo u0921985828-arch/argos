@@ -99,7 +99,11 @@ back; ui; grep -q 'content-desc="Atrás"' ui.xml && back
 ui; tap "Biblioteca"; sleep 2; cap biblioteca-albumes
 tapre "Canciones"; cap biblioteca-canciones
 tap "Más opciones"; sleep 1; cap menu-cancion
-back
+# Aviso propio: marcar favorita desde el menú deja la franja con «Deshacer» al cerrarlo.
+ui; tap "Favorita" || tap "Quitar favorita"; sleep 1
+back; cap aviso
+ui; tap "Deshacer" || true
+for _ in $(seq 1 8); do ui; grep -q 'text="Deshacer"\|text="Quitada de favoritas"\|text="Añadida a favoritas"' ui.xml || break; sleep 1; done
 ui; tapre "Artistas"; cap biblioteca-artistas
 ui; tapre "Carpetas"; cap biblioteca-carpetas
 ui; tapre "Álbumes"; sleep 1; ui; tap "Disco de Prueba"; sleep 2; cap album
@@ -111,8 +115,9 @@ adb shell input swipe 540 600 540 1900 300; sleep 1; ui; tap "Género" || tap "D
 ui; tap "Rock" || true; sleep 2; cap grupo-canciones
 
 ui; tap "Listas"; sleep 2; cap listas
-ui; tap "Lista nueva"; sleep 1; cap lista-nueva
-back
+ui; tap "Lista nueva"; sleep 2; cap lista-nueva
+# El primer «atrás» cierra el teclado; el segundo, la hoja.
+back; ui; grep -q 'text="Crear"' ui.xml && back
 ui; tap "Favoritas"; sleep 2; cap favoritas
 back
 

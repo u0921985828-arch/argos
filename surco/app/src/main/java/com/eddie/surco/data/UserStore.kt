@@ -81,6 +81,7 @@ object UserStore {
 
     fun isFavorite(id: Long) = id in _state.value.favorites
     fun toggleFavorite(id: Long) = update { d -> d.copy(favorites = if (id in d.favorites) d.favorites - id else d.favorites + id) }
+    fun setFavorite(id: Long, on: Boolean) = update { d -> d.copy(favorites = if (on) d.favorites + id else d.favorites - id) }
 
     fun createPlaylist(name: String, ids: List<Long> = emptyList()): Long {
         val id = System.currentTimeMillis()
@@ -89,6 +90,15 @@ object UserStore {
     }
     fun renamePlaylist(id: Long, name: String) = editPlaylist(id) { it.copy(name = name.trim().ifBlank { it.name }) }
     fun deletePlaylist(id: Long) = update { d -> d.copy(playlists = d.playlists.filterNot { it.id == id }) }
+    /** «Deshacer» de borrar: vuelve en su sitio (si no la han vuelto a crear ya). */
+    fun restorePlaylist(p: Playlist, at: Int) = update { d ->
+        if (d.playlists.any { it.id == p.id }) d
+        else d.copy(playlists = d.playlists.toMutableList().also { it.add(at.coerceIn(0, it.size), p) })
+    }
+    /** «Deshacer» de quitar una canción: vuelve a su posición. */
+    fun insertIntoPlaylist(id: Long, index: Int, trackId: Long) = editPlaylist(id) { p ->
+        p.copy(trackIds = p.trackIds.toMutableList().also { it.add(index.coerceIn(0, it.size), trackId) })
+    }
     fun addToPlaylist(id: Long, ids: List<Long>) = editPlaylist(id) { it.copy(trackIds = it.trackIds + ids) }
     fun removeFromPlaylist(id: Long, index: Int) = editPlaylist(id) { p ->
         p.copy(trackIds = p.trackIds.toMutableList().also { if (index in it.indices) it.removeAt(index) })

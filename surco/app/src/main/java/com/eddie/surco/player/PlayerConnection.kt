@@ -120,6 +120,8 @@ class PlayerConnection(ctx: Context) {
 
     fun jumpTo(index: Int) { controller?.let { it.seekToDefaultPosition(index); it.play() } }
     fun removeAt(index: Int) { controller?.removeMediaItem(index) }
+    /** «Deshacer» de quitar de la cola: vuelve a su sitio (o al final si la cola ha encogido). */
+    fun insertAt(index: Int, track: Track) { controller?.let { it.addMediaItem(index.coerceIn(0, it.mediaItemCount), track.toMediaItem()) } }
     fun move(from: Int, to: Int) { if (from != to) controller?.moveMediaItem(from, to) }
 
     /** Quita todo menos lo que suena. */

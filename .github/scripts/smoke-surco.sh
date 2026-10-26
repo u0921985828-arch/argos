@@ -172,13 +172,49 @@ estado() { adb shell dumpsys media_session | grep -m1 -oE 'state=PlaybackState \
 cayo "al reproducir"
 echo "sesión multimedia: $(estado) (3 = sonando)"
 
+# --- Surco 2.5: notificación de música con botones propios (favorita y aleatorio) ---
+notif() { adb shell dumpsys notification --noredact 2>/dev/null | tr -d '\r'; }
+for _ in 1 2 3 4 5; do notif > notif.txt; grep -q 'Marcar favorita\|Quitar de favoritas' notif.txt && break; sleep 1; done
+grep -q 'Marcar favorita' notif.txt || { grep -n -A12 'pkg=com.eddie.surco' notif.txt | head -60; fallo "la notificación no lleva el botón «Marcar favorita»"; }
+grep -q 'Activar aleatorio' notif.txt || fallo "la notificación no lleva el botón «Activar aleatorio»"
+echo "notificación: con «Marcar favorita» y «Activar aleatorio»"
+# Pulsarlo de verdad en la persiana: el aleatorio se activa y el botón cambia.
+adb shell cmd statusbar expand-notifications; sleep 2; ui
+if tap "Activar aleatorio"; then
+    ok=""
+    for _ in 1 2 3 4 5; do sleep 1; notif > notif.txt; grep -q 'Aleatorio activado' notif.txt && { ok=1; break; }; done
+    [ -n "$ok" ] || fallo "pulsar «Activar aleatorio» en la notificación no lo activó"
+    echo "notificación: «Activar aleatorio» pulsado → «Aleatorio activado»"
+    ui; tap "Aleatorio activado" || true
+    for _ in 1 2 3 4 5; do sleep 1; notif > notif.txt; grep -q 'Activar aleatorio' notif.txt && break; done
+    grep -q 'Activar aleatorio' notif.txt || fallo "el aleatorio no se quitó desde la notificación"
+else
+    echo "::warning::la persiana no enseña el botón «Activar aleatorio» (no se pulsa; la notificación sí lo lleva)"
+    grep -o 'content-desc="[^"]*"' ui.xml | head -30 || true
+fi
+adb shell cmd statusbar collapse; sleep 1
+
 # --- Surco 2 --- (en pausa para poder volcar la interfaz; la tecla multimedia
 # pasa por la sesión, así que también prueba el fundido de pausa)
 adb shell input keyevent KEYCODE_MEDIA_PAUSE
 sleep 2
 ui
 tap "Favorita" || fallo "no hay corazón de favorita en el minirreproductor"
-sleep 1
+sleep 1; ui
+# Aviso propio (no un Toast): dice lo que ha hecho y deja deshacerlo.
+grep -q 'text="Añadida a favoritas"' ui.xml && grep -q 'text="Deshacer"' ui.xml || fallo "no sale el aviso «Añadida a favoritas» con «Deshacer»"
+adb exec-out screencap -p > aviso.png
+tap "Deshacer" || fallo "no encuentro «Deshacer» en el aviso"
+sleep 1; ui
+grep -q 'text="Añadida a favoritas"' ui.xml && fallo "el aviso no se fue al pulsar «Deshacer»"
+# Si «Deshacer» la quitó, marcarla otra vez vuelve a decir «Añadida».
+tap "Favorita" || fallo "no hay corazón de favorita en el minirreproductor"
+sleep 1; ui
+grep -q 'text="Añadida a favoritas"' ui.xml || fallo "«Deshacer» no quitó la favorita"
+echo "aviso: «Añadida a favoritas» → Deshacer → otra vez «Añadida»"
+# El aviso se va solo (6 s con acción).
+for _ in $(seq 1 10); do sleep 1; ui; grep -q 'text="Deshacer"' ui.xml || break; done
+grep -q 'text="Deshacer"' ui.xml && fallo "el aviso no se fue solo"
 tap "Otra Banda" || fallo "no encuentro el minirreproductor"
 sleep 2; ui
 grep -q 'text="SONANDO"' ui.xml || fallo "no se abrió «Sonando»"

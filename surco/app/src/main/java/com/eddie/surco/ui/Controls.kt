@@ -13,7 +13,24 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -161,23 +178,82 @@ fun SwitchRow(title: String, subtitle: String? = null, checked: Boolean, onChang
     }
 }
 
-/** Diálogo para escribir un nombre (lista nueva, preajuste…). */
+/** Rojo de lo que borra: con Ink encima pasa de 4,5:1. */
+val Danger = Color(0xFFE5675C)
+
+/**
+ * Hoja de Surco: lo que en otras apps es un diálogo en mitad de la pantalla (temporizador,
+ * velocidad, nombres, confirmar un borrado) sube desde abajo, con el fondo de la app, se cierra
+ * deslizando o tocando fuera y deja los botones grandes al alcance del pulgar. Con el teclado
+ * abierto, la hoja sube por encima de él.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SurcoSheet(
+    title: String,
+    onDismiss: () -> Unit,
+    subtitle: String? = null,
+    confirm: String? = null,
+    confirmEnabled: Boolean = true,
+    danger: Boolean = false,
+    onConfirm: () -> Unit = {},
+    dismiss: String? = "Cancelar",
+    onDismissButton: () -> Unit = onDismiss,
+    content: @Composable ColumnScope.() -> Unit = {},
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss, containerColor = Ink,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
+        Column(Modifier.fillMaxWidth().imePadding().padding(bottom = 20.dp)) {
+            Text(title, color = Paper, fontSize = 22.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 20.dp).semantics { heading() })
+            if (subtitle != null) Text(subtitle, color = Muted, fontSize = 13.sp, lineHeight = 17.sp,
+                modifier = Modifier.padding(horizontal = 20.dp).padding(top = 4.dp))
+            Spacer(Modifier.height(12.dp))
+            content()
+            if (confirm != null || dismiss != null) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (dismiss != null) {
+                        OutlinedButton(onClick = onDismissButton, modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Paper)) { Text(dismiss, fontSize = 15.sp) }
+                    }
+                    if (confirm != null) {
+                        Button(onClick = onConfirm, enabled = confirmEnabled, modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = if (danger) Danger else Copper, contentColor = Ink,
+                                disabledContainerColor = Panel2, disabledContentColor = Muted)) {
+                            Text(confirm, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Hoja para escribir un nombre (lista nueva, preajuste…): el teclado sale solo y «Hecho» guarda. */
 @Composable
 fun NameDialog(title: String, initial: String = "", confirm: String = "Guardar", onDismiss: () -> Unit, onOk: (String) -> Unit) {
-    var text by remember { mutableStateOf(initial) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = Panel,
-        title = { Text(title) },
-        text = {
-            OutlinedTextField(
-                value = text, onValueChange = { text = it }, singleLine = true,
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-            )
-        },
-        confirmButton = { TextButton(onClick = { if (text.isNotBlank()) onOk(text.trim()) }, enabled = text.isNotBlank()) { Text(confirm) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
-    )
+    var text by remember { mutableStateOf(TextFieldValue(initial, TextRange(initial.length))) }
+    val focus = remember { FocusRequester() }
+    val ok = text.text.isNotBlank()
+    SurcoSheet(title, onDismiss, confirm = confirm, confirmEnabled = ok, onConfirm = { if (ok) onOk(text.text.trim()) }) {
+        OutlinedTextField(
+            value = text, onValueChange = { text = it }, singleLine = true,
+            placeholder = { Text("Nombre", color = Muted) },
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { if (ok) onOk(text.text.trim()) }),
+            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Copper, cursorColor = Copper),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).focusRequester(focus),
+        )
+    }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+}
+
+/** Hoja para confirmar algo que borra: el botón dice lo que hace y va en rojo. */
+@Composable
+fun ConfirmSheet(title: String, text: String, confirm: String, onDismiss: () -> Unit, onOk: () -> Unit) {
+    SurcoSheet(title, onDismiss, subtitle = text, confirm = confirm, danger = true, onConfirm = onOk)
 }
 
 /** Fila pulsable de una opción con texto secundario. */

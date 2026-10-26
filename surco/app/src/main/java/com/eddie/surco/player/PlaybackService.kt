@@ -7,7 +7,7 @@ import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
-import android.widget.Toast
+import com.eddie.surco.ui.Notice
 import androidx.media3.common.PlaybackException
 import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
 import com.eddie.surco.data.AlbumRef
@@ -34,6 +34,11 @@ import com.eddie.surco.audio.SurcoExtractorsFactory
 import androidx.media3.exoplayer.RenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
+import androidx.media3.session.CommandButton
+import androidx.media3.session.DefaultMediaNotificationProvider
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
+import com.eddie.surco.R
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.SessionError
 import androidx.media3.session.MediaLibraryService
@@ -139,6 +144,8 @@ class PlaybackService : MediaLibraryService() {
             override fun onEvents(player: Player, events: Player.Events) {
                 if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_PLAY_WHEN_READY_CHANGED,
                         Player.EVENT_MEDIA_METADATA_CHANGED, Player.EVENT_PLAYBACK_STATE_CHANGED)) publishWidget()
+                // Los botones propios de la notificación siguen a la canción y al aleatorio.
+                if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED)) publishButtons()
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (isPlaying && fadeMul < 1f && fadeTarget < 1f && fadeRunnable == null) fadeTo(1f)
@@ -163,7 +170,37 @@ class PlaybackService : MediaLibraryService() {
             this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+        // Notificación de música: icono de Surco en la barra de estado y canal con nombre en español.
+        setMediaNotificationProvider(
+            DefaultMediaNotificationProvider.Builder(this).setChannelName(R.string.canal_musica).build()
+                .apply { setSmallIcon(R.drawable.ic_stat_surco) },
+        )
         session = MediaLibrarySession.Builder(this, FadingPlayer(exo), object : MediaLibrarySession.Callback {
+                // Favorita y aleatorio: dos botones propios en la notificación, la pantalla de bloqueo,
+                // los mandos del sistema y el coche. Cualquier mando puede pedirlos.
+                override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult =
+                    MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                        .setAvailableSessionCommands(
+                            MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon().add(CMD_FAV).add(CMD_SHUFFLE).build(),
+                        )
+                        .build()
+
+                override fun onCustomCommand(
+                    session: MediaSession, controller: MediaSession.ControllerInfo, customCommand: SessionCommand, args: Bundle,
+                ): ListenableFuture<SessionResult> {
+                    when (customCommand.customAction) {
+                        CMD_FAV.customAction -> {
+                            val id = exo.currentMediaItem?.mediaId?.toLongOrNull()
+                                ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
+                            UserStore.toggleFavorite(id) // el colector de favoritas rehace los botones
+                        }
+                        // Por el FadingPlayer: al activarlo, la que suena va primero.
+                        CMD_SHUFFLE.customAction -> session.player.shuffleModeEnabled = !exo.shuffleModeEnabled
+                        else -> return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
+                    }
+                    return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                }
+
                 override fun onAddMediaItems(
                     mediaSession: MediaSession,
                     controller: MediaSession.ControllerInfo,
@@ -307,8 +344,12 @@ class PlaybackService : MediaLibraryService() {
 
         // Favorita marcada desde la app o «Sonando»: el corazón del widget grande la sigue.
         scope.launch {
-            UserStore.state.map { it.favorites }.distinctUntilChanged().drop(1).collect { SurcoWidget.refresh(this@PlaybackService) }
+            UserStore.state.map { it.favorites }.distinctUntilChanged().drop(1).collect {
+                SurcoWidget.refresh(this@PlaybackService)
+                publishButtons()
+            }
         }
+        publishButtons()
 
         // Ajustes que viven en el reproductor
         scope.launch {
@@ -326,6 +367,24 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo) = session
+
+    /** Corazón y aleatorio según la canción y el modo de ahora. */
+    private fun publishButtons() {
+        val s = session ?: return
+        val fav = exo.currentMediaItem?.mediaId?.toLongOrNull()?.let { UserStore.isFavorite(it) } == true
+        val shuffle = exo.shuffleModeEnabled
+        s.setMediaButtonPreferences(ImmutableList.of(
+            CommandButton.Builder(if (fav) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
+                .setDisplayName(getString(if (fav) R.string.n_unfav else R.string.n_fav))
+                .setSessionCommand(CMD_FAV)
+                .setEnabled(exo.currentMediaItem != null)
+                .build(),
+            CommandButton.Builder(if (shuffle) CommandButton.ICON_SHUFFLE_ON else CommandButton.ICON_SHUFFLE_OFF)
+                .setDisplayName(getString(if (shuffle) R.string.n_shuffle_on else R.string.n_shuffle_off))
+                .setSessionCommand(CMD_SHUFFLE)
+                .build(),
+        ))
+    }
 
     private fun publishWidget() {
         val item = exo.currentMediaItem
@@ -425,10 +484,10 @@ class PlaybackService : MediaLibraryService() {
         // canción; uno de la salida de audio no es culpa suya: se para y se avisa.
         val fileProblem = error.errorCode in 2000..4999
         if (!fileProblem) {
-            Toast.makeText(this, "Error de salida de audio (${error.errorCodeName}). Pulsa reproducir para reintentar.", Toast.LENGTH_LONG).show()
+            Notice.fromService(this, "Error de salida de audio (${error.errorCodeName}). Pulsa reproducir para reintentar.", long = true)
             return
         }
-        Toast.makeText(this, "No se pudo reproducir «$title»: se quita de la cola.", Toast.LENGTH_SHORT).show()
+        Notice.fromService(this, "No se pudo reproducir «$title»: se quita de la cola.")
         if (exo.mediaItemCount == 0) return
         exo.removeMediaItem(exo.currentMediaItemIndex)
         if (exo.mediaItemCount > 0 && ++errorStreak < 10) { exo.prepare(); exo.play() }
@@ -559,5 +618,10 @@ class PlaybackService : MediaLibraryService() {
         session?.run { player.release(); release() }
         session = null
         super.onDestroy()
+    }
+
+    private companion object {
+        val CMD_FAV = SessionCommand("surco.FAVORITA", Bundle.EMPTY)
+        val CMD_SHUFFLE = SessionCommand("surco.ALEATORIO", Bundle.EMPTY)
     }
 }

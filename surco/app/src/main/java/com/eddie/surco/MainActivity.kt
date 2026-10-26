@@ -75,6 +75,12 @@ import com.eddie.surco.ui.SleepDialog
 import com.eddie.surco.ui.SmartScreen
 import com.eddie.surco.ui.SongSheet
 import com.eddie.surco.ui.SpeedDialog
+import com.eddie.surco.ui.Notice
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.WindowInsets
+import com.eddie.surco.ui.NoticeHost
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -84,6 +90,11 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) voiceQuery(intent)
         setContent { SurcoTheme { Root() } }
     }
+
+    // Los avisos del servicio (una canción que no se puede abrir) salen en la franja de Surco
+    // solo si la app se ve; si no, como Toast.
+    override fun onStart() { super.onStart(); Notice.visible = true }
+    override fun onStop() { Notice.visible = false; super.onStop() }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -208,6 +219,8 @@ private fun App(vm: LibraryViewModel) {
                     is Screen.Settings -> s.page?.let { SettingsPageScreen(vm, it) } ?: SettingsScreen(vm)
                     Screen.Equalizer -> EqualizerScreen(vm)
                 }
+                // Encima del minirreproductor; con «Sonando» abierta, arriba (ver más abajo).
+                if (!vm.nowPlayingOpen) NoticeHost()
             }
         }
         AnimatedVisibility(
@@ -216,6 +229,8 @@ private fun App(vm: LibraryViewModel) {
         ) {
             current?.let { NowPlaying(vm, it) }
         }
+        // En «Sonando» el aviso va bajo la barra de arriba: abajo están los mandos.
+        if (vm.nowPlayingOpen && current != null) NoticeHost(WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 56.dp, top = true)
         vm.sheet?.let { SongSheet(vm, it) }
         if (vm.queueOpen) QueueSheet(vm, byId)
         if (vm.sleepOpen) SleepDialog(vm)

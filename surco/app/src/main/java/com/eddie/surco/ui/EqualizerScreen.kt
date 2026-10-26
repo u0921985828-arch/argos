@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -186,19 +185,14 @@ fun EqualizerScreen(vm: LibraryViewModel) {
         val name = if (BUILTIN_PRESETS.any { it.first.equals(typed, ignoreCase = true) } || typed == CUSTOM) "$typed (propio)" else typed
         SurcoSettings.update { it.copy(customPresets = it.customPresets + (name to it.dsp.bands), preset = name) }
         saving = false
+        Notice.show("Preajuste «$name» guardado")
     }
     deleting?.let { name ->
-        AlertDialog(
-            onDismissRequest = { deleting = null }, containerColor = Panel,
-            title = { Text("¿Borrar «$name»?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    SurcoSettings.update { it.copy(customPresets = it.customPresets - name, preset = if (it.preset == name) CUSTOM else it.preset) }
-                    deleting = null
-                }) { Text("Borrar") }
-            },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancelar") } },
-        )
+        ConfirmSheet("¿Borrar «$name»?", "Solo se borra el preajuste: el sonido de ahora no cambia.", "Borrar preajuste",
+            onDismiss = { deleting = null }) {
+            SurcoSettings.update { it.copy(customPresets = it.customPresets - name, preset = if (it.preset == name) CUSTOM else it.preset) }
+            deleting = null
+        }
     }
 }
 

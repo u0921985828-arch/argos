@@ -10,4 +10,9 @@
     <string name="w_pause">Pausar</string>
     <string name="w_unfav">Quitar de favoritas</string>
     <string name="w_unknown">Desconocido</string>
+    <string name="canal_musica">Música</string>
+    <string name="n_fav">Marcar favorita</string>
+    <string name="n_unfav">Quitar de favoritas</string>
+    <string name="n_shuffle_on">Aleatorio activado</string>
+    <string name="n_shuffle_off">Activar aleatorio</string>
 </resources>

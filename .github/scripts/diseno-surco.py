@@ -14,6 +14,9 @@ import glob, os, re, sys
 import xml.etree.ElementTree as ET
 from PIL import Image
 
+# Botones de la franja de aviso (ui/Notice.kt).
+AVISO = {"Deshacer", "Ver", "Ver cola"}
+
 PKG = "com.eddie.surco"
 carpeta = sys.argv[1]
 estricto = "--estricto" in sys.argv
@@ -119,7 +122,9 @@ for xmlf in sorted(glob.glob(os.path.join(carpeta, "*.xml"))):
             a, b = toc[i][0], toc[j][0]
             inter = not (a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1])
             dentro = (a[0] <= b[0] and a[1] <= b[1] and a[2] >= b[2] and a[3] >= b[3]) or (b[0] <= a[0] and b[1] <= a[1] and b[2] >= a[2] and b[3] >= a[3])
-            if inter and not dentro:
+            # La franja de aviso flota encima de la lista a propósito, como cualquier aviso, y se va sola.
+            aviso = toc[i][1] in AVISO or toc[j][1] in AVISO
+            if inter and not dentro and not aviso:
                 # Compose declara 48 dp para lo que mide menos: dos chips de 40 dp a 8 dp se «pisan»
                 # 0 dp en pantalla. Solo cuenta si lo pisado pasa de un tercio del más pequeño.
                 ix = min(a[2], b[2]) - max(a[0], b[0]); iy = min(a[3], b[3]) - max(a[1], b[1])

@@ -55,7 +55,6 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -198,7 +197,7 @@ fun MiniPlayer(vm: LibraryViewModel, track: Track) {
                 Text(track.title, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
                 Text(track.artist.ifBlank { "Desconocido" }, color = Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            IconButton(onClick = { UserStore.toggleFavorite(track.id) }, Modifier.semantics { stateDescription = if (fav) "Marcada" else "Sin marcar" }) {
+            IconButton(onClick = { toggleFavorite(track) }, Modifier.semantics { stateDescription = if (fav) "Marcada" else "Sin marcar" }) {
                 Icon(if (fav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, "Favorita", tint = if (fav) Copper else Muted)
             }
             IconButton(onClick = { vm.player.toggle() }) {
@@ -269,7 +268,7 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
                     modifier = Modifier.clickable { vm.goToArtist(track) },
                 )
             }
-            IconButton(onClick = { UserStore.toggleFavorite(track.id) }) {
+            IconButton(onClick = { toggleFavorite(track) }) {
                 Icon(if (fav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, if (fav) "Quitar de favoritas" else "Favorita",
                     tint = if (fav) Copper else Muted, modifier = Modifier.size(28.dp))
             }
@@ -395,6 +394,13 @@ fun LyricsPanel(vm: LibraryViewModel, track: Track, pos: Long, modifier: Modifie
     }
 }
 
+/** Favorita con aviso y «Deshacer»: el corazón cambia, pero un toque sin querer se nota poco. */
+private fun toggleFavorite(track: Track) {
+    val was = UserStore.isFavorite(track.id)
+    UserStore.toggleFavorite(track.id)
+    Notice.show(if (was) "Quitada de favoritas" else "Añadida a favoritas", "Deshacer") { UserStore.setFavorite(track.id, was) }
+}
+
 // ======================= COLA =======================
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -473,14 +479,18 @@ fun QueueSheet(vm: LibraryViewModel, byId: Map<Long, Track>) {
                             fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal)
                         Text(t?.artist.orEmpty(), color = Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    if (!current) IconButton(onClick = { p.removeAt(e.index) }) { Icon(Icons.Default.Close, "Quitar de la cola", tint = Muted) }
+                    if (!current) IconButton(onClick = {
+                        p.removeAt(e.index)
+                        t?.let { gone -> Notice.show("Quitada de la cola", "Deshacer") { p.insertAt(e.index, gone) } }
+                    }) { Icon(Icons.Default.Close, "Quitar de la cola", tint = Muted) }
                 }
             }
         }
     }
     if (saving) NameDialog("Guardar la cola como lista", onDismiss = { saving = false }) { name ->
-        UserStore.createPlaylist(name, p.queue.map { it.trackId })
+        val id = UserStore.createPlaylist(name, p.queue.map { it.trackId })
         saving = false
+        Notice.show("Cola guardada como «$name»", "Ver") { vm.queueOpen = false; vm.openPlaylist(id) }
     }
 }
 
@@ -489,46 +499,38 @@ fun QueueSheet(vm: LibraryViewModel, byId: Map<Long, Track>) {
 fun SleepDialog(vm: LibraryViewModel) {
     val end by SleepTimer.endAt.collectAsState()
     val atEnd by SleepTimer.endOfTrack.collectAsState()
-    AlertDialog(
-        onDismissRequest = { vm.sleepOpen = false }, containerColor = Panel,
-        title = { Text("Temporizador") },
-        text = {
-            Column {
-                if (end != null || atEnd) {
-                    Text(if (atEnd) "Se pausa al acabar esta canción." else "Se pausa en ${sleepRemaining(end!!)} (baja el volumen los últimos 10 s).",
-                        color = Copper, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
-                }
-                listOf(5, 15, 30, 45, 60, 90).forEach { m ->
-                    OptionRow("$m minutos") { SleepTimer.start(m); vm.sleepOpen = false }
-                }
-                OptionRow("Al acabar la canción") { SleepTimer.atEndOfTrack(); vm.sleepOpen = false }
+    val on = end != null || atEnd
+    SurcoSheet(
+        "Temporizador", onDismiss = { vm.sleepOpen = false },
+        subtitle = when {
+            atEnd -> "Se pausa al acabar esta canción."
+            end != null -> "Se pausa en ${sleepRemaining(end!!)} (baja el volumen los últimos 10 s)."
+            else -> "La música se para sola: elige cuándo."
+        },
+        // Con uno en marcha, el botón lo quita; si no, solo hay que elegir.
+        dismiss = if (on) "Quitar" else null,
+        onDismissButton = { SleepTimer.cancel(); vm.sleepOpen = false; Notice.show("Temporizador quitado") },
+    ) {
+        Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+            listOf(5, 15, 30, 45, 60, 90).forEach { m ->
+                OptionRow("$m minutos") { SleepTimer.start(m); vm.sleepOpen = false; Notice.show("Se pausa en $m minutos") }
             }
-        },
-        confirmButton = { TextButton(onClick = { vm.sleepOpen = false }) { Text("Cerrar") } },
-        dismissButton = {
-            if (end != null || atEnd) TextButton(onClick = { SleepTimer.cancel(); vm.sleepOpen = false }) { Text("Quitar") }
-        },
-    )
+            OptionRow("Al acabar la canción") { SleepTimer.atEndOfTrack(); vm.sleepOpen = false; Notice.show("Se pausa al acabar la canción") }
+        }
+    }
 }
 
 @Composable
 fun SpeedDialog(vm: LibraryViewModel) {
     val prefs by SurcoSettings.state.collectAsState()
-    AlertDialog(
-        onDismissRequest = { vm.speedOpen = false }, containerColor = Panel,
-        title = { Text("Velocidad") },
-        text = {
-            Column {
-                LabeledSlider("Velocidad", prefs.speed, 0.5f..2f, "%.2f×".format(Locale("es"), prefs.speed), steps = 29,
-                    onChange = { v -> SurcoSettings.update { it.copy(speed = (v * 20).roundToInt() / 20f) } },
-                    onReset = { SurcoSettings.update { it.copy(speed = 1f) } })
-                SwitchRow("Mantener el tono", "Si no, sube y baja como un disco al cambiar las revoluciones.", prefs.keepPitch) { k ->
-                    SurcoSettings.update { it.copy(keepPitch = k) }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = { vm.speedOpen = false }) { Text("Hecho") } },
-    )
+    SurcoSheet("Velocidad", onDismiss = { vm.speedOpen = false }, dismiss = null, confirm = "Hecho", onConfirm = { vm.speedOpen = false }) {
+        LabeledSlider("Velocidad", prefs.speed, 0.5f..2f, "%.2f×".format(Locale("es"), prefs.speed), steps = 29,
+            onChange = { v -> SurcoSettings.update { it.copy(speed = (v * 20).roundToInt() / 20f) } },
+            onReset = { SurcoSettings.update { it.copy(speed = 1f) } })
+        SwitchRow("Mantener el tono", "Si no, sube y baja como un disco al cambiar las revoluciones.", prefs.keepPitch) { k ->
+            SurcoSettings.update { it.copy(keepPitch = k) }
+        }
+    }
 }
 
 // ======================= LISTAS =======================
@@ -536,22 +538,22 @@ fun SpeedDialog(vm: LibraryViewModel) {
 fun AddToPlaylistDialog(vm: LibraryViewModel, tracks: List<Track>) {
     val user by UserStore.state.collectAsState()
     var naming by remember { mutableStateOf(false) }
-    AlertDialog(
-        onDismissRequest = { vm.addTo = null }, containerColor = Panel,
-        title = { Text(if (tracks.size == 1) "Añadir a una lista" else "Añadir ${songs(tracks.size)} a una lista") },
-        text = {
-            Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
-                OptionRow("+ Lista nueva…") { naming = true }
-                user.playlists.forEach { pl ->
-                    OptionRow(pl.name, songs(pl.trackIds.size)) { UserStore.addToPlaylist(pl.id, tracks.map { it.id }); vm.addTo = null }
+    SurcoSheet(if (tracks.size == 1) "Añadir a una lista" else "Añadir ${songs(tracks.size)} a una lista", onDismiss = { vm.addTo = null },
+        subtitle = if (tracks.size == 1) tracks[0].title else null) {
+        Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+            OptionRow("+ Lista nueva…") { naming = true }
+            user.playlists.forEach { pl ->
+                OptionRow(pl.name, songs(pl.trackIds.size)) {
+                    UserStore.addToPlaylist(pl.id, tracks.map { it.id }); vm.addTo = null
+                    Notice.show("Añadida a «${pl.name}»", "Ver") { vm.openPlaylist(pl.id) }
                 }
             }
-        },
-        confirmButton = { TextButton(onClick = { vm.addTo = null }) { Text("Cancelar") } },
-    )
+        }
+    }
     if (naming) NameDialog("Lista nueva", confirm = "Crear", onDismiss = { naming = false }) { name ->
-        UserStore.createPlaylist(name, tracks.map { it.id })
+        val id = UserStore.createPlaylist(name, tracks.map { it.id })
         naming = false; vm.addTo = null
+        Notice.show("Lista «$name» creada", "Ver") { vm.openPlaylist(id) }
     }
 }
 
@@ -609,11 +611,17 @@ fun SongSheet(vm: LibraryViewModel, s: SongSheetState) {
                 SectionLabel("Esta canción")
             } else Spacer(Modifier.height(14.dp))
             FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionChip(Icons.Default.SkipNext, "A continuación") { vm.player.playNext(listOf(track)); close() }
-                ActionChip(Icons.AutoMirrored.Filled.QueueMusic, "A la cola") { vm.player.enqueue(listOf(track)); close() }
+                ActionChip(Icons.Default.SkipNext, "A continuación") {
+                    vm.player.playNext(listOf(track)); close()
+                    Notice.show("Suena a continuación", "Ver cola") { vm.queueOpen = true }
+                }
+                ActionChip(Icons.AutoMirrored.Filled.QueueMusic, "A la cola") {
+                    vm.player.enqueue(listOf(track)); close()
+                    Notice.show("Añadida a la cola", "Ver cola") { vm.queueOpen = true }
+                }
                 ActionChip(Icons.AutoMirrored.Filled.PlaylistAdd, "A una lista") { vm.addTo = listOf(track); close() }
                 ActionChip(if (fav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, if (fav) "Quitar favorita" else "Favorita") {
-                    UserStore.toggleFavorite(track.id)
+                    toggleFavorite(track)
                 }
                 if (track.album.isNotBlank()) ActionChip(Icons.Default.Album, "Ir al álbum") { close(); vm.goToAlbum(track) }
                 if (track.artist.isNotBlank()) ActionChip(Icons.Default.Person, "Ir al artista") { close(); vm.goToArtist(track) }
@@ -622,7 +630,11 @@ fun SongSheet(vm: LibraryViewModel, s: SongSheetState) {
                     ActionChip(Icons.Default.GraphicEq, "Para mezclar") { close(); vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.Compatible(track.id)) }
                 }
                 if (s.playlistId != null && s.playlistIndex >= 0) {
-                    ActionChip(Icons.Default.Delete, "Quitar de la lista") { UserStore.removeFromPlaylist(s.playlistId, s.playlistIndex); close() }
+                    ActionChip(Icons.Default.Delete, "Quitar de la lista") {
+                        val pid: Long = s.playlistId; val at = s.playlistIndex
+                        UserStore.removeFromPlaylist(pid, at); close()
+                        Notice.show("Quitada de la lista", "Deshacer") { UserStore.insertIntoPlaylist(pid, at, track.id) }
+                    }
                 }
             }
             val plays = user.plays[track.id] ?: 0
