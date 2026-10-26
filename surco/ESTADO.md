@@ -95,3 +95,4 @@ Encargo: «¿Y de diseño?».
 - Medido en las capturas nuevas (commit 3109293): 0 fallos con letra normal y 0 con ×1,3 (con el comprobador final; la base, con el mismo comprobador sobre las capturas de partida, era 6 y 5: título negro en «Sonando», título negro en permiso y chips de 34 dp). El comprobador ya no cuenta lo recortado por el borde de una lista que se desplaza.
 - El CI pasa a estricto: un fallo medible de diseño tumba la compilación. Las capturas se publican antes de comprobar, para verlas si falla.
 - Deslizadores con el cero en medio (graves, agudos, balance) sin relleno: a 0 dB la pista medio cobre parecía un valor.
+- Prueba de humo: el toque sobre el texto de ayuda del buscador a veces no daba el foco y lo escrito se perdía (run 40295895769, el mismo código había pasado antes). → Se pulsa el propio campo (EditText) y hay 3 intentos.
