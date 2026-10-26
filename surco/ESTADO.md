@@ -148,3 +148,4 @@ Encargo: «¿Android Auto?».
   - El aleatorio se heredaba al tocar un disco en el coche → se quita, como en la app.
   - El coche no puede leer portadas de MediaStore → `ArtProvider` (`content://com.eddie.surco.arte/<id>`, JPEG de 512 px en caché, solo lectura).
   - Lectura del árbol con cerrojo (el coche pide cuatro pestañas a la vez); futuros que fallan en vez de quedarse colgados con el servicio cerrándose; logcat de la prueba guardado.
+- Prueba de humo: el buscador del emulador volvió a perder lo escrito (run 40326764164, ahora con el análisis de BPM en marcha al arrancar) → se espera a que el campo tenga el foco, se comprueba que lo escrito llega y hay 5 intentos con más calma cada vez. De paso: «1 canción encontrada» (decía «encontradas»).

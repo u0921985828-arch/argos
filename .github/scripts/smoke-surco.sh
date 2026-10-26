@@ -135,15 +135,19 @@ busca() {  # $1 = texto, $2 = canción que tiene que salir
             grep -q 'content-desc="Atrás"' ui.xml && break
         done
     fi
-    for intento in 1 2 3; do
+    # El teclado del emulador tarda en estar listo (más con el análisis de BPM en marcha): se
+    # espera a que el campo tenga el foco y, si lo escrito no llega, se repite con más calma.
+    for intento in 1 2 3 4 5; do
         ui; tapedit || tap "Buscar en cualquier etiqueta" || tap "$prev" || true
-        sleep 1
+        for _ in 1 2 3 4 5; do sleep 1; ui; grep -q 'class="android.widget.EditText"[^>]*focused="true"' ui.xml && break; done
+        sleep $intento
         adb shell input keyevent KEYCODE_MOVE_END
         for _ in $(seq 1 20); do adb shell input keyevent KEYCODE_DEL; done
         adb shell input text "$1"
         sleep 2
         ui
-        if grep -q "text=\"$2\"" ui.xml && grep -qi 'text="1 canci.n encontradas"' ui.xml; then
+        grep -q "class=\"android.widget.EditText\"[^>]*text=\"$1\"\|text=\"$1\"[^>]*class=\"android.widget.EditText\"" ui.xml || echo "  (lo escrito no llegó al buscador, intento $intento)"
+        if grep -q "text=\"$2\"" ui.xml && grep -qi 'text="1 canci.n encontrada"' ui.xml; then
             echo "buscar «$1» → $2"
             prev=$1
             return 0

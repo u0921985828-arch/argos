@@ -492,7 +492,7 @@ fun SearchScreen(vm: LibraryViewModel, tracks: List<Track>) {
                 item { SectionLabel("Álbumes") }
                 item { AlbumRow(vm, albumHits) }
             }
-            item { SectionLabel("${songs(results.size)} encontradas") }
+            item { SectionLabel("${songs(results.size)} " + if (results.size == 1) "encontrada" else "encontradas") }
             itemsIndexed(results, key = { _, t -> t.id }) { i, t ->
                 SongRow(t, null, t.id == vm.player.currentId,
                     onClick = {
