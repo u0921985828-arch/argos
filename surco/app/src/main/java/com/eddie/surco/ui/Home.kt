@@ -67,6 +67,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -252,10 +253,11 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, byId: Map<Long, Track>
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                // 40 dp de alto (los chips de Material miden 32): es lo que se toca con el pulgar.
                 listOf(TagField.GENRE, TagField.DECADE, TagField.MOOD, TagField.QUALITY, TagField.FOLDER).forEach { f ->
-                    FilterChip(selected = false, onClick = { vm.push(Screen.Groups(f)) }, label = { Text(f.label) })
+                    FilterChip(selected = false, onClick = { vm.push(Screen.Groups(f)) }, label = { Text(f.label) }, modifier = Modifier.height(40.dp))
                 }
-                FilterChip(selected = false, onClick = { vm.selectTab(Tab.TAGS) }, label = { Text("Todas…") })
+                FilterChip(selected = false, onClick = { vm.selectTab(Tab.TAGS) }, label = { Text("Todas…") }, modifier = Modifier.height(40.dp))
             }
         }
         if (tracks.isEmpty() && progress == null) item {
@@ -296,7 +298,8 @@ private fun QuickAction(icon: ImageVector, label: String, modifier: Modifier, on
     ) {
         Icon(icon, null, tint = Copper)
         Spacer(Modifier.height(4.dp))
-        Text(label, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        // Dos líneas: con la letra grande del sistema «Más escuchadas» se cortaba.
+        Text(label, fontSize = 12.sp, lineHeight = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
     }
 }
 

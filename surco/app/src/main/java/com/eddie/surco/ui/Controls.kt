@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
@@ -27,6 +28,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Icon
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -99,7 +103,7 @@ fun LabeledSlider(
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(title, fontSize = 15.sp, modifier = Modifier.weight(1f))
-            if (onReset != null) TextButton(onClick = onReset) { Text("0", color = Muted) }
+            if (onReset != null) TextButton(onClick = onReset, modifier = Modifier.heightIn(min = 44.dp)) { Text("0", color = Muted) }
             Text(valueText, color = Copper, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
         }
         Slider(
@@ -154,10 +158,12 @@ fun OptionRow(title: String, subtitle: String? = null, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.Start, verticalAlignment = Alignment.CenterVertically,
     ) {
         TextButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.fillMaxWidth()) {
+            Column(Modifier.weight(1f)) {
                 Text(title, color = Paper, fontSize = 15.sp)
                 if (subtitle != null) Text(subtitle, color = Muted, fontSize = 12.sp)
             }
+            // La flecha dice que abre algo: sin ella se confundía con los textos fijos de Ajustes.
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Muted)
         }
     }
 }

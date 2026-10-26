@@ -63,7 +63,14 @@ for xmlf in sorted(glob.glob(os.path.join(carpeta, "*.xml"))):
         informe.append(f"{nombre}: no se puede leer ({e})"); continue
     W, H = img.size
     nodos = [n for n in root.iter("node") if n.get("package") == PKG and bounds(n)]
+    padre = {c: p for p in root.iter("node") for c in p}
+    def desactivado(n):
+        while n is not None:
+            if n.get("enabled") == "false": return True
+            n = padre.get(n)
+        return False
     pant = []
+    avisos = []
     toc = []
     for n in nodos:
         b = bounds(n)
@@ -76,15 +83,22 @@ for xmlf in sorted(glob.glob(os.path.join(carpeta, "*.xml"))):
         tocable = n.get("clickable") == "true" or n.get("long-clickable") == "true" or n.get("checkable") == "true"
         visible = b[1] < H and b[3] > 0 and b[3] - b[1] > 2 and b[2] - b[0] > 2
         if tocable and visible:
-            toc.append((b, etiqueta))
+            # El botón de borrar vive dentro del campo de texto: no es un solape.
+            if not n.get("class", "").endswith("EditText"): toc.append((b, etiqueta))
             # Recortado por el borde de una lista que se desplaza: no es su tamaño real.
             cortado = b[1] <= 0 or b[3] >= H - 1
-            if (w < 47.5 or h < 47.5) and not cortado:
+            # Lo de menos de 10 dp es una pieza de un deslizador (pulgar, pista), no un botón.
+            # Compose amplía solo el área de toque de lo pequeño hasta 48 dp (si no hay otro
+            # tocable más cerca), así que de 40 a 47 dp se avisa sin contar como fallo.
+            if (w < 40 or h < 40) and not cortado and w >= 10 and h >= 10:
                 pant.append(f"  TOQUE {w:.0f}×{h:.0f} dp «{etiqueta[:40]}»")
+            elif (w < 47.5 or h < 47.5) and not cortado and w >= 10 and h >= 10:
+                avisos.append(f"  ajustado {w:.0f}×{h:.0f} dp «{etiqueta[:40]}»")
         if visible and (b[0] < 0 or b[2] > W):
             pant.append(f"  SALE «{etiqueta[:40]}» {b}")
         texto = n.get("text") or ""
-        if texto.strip() and visible and n.get("class", "").endswith("TextView"):
+        # Un botón desactivado («Crear» sin nombre escrito) no tiene que cumplir el contraste.
+        if texto.strip() and visible and n.get("class", "").endswith("TextView") and not desactivado(n):
             r = contraste(img, b)
             if r:
                 k, fondo, letra = r
@@ -99,11 +113,17 @@ for xmlf in sorted(glob.glob(os.path.join(carpeta, "*.xml"))):
             inter = not (a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1])
             dentro = (a[0] <= b[0] and a[1] <= b[1] and a[2] >= b[2] and a[3] >= b[3]) or (b[0] <= a[0] and b[1] <= a[1] and b[2] >= a[2] and b[3] >= a[3])
             if inter and not dentro:
-                pant.append(f"  SOLAPE «{toc[i][1][:30]}» y «{toc[j][1][:30]}»")
+                # Compose declara 48 dp para lo que mide menos: dos chips de 40 dp a 8 dp se «pisan»
+                # 0 dp en pantalla. Solo cuenta si lo pisado pasa de un tercio del más pequeño.
+                ix = min(a[2], b[2]) - max(a[0], b[0]); iy = min(a[3], b[3]) - max(a[1], b[1])
+                menor = min((a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1]))
+                if ix * iy > menor / 3:
+                    pant.append(f"  SOLAPE «{toc[i][1][:30]}» y «{toc[j][1][:30]}»")
     pant = sorted(set(pant))
     fallos += len(pant)
     informe.append(f"{nombre}: {len(pant)}")
     informe.extend(pant)
+    informe.extend(sorted(set(avisos)))
 
 informe.append(f"TOTAL {fallos}")
 open(os.path.join(carpeta, "informe.txt"), "w").write("\n".join(informe) + "\n")

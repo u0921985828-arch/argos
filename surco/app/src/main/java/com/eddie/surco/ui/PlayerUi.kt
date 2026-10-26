@@ -538,11 +538,13 @@ fun TagChips(vm: LibraryViewModel, track: Track) {
     val chips = remember(track) {
         TagField.entries.flatMap { f -> f.buckets(track).filter { it.label != "Desconocido" && it.label != "Sin año" }.map { f to it } }
     }
-    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    // 40 dp de alto y 8 dp de hueco: así los objetivos de toque (48 dp) de dos filas no se pisan.
+    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         chips.forEach { (f, b) ->
             Row(
-                Modifier.clip(RoundedCornerShape(8.dp)).background(Panel).clickable { vm.openTag(f, b.key, b.label) }
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                Modifier.clip(RoundedCornerShape(10.dp)).background(Panel).clickable { vm.openTag(f, b.key, b.label) }
+                    .heightIn(min = 40.dp).padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(f.label + " ", color = Muted, fontSize = 12.sp)
                 Text(b.label, color = Paper, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -603,7 +605,7 @@ fun SongSheet(vm: LibraryViewModel, s: SongSheetState) {
 @Composable
 private fun ActionChip(icon: ImageVector, label: String, onClick: () -> Unit) {
     Row(
-        Modifier.clip(RoundedCornerShape(12.dp)).background(Panel).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp),
+        Modifier.clip(RoundedCornerShape(12.dp)).background(Panel).clickable(onClick = onClick).heightIn(min = 44.dp).padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, null, tint = Copper, modifier = Modifier.size(18.dp))

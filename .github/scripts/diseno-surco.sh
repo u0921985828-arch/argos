@@ -147,9 +147,9 @@ ui; tap "Letra"; sleep 2; cap letra
 ui; tap "Letra"; sleep 1
 ui; tap "Cola"; sleep 2; cap cola
 back
-ui; tap "Temporizador" || true; sleep 1; cap temporizador
+ui; tap "Dormir" || tap "Al final" || true; sleep 1; cap temporizador
 back
-ui; tapre "1×" || tapre "1,"; sleep 1; cap velocidad
+ui; tap "1×" || tapre "1" || true; sleep 1; cap velocidad
 back
 ui; tap "Cerrar"; sleep 1
 
