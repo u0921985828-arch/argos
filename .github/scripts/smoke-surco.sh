@@ -55,6 +55,22 @@ PY
     [ -n "$xy" ] || return 1
     adb shell input tap $xy
 }
+tapedit() {  # pulsa el campo de texto (EditText), no su texto de ayuda: el toque sobre la ayuda a veces no da el foco
+    local xy
+    xy=$(python3 - <<'PY'
+import re
+xml = open("ui.xml", encoding="utf-8", errors="ignore").read()
+for m in re.finditer(r'<node [^>]*class="android.widget.EditText"[^>]*>', xml):
+    b = re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', m.group(0))
+    if b:
+        x1, y1, x2, y2 = map(int, b.groups())
+        print((x1 + x2) // 2, (y1 + y2) // 2)
+        break
+PY
+)
+    [ -n "$xy" ] || return 1
+    adb shell input tap $xy
+}
 crashed() { adb logcat -d -s AndroidRuntime:E > crash.txt || true; grep -q 'FATAL EXCEPTION' crash.txt; }
 
 # Música de prueba: la generó el paso anterior con ffmpeg.
@@ -119,8 +135,8 @@ busca() {  # $1 = texto, $2 = canción que tiene que salir
             grep -q 'content-desc="Atrás"' ui.xml && break
         done
     fi
-    for intento in 1 2; do
-        tap "Buscar en cualquier etiqueta" || tap "$prev" || true
+    for intento in 1 2 3; do
+        ui; tapedit || tap "Buscar en cualquier etiqueta" || tap "$prev" || true
         sleep 1
         adb shell input keyevent KEYCODE_MOVE_END
         for _ in $(seq 1 20); do adb shell input keyevent KEYCODE_DEL; done
