@@ -35,6 +35,7 @@ import androidx.media3.exoplayer.RenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.LibraryResult
+import androidx.media3.session.SessionError
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.LibraryParams
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
@@ -214,7 +215,7 @@ class PlaybackService : MediaLibraryService() {
                     page: Int, pageSize: Int, params: LibraryParams?,
                 ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = later {
                     val b = car.get()
-                    val nodes = b.tree.children(parentId) ?: return@later LibraryResult.ofError<ImmutableList<MediaItem>>(LibraryResult.RESULT_ERROR_BAD_VALUE)
+                    val nodes = b.tree.children(parentId) ?: return@later LibraryResult.ofError<ImmutableList<MediaItem>>(SessionError.ERROR_BAD_VALUE)
                     val from = (page.toLong() * pageSize).coerceAtMost(nodes.size.toLong()).toInt()
                     val to = (from.toLong() + pageSize).coerceAtMost(nodes.size.toLong()).toInt()
                     LibraryResult.ofItemList(nodes.subList(from, to).map { car.toItem(it, b.byId) }, params)
@@ -225,7 +226,7 @@ class PlaybackService : MediaLibraryService() {
                 ): ListenableFuture<LibraryResult<MediaItem>> = later {
                     val b = car.get()
                     b.tree.item(mediaId)?.let { LibraryResult.ofItem(car.toItem(it, b.byId), null) }
-                        ?: LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
+                        ?: LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
                 }
 
                 override fun onSearch(
