@@ -13,6 +13,6 @@
     <string name="canal_musica">Música</string>
     <string name="n_fav">Marcar favorita</string>
     <string name="n_unfav">Quitar de favoritas</string>
-    <string name="n_shuffle_on">Aleatorio activado</string>
+    <string name="n_shuffle_on">Desactivar aleatorio</string>
     <string name="n_shuffle_off">Activar aleatorio</string>
 </resources>

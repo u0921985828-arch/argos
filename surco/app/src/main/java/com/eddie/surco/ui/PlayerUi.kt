@@ -411,7 +411,7 @@ fun QueueSheet(vm: LibraryViewModel, byId: Map<Long, Track>) {
     ModalBottomSheet(
         onDismissRequest = { vm.queueOpen = false }, containerColor = Ink,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-    ) {
+    ) { Box { Column {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Cola", fontSize = 22.sp, fontWeight = FontWeight.Bold)
@@ -481,12 +481,17 @@ fun QueueSheet(vm: LibraryViewModel, byId: Map<Long, Track>) {
                     }
                     if (!current) IconButton(onClick = {
                         p.removeAt(e.index)
-                        t?.let { gone -> Notice.show("Quitada de la cola", "Deshacer") { p.insertAt(e.index, gone) } }
+                        // En aleatorio no volvería a su sitio del orden: se avisa sin «Deshacer».
+                        if (p.shuffle || t == null) Notice.show("Quitada de la cola")
+                        else Notice.show("Quitada de la cola", "Deshacer") { p.insertAt(e.index, t) }
                     }) { Icon(Icons.Default.Close, "Quitar de la cola", tint = Muted) }
                 }
             }
         }
     }
+    // Dentro de la hoja: si no, «Deshacer» quedaría debajo de ella, sin poder tocarse.
+    NoticeHost()
+    } }
     if (saving) NameDialog("Guardar la cola como lista", onDismiss = { saving = false }) { name ->
         val id = UserStore.createPlaylist(name, p.queue.map { it.trackId })
         saving = false
@@ -588,7 +593,7 @@ fun SongSheet(vm: LibraryViewModel, s: SongSheetState) {
     val user by UserStore.state.collectAsState()
     val fav = track.id in user.favorites
     fun close() { vm.sheet = null }
-    ModalBottomSheet(onDismissRequest = { close() }, containerColor = Ink) {
+    ModalBottomSheet(onDismissRequest = { close() }, containerColor = Ink) { Box {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 32.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Art(track, 64.dp, modifier = Modifier.size(64.dp))
@@ -649,7 +654,8 @@ fun SongSheet(vm: LibraryViewModel, s: SongSheetState) {
                 }
             }
         }
-    }
+        NoticeHost()
+    } }
 }
 
 /** Estado activo (temporizador, velocidad) bajo los mandos de «Sonando»: un toque lo abre. */

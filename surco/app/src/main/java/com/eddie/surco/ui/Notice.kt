@@ -1,13 +1,14 @@
 package com.eddie.surco.ui
 
 import android.content.Context
+import android.os.SystemClock
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -24,7 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -42,7 +44,8 @@ import kotlinx.coroutines.flow.asStateFlow
  * el nuevo sustituye al anterior. Con la app fuera de la pantalla (lo avisa el servicio), Toast.
  */
 object Notice {
-    class Item(val id: Long, val text: String, val action: String?, val onAction: (() -> Unit)?)
+    /** [until]: hasta cuándo se ve (reloj del sistema), lo enseñe la pantalla que lo enseñe. */
+    class Item(val id: Long, val text: String, val action: String?, val onAction: (() -> Unit)?, val until: Long)
 
     private val _current = MutableStateFlow<Item?>(null)
     val current = _current.asStateFlow()
@@ -51,13 +54,16 @@ object Notice {
     /** La app está a la vista (entre onStart y onStop): si no, nadie vería la franja. */
     @Volatile var visible = false
 
-    fun show(text: String, action: String? = null, onAction: (() -> Unit)? = null) {
-        _current.value = Item(++next, text, action?.takeIf { onAction != null }, onAction)
+    /** Con acción hay que tener tiempo de leerla y llegar al botón; un texto largo, de leerlo. */
+    fun show(text: String, action: String? = null, onAction: (() -> Unit)? = null, long: Boolean = false) {
+        val act = action?.takeIf { onAction != null }
+        val ms = if (act != null) 8000 else if (long) 6000 else 4000
+        _current.value = Item(++next, text, act, onAction, SystemClock.uptimeMillis() + ms)
     }
 
     /** Desde el servicio: franja si la app se ve, Toast si no. Llamar en el hilo principal. */
     fun fromService(ctx: Context, text: String, long: Boolean = false) {
-        if (visible) show(text) else Toast.makeText(ctx, text, if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
+        if (visible) show(text, long = long) else Toast.makeText(ctx, text, if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
     }
 
     internal fun dismiss(item: Item) { _current.compareAndSet(item, null) }
@@ -75,8 +81,8 @@ fun BoxScope.NoticeHost(inset: Dp = 0.dp, top: Boolean = false) {
     item?.let { last[0] = it }
     LaunchedEffect(item) {
         val cur = item ?: return@LaunchedEffect
-        // Con acción hay que tener tiempo de leerla y llegar al botón.
-        delay(if (cur.action != null) 6000 else 3500)
+        // Lo que le queda: cambiar de pantalla (abrir «Sonando», una hoja) no vuelve a contar desde cero.
+        delay((cur.until - SystemClock.uptimeMillis()).coerceAtLeast(0))
         Notice.dismiss(cur)
     }
     AnimatedVisibility(
@@ -86,9 +92,12 @@ fun BoxScope.NoticeHost(inset: Dp = 0.dp, top: Boolean = false) {
         enter = slideInVertically { if (top) -it / 2 else it / 2 } + fadeIn(), exit = slideOutVertically { if (top) -it / 2 else it / 2 } + fadeOut(),
     ) {
         val n = item ?: last[0] ?: return@AnimatedVisibility
-        Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Panel2).heightIn(min = 52.dp)
-                .padding(start = 16.dp, end = 4.dp).semantics { liveRegion = LiveRegionMode.Polite },
+        // Sombra y borde: en Panel2 sobre Ink sin más, parecía una fila más de la lista.
+        Surface(
+            Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), color = Panel2, shadowElevation = 8.dp,
+            border = BorderStroke(1.dp, Color(0xFF3A404A)),
+        ) { Row(
+            Modifier.heightIn(min = 52.dp).padding(start = 16.dp, end = 4.dp).semantics { liveRegion = LiveRegionMode.Polite },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(n.text, color = Paper, fontSize = 14.sp, lineHeight = 18.sp, modifier = Modifier.weight(1f).padding(vertical = 10.dp))
@@ -97,6 +106,6 @@ fun BoxScope.NoticeHost(inset: Dp = 0.dp, top: Boolean = false) {
                     Text(n.action, color = Copper, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 }
             } else Box(Modifier.padding(end = 12.dp))
-        }
+        } }
     }
 }

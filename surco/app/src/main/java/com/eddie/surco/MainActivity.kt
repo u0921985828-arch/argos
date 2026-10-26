@@ -220,7 +220,7 @@ private fun App(vm: LibraryViewModel) {
                     Screen.Equalizer -> EqualizerScreen(vm)
                 }
                 // Encima del minirreproductor; con «Sonando» abierta, arriba (ver más abajo).
-                if (!vm.nowPlayingOpen) NoticeHost()
+                if (!(vm.nowPlayingOpen && current != null)) NoticeHost()
             }
         }
         AnimatedVisibility(

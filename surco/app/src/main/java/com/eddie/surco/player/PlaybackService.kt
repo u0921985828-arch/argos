@@ -8,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
 import com.eddie.surco.ui.Notice
+import androidx.core.app.NotificationManagerCompat
 import androidx.media3.common.PlaybackException
 import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
 import com.eddie.surco.data.AlbumRef
@@ -171,8 +172,11 @@ class PlaybackService : MediaLibraryService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         // Notificación de música: icono de Surco en la barra de estado y canal con nombre en español.
+        // Canal propio: el de Media3 ya existía (2.4 y antes) con su nombre en inglés, y un canal
+        // creado no se renombra; se borra el viejo.
+        NotificationManagerCompat.from(this).deleteNotificationChannel(DefaultMediaNotificationProvider.DEFAULT_CHANNEL_ID)
         setMediaNotificationProvider(
-            DefaultMediaNotificationProvider.Builder(this).setChannelName(R.string.canal_musica).build()
+            DefaultMediaNotificationProvider.Builder(this).setChannelId("musica").setChannelName(R.string.canal_musica).build()
                 .apply { setSmallIcon(R.drawable.ic_stat_surco) },
         )
         session = MediaLibrarySession.Builder(this, FadingPlayer(exo), object : MediaLibrarySession.Callback {

@@ -246,8 +246,9 @@ fun NameDialog(title: String, initial: String = "", confirm: String = "Guardar",
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Copper, cursorColor = Copper),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).focusRequester(focus),
         )
+        // Dentro de la hoja (su propia ventana): fuera podría correr antes de que el campo exista.
+        LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 }
 
 /** Hoja para confirmar algo que borra: el botón dice lo que hace y va en rojo. */

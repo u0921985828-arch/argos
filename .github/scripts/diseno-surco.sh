@@ -99,11 +99,11 @@ back; ui; grep -q 'content-desc="Atrás"' ui.xml && back
 ui; tap "Biblioteca"; sleep 2; cap biblioteca-albumes
 tapre "Canciones"; cap biblioteca-canciones
 tap "Más opciones"; sleep 1; cap menu-cancion
-# Aviso propio: marcar favorita desde el menú deja la franja con «Deshacer» al cerrarlo.
-ui; tap "Favorita" || tap "Quitar favorita"; sleep 1
-back; cap aviso
+back
+# Aviso propio: el corazón del minirreproductor saca la franja con «Deshacer» (dura 8 s).
+ui; tap "Favorita"; cap aviso
 ui; tap "Deshacer" || true
-for _ in $(seq 1 8); do ui; grep -q 'text="Deshacer"\|text="Quitada de favoritas"\|text="Añadida a favoritas"' ui.xml || break; sleep 1; done
+for _ in $(seq 1 10); do ui; grep -q 'text="Deshacer"\|text="Quitada de favoritas"\|text="Añadida a favoritas"' ui.xml || break; sleep 1; done
 ui; tapre "Artistas"; cap biblioteca-artistas
 ui; tapre "Carpetas"; cap biblioteca-carpetas
 ui; tapre "Álbumes"; sleep 1; ui; tap "Disco de Prueba"; sleep 2; cap album
