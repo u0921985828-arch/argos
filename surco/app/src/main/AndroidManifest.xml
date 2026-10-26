@@ -64,6 +64,23 @@
             android:exported="true"
             tools:ignore="ExportedContentProvider" />
 
+        <!-- Widget de la pantalla de inicio (2×1, 4×1 y 4×2). -->
+        <receiver
+            android:name=".player.SurcoWidget"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info" />
+        </receiver>
+        <!-- La favorita del widget: sin exportar, solo la usa el propio widget. -->
+        <receiver
+            android:name=".player.WidgetFavorite"
+            android:exported="false" />
+
         <!-- Botones multimedia (Bluetooth, auriculares) con la app cerrada: reanudan la última cola. -->
         <receiver
             android:name="androidx.media3.session.MediaButtonReceiver"

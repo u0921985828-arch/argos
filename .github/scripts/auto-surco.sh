@@ -10,16 +10,22 @@ PKG=com.eddie.surco
 adb install -r Surco-debug.apk >/dev/null
 adb install -r Surco-auto-test.apk >/dev/null
 adb shell settings put system font_scale 1.0
+# Para que la prueba del widget pueda ponerlo como lo pone un lanzador.
+adb shell appwidget grantbind --package "$PKG" --user 0 || true
 adb logcat -c
 adb shell am instrument -w "$PKG.test/androidx.test.runner.AndroidJUnitRunner" > auto.txt 2>&1 || true
 adb logcat -d > auto-logcat.txt || true
 grep -E "OK \(|FAILURES|Tests run" auto.txt || true
 grep -E "SurcoAuto" auto-logcat.txt | sed 's/^.*SurcoAuto: /  /' || true
-# Dos pruebas: el navegador de Media3 y el camino de Android Auto (MediaBrowser del sistema, toque y voz).
-if ! grep -q "OK (2 tests)" auto.txt; then
+# Cuatro pruebas: el navegador de Media3, el camino de Android Auto (MediaBrowser del sistema,
+# toque y voz), el widget puesto por un anfitrión (enseña la canción, reproducir y pausar) y sus capturas.
+mkdir -p capturas
+adb pull "/sdcard/Android/data/$PKG/files/widget/." capturas/ >/dev/null 2>&1 || true
+ls capturas/widget_*.png 2>/dev/null || true
+if ! grep -q "OK (4 tests)" auto.txt; then
     echo "::error::la navegación de Android Auto falló (ver auto.txt y auto-logcat.txt)"
     sed -n '1,120p' auto.txt
     grep -E "PlaybackService|MediaSession|AndroidRuntime|SurcoAuto" auto-logcat.txt | tail -60 || true
     exit 1
 fi
-echo "Android Auto: navegación, búsqueda y reproducción en contexto, bien"
+echo "Android Auto y widget: navegación, búsqueda, reproducción en contexto y mandos del widget, bien"

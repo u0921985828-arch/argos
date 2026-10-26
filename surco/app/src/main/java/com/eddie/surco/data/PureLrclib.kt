@@ -10,7 +10,7 @@ import kotlin.math.abs
 // Sin Android: se prueba en la JVM (también contra el servicio de verdad, con SURCO_RED=1).
 
 const val LRCLIB = "https://lrclib.net"
-const val LRCLIB_AGENT = "Surco/2.3 (reproductor de música para Android)"
+const val LRCLIB_AGENT = "Surco/2.4 (reproductor de música para Android)"
 
 private fun enc(s: String) = URLEncoder.encode(s.trim(), "UTF-8").replace("+", "%20")
 

@@ -58,6 +58,9 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlin.math.min
 import kotlin.math.pow
 
@@ -131,6 +134,11 @@ class PlaybackService : MediaLibraryService() {
                 applyReplayGain()
                 saveQueue()
                 listenedId = null // también con «Repetir una»: es otra escucha
+            }
+            // El widget de la pantalla de inicio sigue a la canción y al reproducir/pausar.
+            override fun onEvents(player: Player, events: Player.Events) {
+                if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_PLAY_WHEN_READY_CHANGED,
+                        Player.EVENT_MEDIA_METADATA_CHANGED, Player.EVENT_PLAYBACK_STATE_CHANGED)) publishWidget()
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (isPlaying && fadeMul < 1f && fadeTarget < 1f && fadeRunnable == null) fadeTo(1f)
@@ -297,6 +305,11 @@ class PlaybackService : MediaLibraryService() {
             .setSessionActivity(open)
             .build()
 
+        // Favorita marcada desde la app o «Sonando»: el corazón del widget grande la sigue.
+        scope.launch {
+            UserStore.state.map { it.favorites }.distinctUntilChanged().drop(1).collect { SurcoWidget.refresh(this@PlaybackService) }
+        }
+
         // Ajustes que viven en el reproductor
         scope.launch {
             SurcoSettings.state.collect { p ->
@@ -313,6 +326,18 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo) = session
+
+    private fun publishWidget() {
+        val item = exo.currentMediaItem
+        val md = exo.mediaMetadata
+        SurcoWidget.publish(this, WidgetState(
+            trackId = item?.mediaId?.toLongOrNull(),
+            title = md.title?.toString() ?: item?.mediaMetadata?.title?.toString() ?: "Surco",
+            artist = (md.artist ?: item?.mediaMetadata?.artist)?.toString()?.ifBlank { null } ?: "Desconocido",
+            // Lo que va a pasar, no el instante: sin parpadeo entre pausa y reproducir al cargar.
+            playing = exo.playWhenReady && exo.playbackState != Player.STATE_ENDED && exo.playbackState != Player.STATE_IDLE,
+        ))
+    }
 
     private fun applyVolume() { exo.volume = (rgGain * fadeMul * sleepMul * xfadeMul).coerceIn(0f, 1f) }
 
@@ -526,6 +551,8 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onDestroy() {
         saveQueue()
+        // El widget se queda con la canción, en pausa.
+        SurcoWidget.last?.let { SurcoWidget.publish(this, it.copy(playing = false)) }
         UserStore.flush()
         handler.removeCallbacksAndMessages(null)
         scope.cancel()

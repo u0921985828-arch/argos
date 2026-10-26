@@ -150,3 +150,19 @@ Encargo: «¿Android Auto?».
   - Lectura del árbol con cerrojo (el coche pide cuatro pestañas a la vez); futuros que fallan en vez de quedarse colgados con el servicio cerrándose; logcat de la prueba guardado.
 - Prueba de humo: el buscador del emulador volvió a perder lo escrito (run 40326764164, ahora con el análisis de BPM en marcha al arrancar) → se espera a que el campo tenga el foco, se comprueba que lo escrito llega y hay 5 intentos con más calma cada vez. De paso: «1 canción encontrada» (decía «encontradas»).
 - CI verde (run 40328610266): «OK (2 tests)» en el emulador — navegador de Media3: 4 pestañas, 2 álbumes, búsqueda 1, suena «Prueba Uno» en su disco; camino de Android Auto (MediaBrowser del sistema): 4 pestañas, disco de 2, toque y voz bien, y una frase sin coincidencia no vacía la cola. Diseño estricto 0 y 0.
+
+# Surco 2.4 — widgets
+
+Encargo: «Quiero widgets también».
+
+## Criterios
+- C1: un anfitrión de widgets (como un lanzador) pone el widget de Surco en el emulador, el widget enseña una canción, al pulsar «reproducir» suena y el botón pasa a «Pausar», y al pulsarlo otra vez vuelve a «Reproducir» (`androidTest/WidgetTest.kt`). Base: Surco no tenía widget.
+- C2: tres tamaños (2×1, 4×1 y 4×2 con favorita) con imagen de cada uno en la rama `capturas-surco` (`widget_*.png`), revisada a ojo.
+- C3: CI verde (compilación sin avisos, lint 0, humo, diseño estricto, Android Auto).
+- Caso reservado: con el servicio parado, «reproducir» en el widget reanuda la última cola (el toque va por el receptor de teclas multimedia de Media3 y su reanudación).
+
+## Decisiones
+- RemoteViews sin dependencias nuevas (Glance sería otra biblioteca y otra versión que fijar). En Android 12+ el lanzador elige el diseño por tamaño (RemoteViews por tamaños); antes, se elige con el tamaño que da el lanzador.
+- Los mandos son teclas multimedia al receptor de Media3: funcionan con la app cerrada.
+- La favorita va por un receptor sin exportar: el del widget tiene que estar abierto al sistema.
+- El acento del widget es el de Ajustes; «Del disco», de la portada (legible sobre el fondo del widget).
