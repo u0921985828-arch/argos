@@ -98,6 +98,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.media3.common.Player
 import com.eddie.surco.LibraryViewModel
@@ -341,8 +342,13 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
     }
 
     // pointerInput vacío: el fondo se queda los toques de los huecos (en horizontal hay varios); si
-    // no, llegaban a Inicio, que está debajo, y podían poner otra canción sin que se viera.
-    BoxWithConstraints(Modifier.fillMaxSize().background(bg).pointerInput(Unit) {}.statusBarsPadding().navigationBarsPadding()) {
+    // no, llegaban a Inicio, que está debajo, y podían poner otra canción sin que se viera. Y un
+    // nodo de accesibilidad que tapa la pantalla entera: sin él, TalkBack leía (y el volcado de
+    // uiautomator traía) lo de Inicio que asomaba por esos huecos.
+    BoxWithConstraints(
+        Modifier.fillMaxSize().background(bg).pointerInput(Unit) {}.semantics { paneTitle = "Sonando" }
+            .statusBarsPadding().navigationBarsPadding(),
+    ) {
         val w = maxWidth
         val h = maxHeight
         if (w > h && w >= 560.dp) {
