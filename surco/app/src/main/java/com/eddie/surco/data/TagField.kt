@@ -25,8 +25,8 @@ enum class TagField(val label: String, val group: String) {
     DECADE("Década", "Tiempo"),
     ORIGINAL_YEAR("Año original", "Tiempo"),
     DURATION("Duración", "Tiempo"),
-    BPM("BPM", "Tiempo"),
-    KEY("Tonalidad", "Tiempo"),
+    BPM("BPM", "Ritmo y tono"),
+    KEY("Tonalidad", "Ritmo y tono"),
     ADDED("Fecha de añadido", "Tiempo"),
     FORMAT("Formato", "Archivo"),
     QUALITY("Calidad", "Archivo"),
@@ -91,7 +91,8 @@ fun TagField.buckets(t: Track): List<Bucket> = when (this) {
     TagField.DURATION -> durationBucket(t.durationMs)
     TagField.BPM -> t.x("bpm").replace(',', '.').toFloatOrNull()?.toInt()?.takeIf { it > 0 }
         ?.let { val b = it / 10 * 10; num("$b – ${b + 9} BPM", b.toLong()) } ?: emptyList()
-    TagField.KEY -> plain(t.x("key"))
+    // Tonalidad normalizada («Am», «A minor» y «8A» son la misma) y en el orden de la rueda Camelot.
+    TagField.KEY -> parseKey(t.x("key"))?.let { num(it.label, it.order.toLong()) } ?: plain(t.x("key"))
     TagField.ADDED -> if (t.dateAdded > 0) {
         val c = Calendar.getInstance().apply { timeInMillis = t.dateAdded * 1000 }
         val y = c.get(Calendar.YEAR); val m = c.get(Calendar.MONTH)

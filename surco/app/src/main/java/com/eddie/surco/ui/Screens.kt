@@ -79,6 +79,10 @@ import com.eddie.surco.Screen
 import com.eddie.surco.data.Group
 import com.eddie.surco.data.TagField
 import com.eddie.surco.data.Track
+import com.eddie.surco.data.bpmText
+import com.eddie.surco.data.tempoMatch
+import com.eddie.surco.data.harmonic
+import com.eddie.surco.data.parseKey
 import com.eddie.surco.data.availableFields
 import com.eddie.surco.data.buckets
 import com.eddie.surco.data.groupTracks
@@ -199,7 +203,26 @@ private fun List<Track>.sortedForAlbum() = sortedWith(compareBy({ it.album.lower
 // ======================= CANCIONES =======================
 enum class SongSort(val label: String) {
     CUSTOM("Orden de la lista"), TITLE("Título"), ARTIST("Artista"), ALBUM("Álbum y pista"), YEAR("Año"),
-    DURATION("Duración"), ADDED("Recientes"), PLAYS("Más escuchadas"),
+    DURATION("Duración"), ADDED("Recientes"), PLAYS("Más escuchadas"), BPM("BPM"), KEY("Tonalidad (rueda Camelot)"),
+}
+
+private fun Track.bpmOrNull() = x("bpm").replace(',', '.').toFloatOrNull()?.takeIf { it > 0 }
+
+/** Lo que se puede poner detrás de [id] sin choque: tonalidad vecina en la rueda y tempo parecido. */
+@Composable
+fun CompatibleScreen(vm: LibraryViewModel, id: Long, tracks: List<Track>, byId: Map<Long, Track>) {
+    val t = byId[id]
+    if (t == null) { LaunchedEffect(Unit) { vm.pop() }; return }
+    val k = parseKey(t.x("key")); val b = t.bpmOrNull()
+    val list = rememberOffMain(tracks, id, initial = emptyList<Track>()) {
+        tracks.filter { o ->
+            o.id != id &&
+                (k == null || parseKey(o.x("key"))?.let { harmonic(k, it) } == true) &&
+                (b == null || o.bpmOrNull()?.let { tempoMatch(b, it) } == true)
+        }.sortedBy { o -> b?.let { bb -> o.bpmOrNull()?.let { kotlin.math.abs(it - bb) } } ?: 0f }
+    }
+    val sub = listOfNotNull(k?.label, b?.let { "${bpmText(it)} BPM" }).joinToString(" · ")
+    SongListScreen(vm, "Para mezclar con «${t.title}»", sub, list, SongSort.CUSTOM, custom = true)
 }
 
 @Composable
@@ -267,6 +290,8 @@ fun SongListScreen(
             SongSort.DURATION -> l.sortedByDescending { it.value.durationMs }
             SongSort.ADDED -> l.sortedByDescending { it.value.dateAdded }
             SongSort.PLAYS -> l.sortedByDescending { user.plays[it.value.id] ?: 0 }
+            SongSort.BPM -> l.sortedBy { it.value.bpmOrNull() ?: Float.MAX_VALUE }
+            SongSort.KEY -> l.sortedWith(compareBy({ parseKey(it.value.x("key"))?.order ?: Int.MAX_VALUE }, { it.value.bpmOrNull() ?: Float.MAX_VALUE }))
         }
     }
     val tracksSorted = remember(sorted) { sorted.map { it.value } }

@@ -286,7 +286,7 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, byId: Map<Long, Track>
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 // 40 dp de alto (los chips de Material miden 32): es lo que se toca con el pulgar.
-                listOf(TagField.GENRE, TagField.DECADE, TagField.MOOD, TagField.QUALITY, TagField.FOLDER).forEach { f ->
+                listOf(TagField.GENRE, TagField.BPM, TagField.KEY, TagField.DECADE, TagField.MOOD, TagField.QUALITY, TagField.FOLDER).forEach { f ->
                     FilterChip(selected = false, onClick = { vm.push(Screen.Groups(f)) }, label = { Text(f.label) }, colors = chipColors(), modifier = Modifier.height(ChipHeight))
                 }
                 FilterChip(selected = false, onClick = { vm.selectTab(Tab.TAGS) }, label = { Text("Todas…") }, colors = chipColors(), modifier = Modifier.height(ChipHeight))

@@ -65,6 +65,7 @@ import com.eddie.surco.ui.PlaylistScreen
 import com.eddie.surco.ui.PlaylistsScreen
 import com.eddie.surco.ui.QueueSheet
 import com.eddie.surco.ui.SettingsScreen
+import com.eddie.surco.ui.CompatibleScreen
 import com.eddie.surco.ui.SettingsPageScreen
 import com.eddie.surco.ui.SleepDialog
 import com.eddie.surco.ui.SmartScreen
@@ -172,6 +173,7 @@ private fun App(vm: LibraryViewModel) {
                     is Screen.Smart -> SmartScreen(vm, s.list, tracks)
                     is Screen.PlaylistView -> PlaylistScreen(vm, s.id, byId)
                     Screen.Playlists -> PlaylistsScreen(vm, tracks)
+                    is Screen.Compatible -> CompatibleScreen(vm, s.id, tracks, byId)
                     is Screen.Settings -> s.page?.let { SettingsPageScreen(vm, it) } ?: SettingsScreen(vm)
                     Screen.Equalizer -> EqualizerScreen(vm)
                 }

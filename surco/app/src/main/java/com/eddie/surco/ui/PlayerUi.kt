@@ -76,6 +76,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.material.icons.filled.GraphicEq
+import com.eddie.surco.data.parseKey
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -132,6 +134,8 @@ fun qualityLine(t: Track): String = listOfNotNull(
     t.x("bits").takeIf { it.isNotBlank() },
     t.sampleRate.takeIf { it > 0 }?.let { "%.1f kHz".format(Locale("es"), it / 1000f).replace(",0 ", " ") },
     t.bitrate.takeIf { it > 0 }?.let { "%,d kbps".format(Locale("es"), it) },
+    t.x("bpm").takeIf { it.isNotBlank() }?.let { "${it.replace('.', ',').removeSuffix(",0")} BPM" },
+    parseKey(t.x("key"))?.code,
 ).joinToString(" · ")
 
 /**
@@ -613,6 +617,10 @@ fun SongSheet(vm: LibraryViewModel, s: SongSheetState) {
                 }
                 if (track.album.isNotBlank()) ActionChip(Icons.Default.Album, "Ir al álbum") { close(); vm.goToAlbum(track) }
                 if (track.artist.isNotBlank()) ActionChip(Icons.Default.Person, "Ir al artista") { close(); vm.goToArtist(track) }
+                // Con BPM o tonalidad (de la etiqueta o del análisis): lo que suena bien detrás.
+                if (track.x("bpm").isNotBlank() || track.x("key").isNotBlank()) {
+                    ActionChip(Icons.Default.GraphicEq, "Para mezclar") { close(); vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.Compatible(track.id)) }
+                }
                 if (s.playlistId != null && s.playlistIndex >= 0) {
                     ActionChip(Icons.Default.Delete, "Quitar de la lista") { UserStore.removeFromPlaylist(s.playlistId, s.playlistIndex); close() }
                 }

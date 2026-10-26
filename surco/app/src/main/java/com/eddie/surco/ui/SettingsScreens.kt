@@ -192,6 +192,14 @@ private fun LibraryPage(vm: LibraryViewModel) {
     SettingTitle("Ocultar audios cortos", "Notas de voz, tonos y avisos fuera de la biblioteca.")
     ChipChoice(listOf(0 to "No", 30 to "< 30 s", 60 to "< 1 min"), prefs.minDurationSec) { s -> SurcoSettings.update { it.copy(minDurationSec = s) } }
     OptionRow("Volver a leer todas las etiquetas", "Útil si has editado etiquetas con otro programa") { vm.scan(force = true); vm.pop() }
+    val analysis by vm.analysis.collectAsState()
+    val analyzed = remember(all) { all.count { it.x("bpm_src") == "análisis" || it.x("key_src") == "análisis" } }
+    SwitchRow(
+        "Analizar BPM y tonalidad",
+        analysis?.let { (d, n) -> "Analizando: $d de $n canciones (unos segundos cada una, sin internet)." }
+            ?: "Para las canciones que no los traen en las etiquetas. Hechas: $analyzed.",
+        prefs.analyze,
+    ) { on -> SurcoSettings.update { it.copy(analyze = on) }; if (on) vm.analyzeLibrary() else vm.stopAnalysis() }
     SwitchRow(
         "Letras de internet (LRCLIB)",
         "Si una canción no trae letra, se busca en lrclib.net (muchas, sincronizadas). Solo sale artista, título, álbum y duración.",

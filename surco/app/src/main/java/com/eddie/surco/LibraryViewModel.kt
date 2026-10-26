@@ -8,7 +8,10 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.eddie.surco.audio.SurcoSettings
+import com.eddie.surco.data.AnalysisStore
+import com.eddie.surco.data.AudioAnalyzer
 import com.eddie.surco.data.LibraryScanner
+import com.eddie.surco.data.needsAnalysis
 import com.eddie.surco.data.Lyrics
 import com.eddie.surco.data.SmartList
 import com.eddie.surco.data.TagField
@@ -34,6 +37,8 @@ sealed interface Screen {
     data class Smart(val list: SmartList) : Screen
     data class PlaylistView(val id: Long) : Screen
     data object Playlists : Screen
+    /** Canciones que se pueden mezclar con [id]: tonalidad vecina en la rueda y tempo parecido. */
+    data class Compatible(val id: Long) : Screen
     /** Ajustes: sin página, la lista de secciones. */
     data class Settings(val page: com.eddie.surco.ui.SettingsPage? = null) : Screen
     data object Equalizer : Screen
@@ -97,6 +102,43 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         else -> false
     }
 
+    /** Análisis de BPM y tonalidad: (hechas, total) mientras dura. */
+    val analysis = MutableStateFlow<Pair<Int, Int>?>(null)
+    private var analysisJob: Job? = null
+    private val store by lazy { AnalysisStore(getApplication<Application>()) }
+
+    /**
+     * Analiza, una a una y con prioridad baja, las canciones a las que les falta BPM o tonalidad.
+     * Lo hecho se aplica a la biblioteca cada 10 canciones y se guarda; se puede cortar en Ajustes.
+     */
+    fun analyzeLibrary() {
+        if (!SurcoSettings.state.value.analyze || analysisJob?.isActive == true || !fresh.value) return
+        analysisJob = viewModelScope.launch(Dispatchers.IO) {
+            Thread.currentThread().priority = Thread.MIN_PRIORITY
+            tracks.value = tracks.value.map { store.apply(it) }
+            val todo = tracks.value.filter { it.needsAnalysis() && !store.has(it) }
+            if (todo.isEmpty()) return@launch
+            analysis.value = 0 to todo.size
+            try {
+                todo.forEachIndexed { i, t ->
+                    if (!SurcoSettings.state.value.analyze) return@launch
+                    store.put(t, AudioAnalyzer.analyze(getApplication<Application>(), t))
+                    analysis.value = i + 1 to todo.size
+                    if ((i + 1) % 10 == 0 || i == todo.lastIndex) {
+                        tracks.value = tracks.value.map { store.apply(it) }
+                        store.save()
+                    }
+                }
+                scanner.saveCache(tracks.value)
+            } finally {
+                analysis.value = null
+                store.save()
+            }
+        }
+    }
+
+    fun stopAnalysis() { analysisJob?.cancel() }
+
     /** true cuando la lista ya viene de MediaStore (no solo de la caché): hasta entonces no se restaura la cola. */
     val fresh = MutableStateFlow(false)
     private var scannedOnce = false
@@ -144,6 +186,7 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
             }
             progress.value = null
             scanner.saveCache(tracks.value)
+            analyzeLibrary()
         }
     }
 
