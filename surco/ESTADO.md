@@ -174,3 +174,20 @@ Encargo: «Quiero widgets también».
   - Actualizaciones desordenadas (una corrutina por evento en paralelo) → un solo hilo y se pinta el último estado; un fallo del widget no tira el servicio de música; sin widgets en el aparato no pasa nada.
   - Favorita: color y acción se fijan siempre (el lanzador reaplica sobre lo anterior). Portada y acento, una vez por canción; la caché de la biblioteca solo se lee si cambia la canción guardada. Textos en recursos.
 - CI verde (run 40339727282): «OK (4 tests)» — widget: enseña «Prueba Dos», reproducir y pausar desde el widget; Android Auto por los dos caminos; diseño estricto 0 y 0. Capturas de los tres tamaños revisadas a ojo.
+
+# Surco 2.5 — pop-ups: notificación, hojas y avisos
+
+Encargo: «Los pop ups que se usan en el móvil se podrían modificar también?» → las tres cosas: diálogos de la app, avisos breves y notificación de música.
+
+## Criterios
+- C1: la notificación de música lleva dos botones propios, «Marcar favorita» y «Activar aleatorio» (`dumpsys notification`), y pulsar el de aleatorio en la persiana del emulador lo activa (el botón pasa a «Aleatorio activado») y lo vuelve a quitar. Base: solo anterior / reproducir / siguiente de Media3.
+- C2: ningún `AlertDialog` en la app: temporizador, velocidad, nombres, añadir a lista y confirmaciones de borrado son hojas de Surco (`SurcoSheet`), capturadas en el recorrido de diseño con `--estricto` (0 fallos).
+- C3: ningún Toast con la app a la vista: marcar favorita saca la franja «Añadida a favoritas» con «Deshacer»; «Deshacer» la quita (marcarla otra vez vuelve a decir «Añadida») y la franja se va sola.
+- Caso reservado: la hoja de nombre con el teclado abierto no queda tapada (captura `lista-nueva` del recorrido).
+
+## Decisiones
+- Botones de la notificación con comandos propios de Media3 (`SessionCommand` + `setMediaButtonPreferences`): los mismos salen en la pantalla de bloqueo, los mandos multimedia del sistema y el coche. Iconos de Media3 (corazón y aleatorio, lleno o vacío según el estado).
+- Icono propio en la barra de estado (la nota de Surco) y canal «Música» en español.
+- `SurcoSheet` sobre `ModalBottomSheet`: fondo de la app, título grande, botones de 48 dp abajo (principal en el acento; lo que borra, en rojo). Se cierra deslizando o tocando fuera.
+- Avisos (`ui/Notice.kt`): uno a la vez, 3,5 s (6 s con acción), encima del minirreproductor; en «Sonando», arriba, para no tapar los mandos. El servicio usa la franja si la app se ve y Toast si no (una canción rota con la app cerrada sigue avisando).
+- Borrar una lista sigue pidiendo confirmación y además se puede deshacer.
