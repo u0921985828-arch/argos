@@ -97,7 +97,9 @@ jobs:
 
   smoke:
     needs: build
-    runs-on: ubuntu-latest
+    # Fijado: en ubuntu-latest (26.04 desde octubre de 2026) instalar ffmpeg tarda 30 min y la
+    # descarga del emulador se cortó; con 24.04 el humo entero iba en unos 18 min.
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
