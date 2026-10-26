@@ -17,6 +17,8 @@ import android.util.Size
 import android.util.SizeF
 import android.view.KeyEvent
 import android.widget.RemoteViews
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaButtonReceiver
 import androidx.palette.graphics.Palette
 import com.eddie.surco.MainActivity
@@ -151,6 +153,7 @@ class SurcoWidget : AppWidgetProvider() {
          * Las teclas multimedia van al receptor de Media3: con el servicio parado, «reproducir»
          * lo arranca y reanuda la última cola (onPlaybackResumption); con él en marcha, se la pasa.
          */
+        @OptIn(UnstableApi::class)
         private fun mediaKey(ctx: Context, code: Int): PendingIntent {
             val i = Intent(Intent.ACTION_MEDIA_BUTTON).setComponent(ComponentName(ctx, MediaButtonReceiver::class.java))
                 .putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, code))
