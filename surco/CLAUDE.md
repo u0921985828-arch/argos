@@ -3,6 +3,7 @@
 App nativa Android (Kotlin + Jetpack Compose + Media3). Lee todas las etiquetas de los archivos de audio del móvil y permite navegar la biblioteca por cualquiera de ellas.
 
 ## Estado
+- **Surco 2.3**: Android Auto (`player/CarLibrary.kt`, `data/PureBrowse.kt`, `PlaybackService` como `MediaLibraryService`): cuatro pestañas (Para ti, Listas, Álbumes, Artistas), tocar una canción suena su carpeta desde ella, búsqueda en pantalla y por voz, portadas por `player/ArtProvider.kt`; probado en el emulador con `androidTest/AutoTest.kt` por los dos caminos (navegador de Media3 y MediaBrowser del sistema, el de Android Auto).
 - **Surco 2.2**: interfaz limpia (en «Sonando» solo lo de cada día) y todo lo demás en Ajustes por secciones; acento de color (fijo o «Del disco»), fundido entre canciones que respeta los discos, índice de letras, carpetas excluidas, Inicio a medida y «Tus escuchas». Antes, 2.1: salida sin recortar a 16 bits, auditoría independiente aplicada (`AUDITORIA.md`) y app en pestañas. Pruebas JVM (motor, PCM, letras, ReplayGain/R128/Opus, cola, búsqueda) + debug/release + prueba de humo en emulador con el APK de release.
 - Se compila en GitHub Actions (`.github/workflows/build-surco.yml` del repo `argos`, donde vive en `surco/`): el contenedor de desarrollo no llega a Google Maven ni al Android SDK. Cada push que toque `surco/` deja los APK en el artifact `surco-apk` y en la rama `apk-surco` (un solo commit, se reescribe).
 - Las partes puras se prueban también sin Android con `kotlinc` + JUnit (ver ESTADO.md).
@@ -42,7 +43,7 @@ AGP 8.7.3 · Kotlin 2.0.21 · Gradle 8.14.3 · Compose BOM 2024.12.01 · Media3 
 - `ui/` — `SettingsScreens.kt` (Ajustes por secciones: Sonido, Reproducción, Biblioteca, Interfaz, Tus escuchas, Acerca de), `Home.kt` (Inicio, Biblioteca con índice de letras `WithLetters`, Buscar, barra inferior), `Screens.kt` (Etiquetas, grupos, listas de canciones, `rememberOffMain`), `PlayerUi.kt` («Sonando», letra, cola, temporizador, velocidad, menú de canción, línea de salida), `EqualizerScreen.kt`, `LibraryScreens.kt` (listas), `Controls.kt` (deslizadores accesibles, `SurcoSlider`: pulgar redondo y pista continua; el de Material 1.3 se veía en tres piezas), `Theme.kt` (portadas por bytes y tamaños; `chipColors`/`ChipHeight` para todos los chips; color de contenido `Paper`: fuera del Scaffold Compose pinta en negro).
 
 ## Pendiente
-- «Bit-perfect» por USB (Android 14+), cruce con solape entre canciones, Android Auto, edición de etiquetas.
+- «Bit-perfect» por USB (Android 14+), cruce con solape entre canciones, edición de etiquetas; Android Auto sin probar en un coche ni en el Desktop Head Unit.
 - Probado en JVM y en emulador; falta un móvil real (sonido real, Bluetooth con la app cerrada).
 
 ## Idioma
