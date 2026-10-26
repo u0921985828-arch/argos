@@ -195,8 +195,9 @@ adb logcat -c
 adb shell am start -n "$PKG/.MainActivity"
 for _ in $(seq 1 20); do sleep 2; ui; grep -q 'text="4 canciones' ui.xml && break; done
 cayo "al volver a abrir"
-# Inicio ofrece seguir con lo de la última vez.
-grep -q 'text="Seguir escuchando"' ui.xml && grep -q 'text="Prueba Dos"' ui.xml || fallo "Inicio no ofrece «Seguir escuchando» con la última canción"
+# La última canción vuelve preparada en el minirreproductor (la tarjeta «Seguir escuchando» solo
+# sale cuando no hay nada cargado: con las dos a la vez se veía la misma canción dos veces).
+grep -q 'content-desc="Reproducir o pausar"' ui.xml && grep -q 'text="Prueba Dos"' ui.xml || fallo "al volver a abrir no está la última canción en el minirreproductor"
 adb exec-out screencap -p > inicio2.png
 tap "Ajustes" || fallo "no encuentro Ajustes en Inicio"
 sleep 2; ui
