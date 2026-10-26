@@ -96,3 +96,19 @@ Encargo: «¿Y de diseño?».
 - El CI pasa a estricto: un fallo medible de diseño tumba la compilación. Las capturas se publican antes de comprobar, para verlas si falla.
 - Deslizadores con el cero en medio (graves, agudos, balance) sin relleno: a 0 dB la pista medio cobre parecía un valor.
 - Prueba de humo: el toque sobre el texto de ayuda del buscador a veces no daba el foco y lo escrito se perdía (run 40295895769, el mismo código había pasado antes). → Se pulsa el propio campo (EditText) y hay 3 intentos.
+
+# Surco 2.2 — reproductor de calidad, interfaz limpia, todo lo demás en Ajustes
+
+Encargo: «Quiero que mejores el reproductor a niveles exagerados, la UI debe ser limpia y simple, pero en ajustes está todo lo demás, un reproductor y interfaz de calidad».
+
+## Criterios
+- C1: «Sonando» limpia: sin líneas técnicas por defecto y ≤ 12 elementos tocables (base medida: 16 tocables, 17 textos con formato, salida y chips de etiquetas). Lo comprueba la prueba de humo.
+- C2: todo lo demás en Ajustes, por secciones (Sonido, Reproducción, Biblioteca, Interfaz, Tus escuchas, Acerca de), y funcionando: la prueba de humo activa «Detalles técnicos» en Ajustes → Interfaz y comprueba que aparecen en «Sonando»; el ecualizador se abre desde «⋮» y su preajuste sobrevive al reinicio desde Ajustes → Sonido.
+- C3: funciones nuevas con pruebas JVM (fundido entre canciones, discos sin pausas, índice de letras, acentos legibles, tus escuchas) y CI verde: compilación sin avisos, lint 0, humo, diseño estricto con letra normal y ×1,3.
+- Caso reservado: la pasada con letra ×1,3 corre con el acento Violeta elegido en la pasada anterior (tiene que sobrevivir al reinicio) y el diseño estricto tiene que dar 0 con él.
+
+## Decisiones
+- Fundido entre canciones «baja y sube» (curva de potencia constante), no un cruce con solape: ExoPlayer toca una pista cada vez y un segundo reproductor rompería la sesión, el sin cortes y el camino sin pérdida. Por defecto respeta los discos (mismo álbum y misma carpeta): los directos siguen sin pausas.
+- El acento es estado de Compose detrás de `Copper` (un getter): cambiarlo repinta todo sin tocar los cien sitios que lo usan. «Del disco» se aclara (manteniendo el tono) hasta 4,5:1 sobre el fondo.
+- `SwitchRow`: la fila entera es el interruptor (antes solo el interruptor, un blanco pequeño).
+- Pendiente a propósito: Android Auto, edición de etiquetas, salida bit-perfect por USB (sin aparato para medirla), cruce con solape.
