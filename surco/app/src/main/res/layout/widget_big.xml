@@ -4,6 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/w_bg"
+    android:baselineAligned="false"
     android:orientation="horizontal"
     android:padding="12dp">
         <FrameLayout
@@ -29,51 +30,54 @@
         android:layout_height="match_parent"
         android:layout_weight="1"
         android:layout_marginStart="4dp"
+        android:gravity="center_vertical"
         android:orientation="vertical">
-        <LinearLayout
+        <!-- RelativeLayout: los títulos ocupan lo que deja la favorita sin pesos anidados. -->
+        <RelativeLayout
             android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="12dp"
-            android:orientation="vertical">
-            <TextView
-                android:id="@+id/w_title"
+            android:layout_height="wrap_content">
+            <ImageView
+                android:id="@+id/w_fav"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                android:padding="12dp"
+                android:contentDescription="@string/w_fav"
+                android:src="@drawable/w_fav_border" />
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:text="@string/app_name"
-                android:textColor="#FFECE7E1"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-            <TextView
-                android:id="@+id/w_artist"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:text="@string/widget_empty"
-                android:textColor="#FFA3A8B0"
-                android:textSize="13sp" />
-        </LinearLayout>
-        <ImageView
-            android:id="@+id/w_fav"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:padding="12dp"
-            android:contentDescription="@string/w_fav"
-            android:src="@drawable/w_fav_border" />
-        </LinearLayout>
+                android:layout_centerVertical="true"
+                android:layout_marginStart="12dp"
+                android:layout_toStartOf="@id/w_fav"
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/w_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="@string/app_name"
+                    android:textColor="#FFECE7E1"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/w_artist"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="@string/widget_empty"
+                    android:textColor="#FFA3A8B0"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </RelativeLayout>
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center"
+            android:baselineAligned="false"
             android:orientation="horizontal">
         <ImageView
             android:id="@+id/w_prev"

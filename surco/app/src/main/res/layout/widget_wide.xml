@@ -5,11 +5,12 @@
     android:layout_height="match_parent"
     android:background="@drawable/w_bg"
     android:gravity="center_vertical"
+    android:baselineAligned="false"
     android:orientation="horizontal"
-    android:padding="10dp">
+    android:padding="8dp">
         <FrameLayout
-            android:layout_width="52dp"
-            android:layout_height="52dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:background="@drawable/w_art_bg">
             <ImageView
                 android:id="@+id/w_note"

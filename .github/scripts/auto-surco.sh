@@ -23,9 +23,9 @@ mkdir -p capturas
 adb pull "/sdcard/Android/data/$PKG/files/widget/." capturas/ >/dev/null 2>&1 || true
 ls capturas/widget_*.png 2>/dev/null || true
 if ! grep -q "OK (4 tests)" auto.txt; then
-    echo "::error::la navegación de Android Auto falló (ver auto.txt y auto-logcat.txt)"
+    echo "::error::fallaron las pruebas de Android Auto o del widget (ver auto.txt y auto-logcat.txt)"
     sed -n '1,120p' auto.txt
-    grep -E "PlaybackService|MediaSession|AndroidRuntime|SurcoAuto" auto-logcat.txt | tail -60 || true
+    grep -E "PlaybackService|MediaSession|MediaButtonReceiver|SurcoWidget|AndroidRuntime|SurcoAuto" auto-logcat.txt | tail -60 || true
     exit 1
 fi
 echo "Android Auto y widget: navegación, búsqueda, reproducción en contexto y mandos del widget, bien"

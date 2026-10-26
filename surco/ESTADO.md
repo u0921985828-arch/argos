@@ -166,3 +166,10 @@ Encargo: «Quiero widgets también».
 - Los mandos son teclas multimedia al receptor de Media3: funcionan con la app cerrada.
 - La favorita va por un receptor sin exportar: el del widget tiene que estar abierto al sistema.
 - El acento del widget es el de Ajustes; «Del disco», de la portada (legible sobre el fondo del widget).
+- Revisión por ataque (3 FATALES, 2 GRAVES, 5 MENORES), aplicada:
+  - El receptor de teclas de Media3 solo deja pasar PLAY y PLAY_PAUSE: pausar, anterior y siguiente no hacían nada → el botón central es PLAY_PAUSE por el receptor (arranca y reanuda con la app cerrada) y anterior/siguiente van directos al servicio, como en la notificación de Media3.
+  - Lint: OptIn de UnstableApi en las teclas; sin pesos anidados (fila de títulos y favorita en RelativeLayout) ni alineación por línea base; diseños que caben en su celda (2×1 desde 56 dp, 4×2 desde 124 dp).
+  - La prueba podía pulsar el diseño inicial (sin acción) → espera a la descripción que solo pone el proveedor.
+  - «Reproducir» sin nada que reanudar abría un servicio sin cola y Android lo cerraba → sin canción, el botón abre Surco.
+  - Actualizaciones desordenadas (una corrutina por evento en paralelo) → un solo hilo y se pinta el último estado; un fallo del widget no tira el servicio de música; sin widgets en el aparato no pasa nada.
+  - Favorita: color y acción se fijan siempre (el lanzador reaplica sobre lo anterior). Portada y acento, una vez por canción; la caché de la biblioteca solo se lee si cambia la canción guardada. Textos en recursos.

@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Size
+import android.util.Log
 import android.util.SizeF
 import android.view.KeyEvent
 import android.widget.RemoteViews
@@ -29,6 +30,8 @@ import com.eddie.surco.audio.SurcoSettings
 import com.eddie.surco.data.LibraryScanner
 import com.eddie.surco.data.UserStore
 import com.eddie.surco.data.legibleAccent
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -61,7 +64,11 @@ class SurcoWidget : AppWidgetProvider() {
     companion object {
         const val ACTION_FAV = "com.eddie.surco.widget.FAVORITA"
         const val EXTRA_ID = "id"
-        internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        // Un solo hilo: dos estados seguidos (reproducir y pausar, canción y su título) no se
+        // pueden aplicar al revés. Un fallo del widget no tira el servicio de música.
+        @kotlin.OptIn(ExperimentalCoroutinesApi::class)
+        internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1) +
+            CoroutineExceptionHandler { _, e -> Log.w("SurcoWidget", "no se pudo actualizar el widget", e) })
 
         /** Lo último que publicó el servicio (en el mismo proceso). */
         @Volatile var last: WidgetState? = null
@@ -71,7 +78,8 @@ class SurcoWidget : AppWidgetProvider() {
             if (s == last) return
             last = s
             val app = ctx.applicationContext
-            scope.launch { push(app, s) }
+            // Se lee `last` al pintar: si llegan varios seguidos, se pinta el último.
+            scope.launch { last?.let { push(app, it) } }
         }
 
         /** Que se repinte (al marcar una favorita desde la app, por ejemplo). */
@@ -80,39 +88,52 @@ class SurcoWidget : AppWidgetProvider() {
             scope.launch { push(app, last ?: lastSaved(app)) }
         }
 
+        // Sin widgets en el aparato (sin FEATURE_APP_WIDGETS) getInstance da null.
         private fun ids(ctx: Context): IntArray =
-            AppWidgetManager.getInstance(ctx).getAppWidgetIds(ComponentName(ctx, SurcoWidget::class.java))
+            runCatching { AppWidgetManager.getInstance(ctx)?.getAppWidgetIds(ComponentName(ctx, SurcoWidget::class.java)) }.getOrNull() ?: IntArray(0)
+
+        private var saved: Pair<Long?, WidgetState>? = null
 
         internal fun lastSaved(ctx: Context): WidgetState {
             UserStore.init(ctx)
             val q = UserStore.state.value.queue
-            val id = q.ids.getOrNull(q.index) ?: return WidgetState(null, "Surco", "Toca para elegir música", false)
-            val t = runCatching { LibraryScanner(ctx).loadCache().firstOrNull { it.id == id } }.getOrNull()
-                ?: return WidgetState(null, "Surco", "Toca para elegir música", false)
-            return WidgetState(t.id, t.title, t.artist.ifBlank { "Desconocido" }, false)
+            val id = q.ids.getOrNull(q.index)
+            val empty = WidgetState(null, ctx.getString(R.string.app_name), ctx.getString(R.string.widget_empty), false)
+            // La caché de la biblioteca solo se lee si la canción guardada cambió.
+            saved?.let { (sid, st) -> if (sid == id) return st }
+            val st = id?.let { i -> runCatching { LibraryScanner(ctx).loadCache().firstOrNull { it.id == i } }.getOrNull() }
+                ?.let { t -> WidgetState(t.id, t.title, t.artist.ifBlank { ctx.getString(R.string.w_unknown) }, false) } ?: empty
+            saved = id to st
+            return st
         }
+
+        private var art: Triple<Long?, Bitmap?, Int>? = null
 
         /** Arma los tres diseños y los manda a todos los widgets. */
         fun push(ctx: Context, s: WidgetState) {
             val ids = ids(ctx)
             if (ids.isEmpty()) return
             SurcoSettings.init(ctx)
-            val art = s.trackId?.let { loadArt(ctx, it) }
-            val accent = accentFor(art)
+            // Portada y acento, una vez por canción (no en cada reproducir/pausar).
+            val key = s.trackId?.let { it * 31 + SurcoSettings.state.value.accent.hashCode() }
+            val (_, cover, accent) = art?.takeIf { it.first == key } ?: s.trackId.let { id ->
+                val b = id?.let { loadArt(ctx, it) }
+                Triple(key, b, accentFor(b)).also { art = it }
+            }
             val fav = s.trackId != null && run { UserStore.init(ctx); s.trackId in UserStore.state.value.favorites }
-            val small = views(ctx, R.layout.widget_small, s, art, accent, fav)
-            val wide = views(ctx, R.layout.widget_wide, s, art, accent, fav)
-            val big = views(ctx, R.layout.widget_big, s, art, accent, fav)
-            val m = AppWidgetManager.getInstance(ctx)
+            val small = views(ctx, R.layout.widget_small, s, cover, accent, fav)
+            val wide = views(ctx, R.layout.widget_wide, s, cover, accent, fav)
+            val big = views(ctx, R.layout.widget_big, s, cover, accent, fav)
+            val m = AppWidgetManager.getInstance(ctx) ?: return
             for (id in ids) {
                 val rv = if (Build.VERSION.SDK_INT >= 31) {
                     // El lanzador elige el diseño que cabe (también al redimensionar).
-                    RemoteViews(mapOf(SizeF(110f, 40f) to small, SizeF(250f, 40f) to wide, SizeF(250f, 110f) to big))
+                    RemoteViews(mapOf(SizeF(110f, 40f) to small, SizeF(250f, 40f) to wide, SizeF(250f, 124f) to big))
                 } else {
                     val o = m.getAppWidgetOptions(id)
                     val w = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250)
                     val h = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 40)
-                    when { h >= 110 && w >= 250 -> big; w >= 250 -> wide; else -> small }
+                    when { h >= 124 && w >= 250 -> big; w >= 250 -> wide; else -> small }
                 }
                 m.updateAppWidget(id, rv)
             }
@@ -125,21 +146,25 @@ class SurcoWidget : AppWidgetProvider() {
             if (art != null) v.setImageViewBitmap(R.id.w_art, art) else v.setImageViewResource(R.id.w_art, android.R.color.transparent)
             v.setImageViewResource(R.id.w_play, if (s.playing) R.drawable.w_pause else R.drawable.w_play)
             v.setInt(R.id.w_play_bg, "setColorFilter", accent)
-            v.setContentDescription(R.id.w_play_box, if (s.playing) "Pausar" else "Reproducir")
+            v.setContentDescription(R.id.w_play_box, ctx.getString(if (s.playing) R.string.w_pause else R.string.w_play))
             v.setOnClickPendingIntent(R.id.w_root, openApp(ctx))
-            v.setOnClickPendingIntent(R.id.w_play_box, mediaKey(ctx, if (s.playing) KeyEvent.KEYCODE_MEDIA_PAUSE else KeyEvent.KEYCODE_MEDIA_PLAY))
+            // Sin nada que reanudar, «reproducir» abre Surco: un servicio sin cola no puede ponerse
+            // en primer plano y Android lo cerraría a los pocos segundos.
+            v.setOnClickPendingIntent(R.id.w_play_box, if (s.trackId == null) openApp(ctx) else playPause(ctx))
             if (layout != R.layout.widget_small) {
-                v.setOnClickPendingIntent(R.id.w_prev, mediaKey(ctx, KeyEvent.KEYCODE_MEDIA_PREVIOUS))
-                v.setOnClickPendingIntent(R.id.w_next, mediaKey(ctx, KeyEvent.KEYCODE_MEDIA_NEXT))
+                v.setOnClickPendingIntent(R.id.w_prev, serviceKey(ctx, KeyEvent.KEYCODE_MEDIA_PREVIOUS))
+                v.setOnClickPendingIntent(R.id.w_next, serviceKey(ctx, KeyEvent.KEYCODE_MEDIA_NEXT))
             }
             if (layout == R.layout.widget_big) {
+                // Todo se fija siempre: al repintar, el lanzador reaplica sobre las vistas de antes.
                 v.setImageViewResource(R.id.w_fav, if (fav) R.drawable.w_fav else R.drawable.w_fav_border)
-                if (fav) v.setInt(R.id.w_fav, "setColorFilter", accent)
-                v.setContentDescription(R.id.w_fav, if (fav) "Quitar de favoritas" else "Favorita")
-                s.trackId?.let { id ->
-                    val i = Intent(ctx, WidgetFavorite::class.java).setAction(ACTION_FAV).putExtra(EXTRA_ID, id)
-                    v.setOnClickPendingIntent(R.id.w_fav, PendingIntent.getBroadcast(ctx, 40, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
-                }
+                v.setInt(R.id.w_fav, "setColorFilter", if (fav) accent else 0xFFECE7E1.toInt())
+                v.setContentDescription(R.id.w_fav, ctx.getString(if (fav) R.string.w_unfav else R.string.w_fav))
+                val id = s.trackId
+                v.setOnClickPendingIntent(R.id.w_fav, if (id == null) openApp(ctx) else PendingIntent.getBroadcast(
+                    ctx, 40, Intent(ctx, WidgetFavorite::class.java).setAction(ACTION_FAV).putExtra(EXTRA_ID, id),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                ))
             }
             return v
         }
@@ -150,14 +175,22 @@ class SurcoWidget : AppWidgetProvider() {
         )
 
         /**
-         * Las teclas multimedia van al receptor de Media3: con el servicio parado, «reproducir»
-         * lo arranca y reanuda la última cola (onPlaybackResumption); con él en marcha, se la pasa.
+         * Reproducir/pausar por el receptor de Media3: con el servicio parado lo arranca y reanuda
+         * la última cola (onPlaybackResumption); con él en marcha, le pasa la tecla. El receptor
+         * solo deja pasar PLAY y PLAY_PAUSE (las demás las tira): por eso es PLAY_PAUSE.
          */
         @OptIn(UnstableApi::class)
-        private fun mediaKey(ctx: Context, code: Int): PendingIntent {
+        private fun playPause(ctx: Context): PendingIntent {
             val i = Intent(Intent.ACTION_MEDIA_BUTTON).setComponent(ComponentName(ctx, MediaButtonReceiver::class.java))
+                .putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
+            return PendingIntent.getBroadcast(ctx, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        }
+
+        /** Anterior y siguiente, directos al servicio (como los botones de la notificación de Media3). */
+        private fun serviceKey(ctx: Context, code: Int): PendingIntent {
+            val i = Intent(Intent.ACTION_MEDIA_BUTTON).setComponent(ComponentName(ctx, PlaybackService::class.java))
                 .putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, code))
-            return PendingIntent.getBroadcast(ctx, code, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            return PendingIntent.getService(ctx, code, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         }
 
         private fun loadArt(ctx: Context, id: Long): Bitmap? = runCatching {

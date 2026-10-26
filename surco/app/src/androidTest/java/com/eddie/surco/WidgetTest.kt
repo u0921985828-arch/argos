@@ -58,7 +58,17 @@ class WidgetTest {
             }
             // El sistema pide el contenido al proveedor (onUpdate): la última canción de la cola.
             SurcoWidget.refresh(ctx)
-            waitFor("enseñar una canción") { view.findViewById<TextView>(R.id.w_title)?.text?.isNotBlank() == true && view.findViewById<View>(R.id.w_play_box) != null }
+            // El diseño inicial ya trae «Surco» y el botón (sin acción): se espera a lo que solo pone
+            // el proveedor, la descripción del botón según el estado.
+            waitFor("enseñar una canción") {
+                view.findViewById<View>(R.id.w_play_box)?.contentDescription?.toString() in setOf("Reproducir", "Pausar") &&
+                    view.findViewById<TextView>(R.id.w_title)?.text?.isNotBlank() == true
+            }
+            // Si ya sonaba (lo dejó así otra prueba), se pausa primero para empezar desde «Reproducir».
+            if (main { view.findViewById<View>(R.id.w_play_box).contentDescription == "Pausar" }) {
+                main { view.findViewById<View>(R.id.w_play_box).performClick() }
+                waitFor("«Reproducir» de partida") { view.findViewById<View>(R.id.w_play_box)?.contentDescription == "Reproducir" }
+            }
             val title = main { view.findViewById<TextView>(R.id.w_title).text.toString() }
 
             // Reproducir desde el widget → suena → el botón pasa a «Pausar».
