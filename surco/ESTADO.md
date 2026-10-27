@@ -239,3 +239,24 @@ Encargo: «Quiero que sea el mejor reproductor de música de Android, que lo qui
 - Inglés: 9 pantallas con 0 textos en español y diseño estricto 0; «OK (5 tests)» con la cuadrícula pellizcada de 2 a 5 y vuelta (capturas `rejilla_2.png` y `rejilla_5.png`).
 - Pendiente de esta ronda: medir en un móvil real; leer las etiquetas de 10.000 canciones en 258 s es mejorable (lectura en paralelo limitada a 4).
 - CI verde (run 40431069488, segundo intento: el primero se cayó antes de empezar, con el buscador del emulador perdiendo lo escrito, el fallo intermitente conocido; el mismo código de la app había pasado entero en 40427734203): humo, 39 pantallas ×2 y 9 en inglés con diseño estricto 0, «OK (5 tests)», 10.004 canciones sin caídas.
+
+# Surco 2.7 — lo pendiente (rondas 2, 3 y 4)
+
+Encargo: «Cumple lo pendiente» (las tres rondas que quedaban y lo pendiente de la 2.6) y, a mitad, «la visión de carátulas en todos los apartados de biblioteca, por carátulas y en lista» y «en vez de 5 carátulas incluso a 8, siguiendo la secuencia de Fibonacci».
+
+## Hecho
+- **Lectura de 10.000 canciones**: los lectores de etiquetas ya no esperan en tandas de 32 a la más lenta, hay de 4 a 8 (2 por núcleo) y, con miles de canciones, la interfaz se rehace cada 4 s y no cada segundo (rehacer grupos de 10.000 cada segundo le quitaba CPU a la lectura). El tiempo sale en el log (`SurcoScan`) y `rendimiento-surco.sh` espera a esa línea (antes podía medir antes de que empezara).
+- **Perfiles de arranque**: `profileinstaller` + `baseline-prof.txt` (el código de la app y los perfiles de Compose y Media3 se compilan al instalar, también fuera de Play).
+- **Bit-perfect por USB** (Android 14+, Ajustes → Sonido): `PureMixer.pickMixer` elige el mezclador del DAC (bit-perfect a la frecuencia y codificación de la canción o, si no hay, uno normal a su frecuencia: sin remuestrear); `OutputRoute` lo pide con `setPreferredMixerAttributes` en cada canción. Probado en la JVM; sin DAC en el emulador.
+- **Salida a la vista**: altavoz, cable, Bluetooth o USB con su nombre y, con DAC, «bit-perfect a 44,1 kHz» o «sin remuestrear». El códec Bluetooth no lo da Android a las apps.
+- **Cruce con solape**: la cola de la que se va suena en un segundo reproductor (preparado unos segundos antes, sin foco ni sesión) mientras entra la siguiente; potencia constante (`OverlapTest`); `CrossfadeTest` cuenta en el emulador dos reproductores activos a la vez y que la cola se apaga.
+- **Editor de etiquetas** (menú de la canción → «Editar etiquetas»): 13 campos, escribe en el archivo con jaudiotagger sobre una copia y la vuelca con el permiso del sistema por archivo (`createWriteRequest`); Opus no. Prueba de humo: cambia el título de «Prueba Tres» con «Allow», lo comprueba en MediaStore y lo deja como estaba.
+- **Listas M3U/M3U8**: importar (rutas absolutas, relativas, de Windows, file://, nombres; Windows-1252 y BOM) y exportar.
+- **ListenBrainz** (opcional, apagado): «sonando ahora» y escuchas con su regla (mitad o 4 min), cola sin conexión, token fuera de la copia de seguridad.
+- **Copia de seguridad**: un JSON con favoritas, listas, escuchas, ajustes y lo analizado; al restaurar en otro móvil traduce los ids por las claves estables. De paso, la reconciliación reconoce ids que en el móvil nuevo son OTRA canción (lo que traía la copia automática de Android).
+- **Mosaico de ajustes rápidos** y **accesos directos** del icono (mezclar todo, favoritas, buscar), probados en la prueba de humo.
+- **«Enviar a»** teles y altavoces: DLNA/UPnP (descubrimiento SSDP, servidor HTTP propio con rangos, SOAP por socket, un `SimpleBasePlayer` remoto) y Chromecast (CastPlayer con el receptor por defecto; sin servicios de Google, solo DLNA). La misma sesión cambia de reproductor. Probado de extremo a extremo en la JVM con un renderizador falso; sin aparatos en el emulador.
+- **Carátulas o lista en todos los apartados** de Biblioteca (Canciones, Álbumes, Artistas, Carpetas), cada uno lo recuerda; la cuadrícula se pellizca en **2-3-5-8** portadas por fila (Fibonacci); a 8 solo quedan las portadas, con el nombre para TalkBack. `GridZoomTest` llega a 8 y vuelve a 2.
+- **Reloj**: sin app propia para Wear OS. El reloj ya enseña la sesión de Surco del móvil con sus mandos y los botones propios (favorita y aleatorio); una app de reloj con biblioteca propia sería otro proyecto (otro módulo, otra música en el reloj).
+- Hecho con cinco agentes en paralelo (M3U, ListenBrainz, copia de seguridad, editor de etiquetas, «Enviar a»), cada uno con sus archivos; el coordinador cableó servicio, manifiesto y dependencias.
+- Revisión por ataque: 2 bloqueantes de la prueba de humo («Sonando» abierta tapaba el editor; el mosaico dependía de que siguiera sonando una canción de 20 s), 4 importantes (el cruce no se cortaba con una pausa que no fuera la del botón; hueco al empezar el cruce; widget y mosaico desfasados con «Enviar a»; editar la que suena), 4 menores. Aplicada.
