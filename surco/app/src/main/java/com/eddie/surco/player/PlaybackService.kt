@@ -114,6 +114,8 @@ class PlaybackService : MediaLibraryService() {
     private var listenedMs = 0L
     private var lastPos = 0L
     private var counted = false
+    /** ListenBrainz ya sabe lo que suena (se le dice una vez por canción). */
+    private var lbNow = false
     private var ticks = 0
 
     override fun onCreate() {
@@ -643,15 +645,18 @@ class PlaybackService : MediaLibraryService() {
         // Escuchas: cuenta al pasar la mitad (o 4 minutos), como Last.fm.
         val id = exo.currentMediaItem?.mediaId
         val pos = exo.currentPosition
-        if (id != listenedId) { listenedId = id; listenedMs = 0; counted = false; lastPos = pos }
+        if (id != listenedId) { listenedId = id; listenedMs = 0; counted = false; lastPos = pos; lbNow = false }
         if (exo.isPlaying) {
             val d = pos - lastPos
             if (d in 1..2_000) listenedMs += d
             val dur = exo.duration
+            // ListenBrainz (si se activa): «sonando ahora» al empezar y la escucha al contarla.
+            if (!lbNow && dur > 0) { lbNow = true; exo.currentMediaItem?.let { Scrobbler.nowPlaying(this, it, dur) } }
             val need = if (dur > 0) min(dur / 2, 240_000L) else 30_000L
             if (!counted && id != null && listenedMs >= need) {
                 counted = true
                 id.toLongOrNull()?.let { UserStore.recordPlay(it) }
+                if (dur > 0) exo.currentMediaItem?.let { Scrobbler.listened(this, it, dur, System.currentTimeMillis() / 1000 - listenedMs / 1000) }
             }
             if (++ticks % 10 == 0) saveQueue()
         }

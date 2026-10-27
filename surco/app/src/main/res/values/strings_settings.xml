@@ -133,4 +133,5 @@
     <string name="settings_usb_title">Bit-perfect over USB</string>
     <string name="settings_usb_help">With a USB DAC, Android plays each song at its own sample rate, untouched (with the equalizer, ReplayGain and speed off). Volume is then set on the DAC.</string>
     <string name="settings_usb_old">Needs Android 14 or later.</string>
+    <string name="settings_privacy_lb">ListenBrainz is on: each play (artist, title, album and duration) is sent to listenbrainz.org with your token.</string>
 </resources>

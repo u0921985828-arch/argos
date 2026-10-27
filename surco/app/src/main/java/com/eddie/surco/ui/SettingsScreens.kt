@@ -63,6 +63,7 @@ import com.eddie.surco.Screen
 import com.eddie.surco.audio.ACCENTS
 import com.eddie.surco.audio.ACCENT_FROM_ART
 import com.eddie.surco.audio.ACCENT_SYSTEM
+import com.eddie.surco.player.Scrobbler
 import android.app.LocaleManager
 import android.os.Build
 import android.os.LocaleList
@@ -328,6 +329,7 @@ private fun StatsPage(vm: LibraryViewModel) {
     if (s.plays == 0) {
         Text(stringResource(R.string.settings_stats_empty),
             color = Muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
+        ListenBrainzSettings()
         return
     }
     SectionLabel(stringResource(R.string.settings_stats_artists))
@@ -337,6 +339,8 @@ private fun StatsPage(vm: LibraryViewModel) {
         val t = byId[id] ?: return@forEachIndexed
         RankRow(i + 1, t.title, "$n") { vm.player.play(listOf(t), 0) }
     }
+    // Enviar las escuchas a ListenBrainz (opcional, apagado por defecto).
+    ListenBrainzSettings()
 }
 
 @Composable
@@ -367,6 +371,10 @@ private fun AboutPage() {
         stringResource(R.string.settings_privacy),
         stringResource(if (online) R.string.settings_privacy_online else R.string.settings_privacy_offline),
     )
+    // Con ListenBrainz activado sale algo más de internet: se dice aquí también.
+    if (Scrobbler.state.collectAsState().value.enabled) {
+        Text(stringResource(R.string.settings_privacy_lb), color = Muted, fontSize = 12.sp, lineHeight = 15.sp, modifier = Modifier.padding(horizontal = 20.dp))
+    }
     SettingTitle(stringResource(R.string.settings_version), SURCO_VERSION)
     SettingTitle(stringResource(R.string.settings_formats), stringResource(R.string.settings_formats_help))
 }
