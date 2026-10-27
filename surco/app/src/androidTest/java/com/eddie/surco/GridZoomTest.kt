@@ -1,10 +1,11 @@
 package com.eddie.surco
 
 import android.content.Intent
+import android.graphics.Point
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
-import androidx.test.uiautomator.StaleObjectException
+import androidx.test.uiautomator.UiSelector
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import com.eddie.surco.audio.SurcoSettings
@@ -33,25 +34,20 @@ class GridZoomTest {
     }
 
     /**
-     * Pellizca la tarjeta del álbum de prueba. Se busca cada vez y se reintenta: con cada pellizco
-     * la cuadrícula se recompone y el nodo encontrado puede quedar viejo antes de usarlo.
+     * Pellizca en el centro de la pantalla, que es cuadrícula (escucha el gesto en toda su
+     * superficie). Por coordenadas y no sobre un nodo: con cada pellizco la cuadrícula se recompone
+     * y el nodo encontrado quedaba viejo (StaleObjectException) antes de usarlo.
      */
     private fun pinch(close: Boolean) {
-        repeat(5) { n ->
-            dev.waitForIdle()
-            try {
-                val o = dev.findObject(By.text("Disco de Prueba")) ?: dev.findObject(By.desc("Disco de Prueba"))
-                if (o != null) {
-                    val card = o.parent ?: o
-                    if (close) card.pinchClose(0.8f) else card.pinchOpen(0.8f)
-                    return
-                }
-            } catch (e: StaleObjectException) {
-                if (n == 4) throw e
-            }
-            Thread.sleep(300)
-        }
-        throw AssertionError("no se encuentra el álbum de prueba para pellizcarlo")
+        dev.waitForIdle()
+        val cx = dev.displayWidth / 2; val cy = dev.displayHeight / 2
+        val far = dev.displayWidth * 35 / 100; val near = dev.displayWidth * 5 / 100
+        val (from, to) = if (close) far to near else near to far
+        val carrier = dev.findObject(UiSelector().text(ctx.getString(R.string.app_tab_library)))
+        assertTrue("no se pudo pellizcar", carrier.performTwoPointerGesture(
+            Point(cx - from, cy), Point(cx + from, cy), Point(cx - to, cy), Point(cx + to, cy), 30,
+        ))
+        dev.waitForIdle()
     }
 
     private fun shot(name: String) {
