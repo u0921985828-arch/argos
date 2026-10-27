@@ -140,7 +140,7 @@ busca() {  # $1 = texto, $2 = canción que tiene que salir
     fi
     # El teclado del emulador tarda en estar listo (más con el análisis de BPM en marcha): se
     # espera a que el campo tenga el foco y, si lo escrito no llega, se repite con más calma.
-    for intento in 1 2 3 4 5; do
+    for intento in 1 2 3; do
         ui; tapedit || tap "Buscar en cualquier etiqueta" || tap "$prev" || true
         for _ in 1 2 3 4 5; do sleep 1; ui; grep -q 'class="android.widget.EditText"[^>]*focused="true"' ui.xml && break; done
         sleep $intento
@@ -150,6 +150,19 @@ busca() {  # $1 = texto, $2 = canción que tiene que salir
         sleep 2
         ui
         grep -q "class=\"android.widget.EditText\"[^>]*text=\"$1\"\|text=\"$1\"[^>]*class=\"android.widget.EditText\"" ui.xml || echo "  (lo escrito no llegó al buscador, intento $intento)"
+        if grep -q "text=\"$2\"" ui.xml && grep -qi 'text="1 canci.n encontrada"' ui.xml; then
+            echo "buscar «$1» → $2"
+            prev=$1
+            return 0
+        fi
+    done
+    # El teclado del emulador a veces no entrega lo escrito (sobre todo en arranque en frío): lo
+    # que se prueba aquí es lo que encuentra la búsqueda, así que se le pasa el texto como lo
+    # haría la búsqueda del sistema (el acceso directo «Buscar» con el texto puesto).
+    echo "  (el teclado no escribe: búsqueda con el texto ya puesto)"
+    adb shell am start -n "$PKG/.MainActivity" -a com.eddie.surco.action.SEARCH -e query "$1" >/dev/null
+    for _ in 1 2 3 4 5; do
+        sleep 2; ui
         if grep -q "text=\"$2\"" ui.xml && grep -qi 'text="1 canci.n encontrada"' ui.xml; then
             echo "buscar «$1» → $2"
             prev=$1

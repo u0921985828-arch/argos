@@ -108,7 +108,10 @@ class MainActivity : ComponentActivity() {
 
     /** Accesos directos del icono (res/xml/shortcuts.xml): los atiende App. */
     private fun shortcut(i: Intent?) {
-        if (i?.action?.startsWith("com.eddie.surco.action.") == true) PendingShortcut.action.value = i.action
+        if (i?.action?.startsWith("com.eddie.surco.action.") != true) return
+        // Buscar puede traer ya lo que se busca (la búsqueda del sistema, otra app o las pruebas).
+        PendingShortcut.query = i.getStringExtra(SearchManager.QUERY)
+        PendingShortcut.action.value = i.action
     }
 
     /** «Pon … en Surco» del asistente: la frase llega en el intent y la recoge App al tener la biblioteca. */
@@ -126,6 +129,7 @@ object PendingShortcut {
     const val FAVORITES = "com.eddie.surco.action.FAVORITES"
     const val SEARCH = "com.eddie.surco.action.SEARCH"
     val action = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    var query: String? = null
 }
 
 private val audioPerm = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
@@ -206,7 +210,12 @@ private fun App(vm: LibraryViewModel) {
         when (shortcut) {
             null -> return@LaunchedEffect
             PendingShortcut.FAVORITES -> { vm.selectTab(Tab.HOME); vm.push(Screen.Smart(SmartList.FAVORITES)) }
-            PendingShortcut.SEARCH -> { vm.selectTab(Tab.HOME); vm.push(Screen.Search) }
+            PendingShortcut.SEARCH -> {
+                vm.selectTab(Tab.HOME)
+                PendingShortcut.query?.let { vm.query = it }
+                PendingShortcut.query = null
+                vm.push(Screen.Search)
+            }
             PendingShortcut.SHUFFLE_ALL -> {
                 if (!ready || tracks.isEmpty() || vm.player.controller == null) return@LaunchedEffect
                 vm.player.play(tracks, 0, shuffled = true)
