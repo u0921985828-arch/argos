@@ -49,6 +49,8 @@ sealed interface Screen {
     data object Library : Screen
     data object Tags : Screen
     data object Search : Screen
+    /** Editar las etiquetas de una canción (ui/TagEditor.kt). */
+    data class TagEditor(val id: Long) : Screen
 }
 
 /** Pestañas de la barra inferior, en el orden de uso: lo de cada día primero. */

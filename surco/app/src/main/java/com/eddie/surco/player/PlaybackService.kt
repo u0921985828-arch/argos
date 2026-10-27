@@ -4,6 +4,8 @@ import android.app.PendingIntent
 import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
+import android.content.ComponentName
+import android.service.quicksettings.TileService
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
@@ -411,6 +413,8 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun publishWidget() {
+        // El mosaico de ajustes rápidos también se entera (si está puesto).
+        runCatching { TileService.requestListeningState(this, ComponentName(this, PlayTile::class.java)) }
         val item = exo.currentMediaItem
         val md = exo.mediaMetadata
         SurcoWidget.publish(this, WidgetState(

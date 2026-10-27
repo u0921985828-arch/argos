@@ -77,6 +77,8 @@ import com.eddie.surco.ui.SleepDialog
 import com.eddie.surco.ui.SmartScreen
 import com.eddie.surco.ui.SongSheet
 import com.eddie.surco.ui.SpeedDialog
+import com.eddie.surco.ui.TagEditorScreen
+import com.eddie.surco.data.SmartList
 import com.eddie.surco.ui.Notice
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.asPaddingValues
@@ -89,7 +91,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         // Solo la primera vez: al recrearse (giro, cambio de tema) el intent sigue siendo el mismo.
-        if (savedInstanceState == null) voiceQuery(intent)
+        if (savedInstanceState == null) { voiceQuery(intent); shortcut(intent) }
         setContent { SurcoTheme { Root() } }
     }
 
@@ -101,6 +103,12 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         voiceQuery(intent)
+        shortcut(intent)
+    }
+
+    /** Accesos directos del icono (res/xml/shortcuts.xml): los atiende App. */
+    private fun shortcut(i: Intent?) {
+        if (i?.action?.startsWith("com.eddie.surco.action.") == true) PendingShortcut.action.value = i.action
     }
 
     /** «Pon … en Surco» del asistente: la frase llega en el intent y la recoge App al tener la biblioteca. */
@@ -111,6 +119,14 @@ class MainActivity : ComponentActivity() {
 
 /** Frase pendiente del asistente de voz («» = poner lo que sea: todo en aleatorio). */
 object PendingVoice { val query = kotlinx.coroutines.flow.MutableStateFlow<String?>(null) }
+
+/** Acceso directo pendiente (mezclar todo, favoritas, buscar). */
+object PendingShortcut {
+    const val SHUFFLE_ALL = "com.eddie.surco.action.SHUFFLE_ALL"
+    const val FAVORITES = "com.eddie.surco.action.FAVORITES"
+    const val SEARCH = "com.eddie.surco.action.SEARCH"
+    val action = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+}
 
 private val audioPerm = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
 
@@ -183,6 +199,22 @@ private fun App(vm: LibraryViewModel) {
         if (hits.isEmpty()) vm.player.play(tracks, 0, shuffled = true) else vm.player.play(hits, 0)
         vm.nowPlayingOpen = true
     }
+    // Accesos directos: favoritas y buscar abren su pantalla; mezclar todo espera, como la voz, a
+    // la biblioteca consultada y al controlador.
+    val shortcut by PendingShortcut.action.collectAsStateWithLifecycle()
+    LaunchedEffect(shortcut, ready, tracks, vm.player.controller) {
+        when (shortcut) {
+            null -> return@LaunchedEffect
+            PendingShortcut.FAVORITES -> { vm.selectTab(Tab.HOME); vm.push(Screen.Smart(SmartList.FAVORITES)) }
+            PendingShortcut.SEARCH -> { vm.selectTab(Tab.HOME); vm.push(Screen.Search) }
+            PendingShortcut.SHUFFLE_ALL -> {
+                if (!ready || tracks.isEmpty() || vm.player.controller == null) return@LaunchedEffect
+                vm.player.play(tracks, 0, shuffled = true)
+                vm.nowPlayingOpen = true
+            }
+        }
+        PendingShortcut.action.value = null
+    }
     // Pantalla encendida con «Sonando» abierta, si se pide.
     val view = LocalView.current
     DisposableEffect(prefs.keepScreenOn, vm.nowPlayingOpen) {
@@ -225,6 +257,7 @@ private fun App(vm: LibraryViewModel) {
                     is Screen.Compatible -> CompatibleScreen(vm, s.id, tracks, byId)
                     is Screen.Settings -> s.page?.let { SettingsPageScreen(vm, it) } ?: SettingsScreen(vm)
                     Screen.Equalizer -> EqualizerScreen(vm)
+                    is Screen.TagEditor -> TagEditorScreen(vm, s.id, byId)
                 }
                 // Encima del minirreproductor; con «Sonando» abierta, arriba (ver más abajo).
                 if (!(vm.nowPlayingOpen && current != null)) NoticeHost()

@@ -356,4 +356,29 @@ adb logcat -d > logcat.txt || true
 adb shell dumpsys media.audio_flinger > flinger.txt 2>/dev/null || true
 grep -o "Surco salida: .*" salida.txt | sort -u || true
 
+# --- Mosaico de ajustes rápidos: pulsarlo pausa lo que suena y volver a pulsarlo lo reanuda. ---
+TILE="$PKG/.player.PlayTile"
+adb shell cmd statusbar add-tile "$TILE" >/dev/null 2>&1 || true
+sleep 1
+e=$(estado); echo "antes del mosaico: $e"
+adb shell cmd statusbar click-tile "$TILE"; sleep 3
+e=$(estado); echo "tras pulsar el mosaico: $e"
+echo "$e" | grep -qE 'state=(PAUSED|2)|\(2\)' || fallo "el mosaico no pausó ($e)"
+adb shell cmd statusbar click-tile "$TILE"; sleep 3
+e=$(estado); echo "tras pulsarlo otra vez: $e"
+echo "$e" | grep -qE 'state=(PLAYING|3)|\(3\)' || fallo "el mosaico no reanudó ($e)"
+adb shell cmd statusbar collapse; adb shell cmd statusbar remove-tile "$TILE" >/dev/null 2>&1 || true
+cayo "con el mosaico"
+
+# --- Accesos directos del icono: «Buscar» abre el buscador y «Mezclar todo» pone todo en aleatorio. ---
+adb shell input keyevent KEYCODE_MEDIA_PAUSE; sleep 1
+adb shell am start -a com.eddie.surco.action.SEARCH -n "$PKG/.MainActivity" >/dev/null; sleep 3; ui
+grep -q 'class="android.widget.EditText"' ui.xml || fallo "el acceso directo «Buscar» no abrió el buscador"
+adb shell input keyevent KEYCODE_BACK; sleep 1
+adb shell am start -a com.eddie.surco.action.SHUFFLE_ALL -n "$PKG/.MainActivity" >/dev/null; sleep 5
+e=$(estado); echo "acceso directo «Mezclar todo»: $e"
+echo "$e" | grep -qE 'state=(PLAYING|3)|\(3\)' || fallo "el acceso directo «Mezclar todo» no puso música ($e)"
+adb shell input keyevent KEYCODE_MEDIA_PAUSE; sleep 2
+cayo "con los accesos directos"
+
 echo "Surco 2.1: biblioteca, pestañas, seguir escuchando, etiquetas, favorita, cola, ecualizador, persistencia, FLAC y WAV en coma flotante y MP3 en 16 bits sin caerse"

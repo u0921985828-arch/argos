@@ -40,7 +40,26 @@
                 <action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+            <!-- Accesos directos al mantener pulsado el icono: mezclar todo, favoritas y buscar. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
+
+        <!-- Mosaico de ajustes rápidos: reproducir o pausar sin abrir Surco. -->
+        <service
+            android:name=".player.PlayTile"
+            android:exported="true"
+            android:icon="@drawable/ic_stat_surco"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="false" />
+        </service>
 
         <!-- Android Auto: Surco sale entre las aplicaciones de música del coche. -->
         <meta-data
