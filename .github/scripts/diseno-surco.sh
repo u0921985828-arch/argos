@@ -99,8 +99,9 @@ back; ui; grep -q 'content-desc="Atrás"' ui.xml && back
 ui; tap "Biblioteca"; sleep 2; cap biblioteca-albumes
 tapre "Canciones"; cap biblioteca-canciones
 ui; tap "Ver en carátulas" && { sleep 2; cap biblioteca-canciones-caratulas; ui; tap "Ver en lista"; sleep 1; }
-tap "Más opciones"; sleep 1; cap menu-cancion
-back
+# Con la pantalla de ahora (la de antes era la de carátulas, sin «Más opciones»): si no se abría
+# la hoja, el «atrás» de después sacaba de Biblioteca y a 1,3 el resto del recorrido se perdía.
+ui; tap "Más opciones" && { sleep 1; cap menu-cancion; back; }
 # Aviso propio: el corazón del minirreproductor saca la franja con «Deshacer» (dura 8 s).
 ui; tap "Favorita"; cap aviso
 ui; tap "Deshacer" || true
