@@ -212,3 +212,24 @@ Encargo (con captura del móvil real): «No es responsive no? Y el degradado a o
 - Prueba nueva FONDO en `diseno-surco.py` (bordes de un solo color en «Sonando», en horizontal y con letra); con la captura del móvil real y con la de antes falla. Captura en horizontal girando el emulador.
 - CI verde (run 40398712414): 39 pantallas ×2 con diseño estricto 0, incluido FONDO; humo y «OK (4 tests)».
 - Pendiente de la CI: instalar ffmpeg en el ejecutor de GitHub tarda ahora ~30 min (también en 24.04); habría que cachearlo o generar la música de prueba sin apt.
+
+# Surco 2.6 — listo para marcas (ronda 1 de 4)
+
+Encargo: «Quiero que sea el mejor reproductor de música de Android, que lo quieran las marcas de móviles incluso». Rondas elegidas, en orden: listo para marcas → sonido de audiófilo → funciones que piden → conectado. Y, a mitad: «en la biblioteca molaría hacer zoom para que las cuadrículas vayan de ×2 carátulas de ancho hasta ×5, respetando las cuadrículas y las distancias; que toda la app sea agradable de usar».
+
+## Criterios
+- C1: ningún texto de la interfaz fijo en el código: inglés por defecto (`values/`) y español (`values-es/`) con las mismas claves; el recorrido en inglés (`idioma-surco.sh`) falla si queda una palabra de la interfaz en español. Base: ~500 textos en español en el código, 0 en inglés.
+- C2: idioma por app (Android 13+): en Ajustes del sistema y en Ajustes → Interfaz → Idioma; las pruebas ponen español con `cmd locale set-app-locales`.
+- C3: 10.000 canciones más en el emulador: sin caídas ni ANR, Inicio llega a enseñarlas todas; arranque en frío, lectura de etiquetas, fotogramas al desplazar y memoria apuntados en `rendimiento.txt`. Base: nunca medido con más de 4.
+- C4: la cuadrícula de álbumes se pellizca con dos dedos de 2 a 5 portadas por fila y vuelta (`GridZoomTest`, UiAutomator), con capturas de 2 y 5.
+- C5: diseño estricto también en inglés y con la regla nueva SIN NOMBRE (nada tocable sin nombre para TalkBack; cazó el interruptor del ecualizador).
+- Caso reservado: la pantalla «Sonando» y Ajustes en inglés, sin textos cortados (capturas `capturas-en/`).
+
+## Decisiones
+- Inglés por defecto: es lo que ve todo el mundo que no tenga el móvil en español; el español queda en `values-es/` idéntico al de antes (las pruebas lo buscan letra por letra).
+- La parte pura (etiquetas, Android Auto) no puede usar R: `data/Texts.kt` con el español por defecto (pruebas JVM) y `data/TextsAndroid.kt` con un `when` explícito a los recursos (sin `getIdentifier`, que lint marca).
+- `SurcoApp` (Application) conecta los textos antes que cualquier pantalla, servicio o widget; `Res.str` fuera de Compose.
+- Los identificadores guardados (preajustes, acentos, claves de etiquetas) no cambian: la etiqueta visible sale de recursos.
+- Material You como acento «Del sistema» (Android 12+), aclarado hasta que se lea sobre el fondo, como «Del disco».
+- Cuadrícula: hueco y margen en proporción a la portada (12/16 dp con 2 por fila → 6/10 con 5); con 4–5 por fila la portada pierde el botón de reproducir (la taparía) y la letra baja. Se recuerda en Ajustes.
+- Hecho con cinco agentes en paralelo (reproductor, ajustes, biblioteca y ecualizador, datos y coche, comunes y servicio), cada uno con sus archivos y su XML.
