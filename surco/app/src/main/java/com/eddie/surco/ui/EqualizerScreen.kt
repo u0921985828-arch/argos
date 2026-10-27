@@ -130,7 +130,7 @@ fun EqualizerScreen(vm: LibraryViewModel) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             d.bands[i].let { if (it == 0f) "0" else (if (it > 0) "+" else "") + it.toString().removeSuffix(".0") },
-                            color = if (d.bands[i] == 0f) Muted else Copper, fontSize = 10.sp, fontFeatureSettings = "tnum",
+                            color = if (d.bands[i] == 0f) Muted else Copper, fontSize = 10.sp, style = Tnum,
                         )
                         VerticalSlider(
                             value = d.bands[i], min = -EQ_MAX_DB, max = EQ_MAX_DB, label = stringResource(R.string.eq_band, freqLabel(f)),

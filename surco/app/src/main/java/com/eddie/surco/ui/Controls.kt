@@ -155,7 +155,7 @@ fun LabeledSlider(
             Text(title, fontSize = 15.sp, modifier = Modifier.weight(1f))
             // Volver a 0 con un icono y solo cuando hace falta: un «0» junto al valor se leía como dos cifras.
             if (onReset != null && value != 0f) IconButton(onClick = onReset) { Icon(Icons.Rounded.Refresh, stringResource(R.string.app_reset_zero), tint = Muted) }
-            Text(valueText, color = Copper, fontFeatureSettings = "tnum", fontSize = 13.sp)
+            Text(valueText, color = Copper, style = Tnum, fontSize = 13.sp)
         }
         SurcoSlider(value = value, onChange = onChange, range = range, steps = steps, fill = range.start != -range.endInclusive)
     }

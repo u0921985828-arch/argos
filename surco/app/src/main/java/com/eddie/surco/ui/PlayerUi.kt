@@ -196,9 +196,9 @@ private fun SeekBar(vm: LibraryViewModel, track: Track) {
         enabled = p.seekable && dur > 0,
     )
     Row(Modifier.fillMaxWidth()) {
-        Text(fmtTime(shown), color = Muted, fontSize = 12.sp, fontFeatureSettings = "tnum")
+        Text(fmtTime(shown), color = Muted, fontSize = 12.sp, style = Tnum)
         Spacer(Modifier.weight(1f))
-        Text(if (dur > 0) "−" + fmtTime((dur - shown).coerceAtLeast(0)) else "--:--", color = Muted, fontSize = 12.sp, fontFeatureSettings = "tnum")
+        Text(if (dur > 0) "−" + fmtTime((dur - shown).coerceAtLeast(0)) else "--:--", color = Muted, fontSize = 12.sp, style = Tnum)
     }
 }
 
@@ -415,10 +415,10 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
             if (prefs.techDetails) {
                 val q = qualityLine(track)
                 if (q.isNotEmpty()) {
-                    Text(q, color = Teal, fontSize = 12.sp, fontFeatureSettings = "tnum", modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+                    Text(q, color = Teal, fontSize = 12.sp, style = Tnum, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
                 }
-                outputLine(track)?.let { Text(it, color = Muted, fontSize = 11.sp, lineHeight = 15.sp, fontFeatureSettings = "tnum", modifier = Modifier.fillMaxWidth()) }
-            routeLine()?.let { Text(it, color = Muted, fontSize = 11.sp, lineHeight = 15.sp, fontFeatureSettings = "tnum", modifier = Modifier.fillMaxWidth()) }
+                outputLine(track)?.let { Text(it, color = Muted, fontSize = 11.sp, lineHeight = 15.sp, style = Tnum, modifier = Modifier.fillMaxWidth()) }
+            routeLine()?.let { Text(it, color = Muted, fontSize = 11.sp, lineHeight = 15.sp, style = Tnum, modifier = Modifier.fillMaxWidth()) }
             }
             Spacer(Modifier.height(10.dp))
             SeekBar(vm, track)
@@ -779,7 +779,7 @@ fun SongSheet(vm: LibraryViewModel, s: SongSheetState) {
                     Text(track.title, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(track.artist, color = Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     val q = qualityLine(track)
-                    if (q.isNotEmpty()) Text(q, color = Teal, fontSize = 11.sp, fontFeatureSettings = "tnum")
+                    if (q.isNotEmpty()) Text(q, color = Teal, fontSize = 11.sp, style = Tnum)
                 }
             }
             // Desde «Sonando», primero lo de la escucha (a la vista sin desplegar la hoja).

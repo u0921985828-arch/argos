@@ -179,7 +179,7 @@ fun TagEditorScreen(vm: LibraryViewModel, id: Long, byId: Map<Long, Track>) {
                 Art(track, 72.dp, modifier = Modifier.size(72.dp))
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
-                    if (track.format.isNotBlank()) Text(track.format, color = Teal, fontSize = 12.sp, fontFeatureSettings = "tnum")
+                    if (track.format.isNotBlank()) Text(track.format, color = Teal, fontSize = 12.sp, style = Tnum)
                     Text(track.path, color = Muted, fontSize = 12.sp, lineHeight = 16.sp)
                 }
             }

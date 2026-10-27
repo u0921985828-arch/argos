@@ -127,7 +127,7 @@ private fun FieldCard(field: TagField, groups: List<Group>, modifier: Modifier, 
         modifier.clip(RoundedCornerShape(14.dp)).background(Panel).clickable(onClick = onClick).padding(14.dp),
     ) {
         Text(field.label, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 18.sp)
-        Text("${groups.size}", color = Paper, fontSize = 26.sp, fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")
+        Text("${groups.size}", color = Paper, fontSize = 26.sp, fontWeight = FontWeight.Bold, style = Tnum)
         Text(top, color = Muted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 15.sp)
     }
 }
@@ -382,7 +382,7 @@ fun SongRow(t: Track, number: Int?, playing: Boolean, onClick: () -> Unit, onLon
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (number != null) {
-            Text("$number", color = if (playing) Copper else Muted, fontFeatureSettings = "tnum", fontSize = 13.sp,
+            Text("$number", color = if (playing) Copper else Muted, style = Tnum, fontSize = 13.sp,
                 modifier = Modifier.width(30.dp))
         } else {
             Art(t, 46.dp, modifier = Modifier.size(46.dp)); Spacer(Modifier.width(12.dp))
@@ -394,7 +394,7 @@ fun SongRow(t: Track, number: Int?, playing: Boolean, onClick: () -> Unit, onLon
                 color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.width(8.dp))
-        Text(fmtTime(t.durationMs), color = Muted, fontSize = 12.sp, fontFeatureSettings = "tnum")
+        Text(fmtTime(t.durationMs), color = Muted, fontSize = 12.sp, style = Tnum)
         // El menú (a continuación, a la cola, a una lista…) también a la vista, no solo con pulsación larga.
         IconButton(onClick = onLong) { Icon(Icons.Rounded.MoreVert, moreOptions, tint = Muted) }
     }

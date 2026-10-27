@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -94,6 +95,10 @@ val Manrope = FontFamily(
     Font(R.font.manrope_semibold, FontWeight.SemiBold),
     Font(R.font.manrope_bold, FontWeight.Bold),
 )
+
+/** El estilo de ahora con cifras tabulares (tiempos y datos técnicos: los números no bailan). */
+val Tnum: TextStyle
+    @Composable get() = LocalTextStyle.current.copy(fontFeatureSettings = "tnum")
 
 private val SurcoType = Typography().let { t ->
     fun TextStyle.m() = copy(fontFamily = Manrope)

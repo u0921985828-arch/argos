@@ -357,7 +357,7 @@ private fun StatsPage(vm: LibraryViewModel) {
 @Composable
 private fun Big(value: String, label: String, modifier: Modifier) {
     Column(modifier.clip(RoundedCornerShape(14.dp)).background(Panel).padding(vertical = 14.dp, horizontal = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, color = Copper, fontSize = 24.sp, fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum", maxLines = 1)
+        Text(value, color = Copper, fontSize = 24.sp, fontWeight = FontWeight.Bold, style = Tnum, maxLines = 1)
         Text(label, color = Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -368,9 +368,9 @@ private fun RankRow(rank: Int, title: String, value: String, onClick: () -> Unit
         Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 48.dp).padding(horizontal = 20.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("$rank", color = Muted, fontFeatureSettings = "tnum", fontSize = 13.sp, modifier = Modifier.width(28.dp))
+        Text("$rank", color = Muted, style = Tnum, fontSize = 13.sp, modifier = Modifier.width(28.dp))
         Text(title, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        Text(value, color = Copper, fontFeatureSettings = "tnum", fontSize = 13.sp)
+        Text(value, color = Copper, style = Tnum, fontSize = 13.sp)
     }
 }
 
