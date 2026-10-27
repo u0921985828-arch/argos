@@ -12,7 +12,12 @@ PKG=com.eddie.surco
 OUT=rendimiento.txt
 : > "$OUT"
 nota() { echo "$1" | tee -a "$OUT"; }
-fallo() { echo "::error::$1"; cat "$OUT"; exit 1; }
+fallo() {
+    echo "::error::$1"; cat "$OUT"
+    # La pila de la caída o del «no responde», en el registro del CI (el artefacto no siempre se puede bajar).
+    [ -f rendimiento-logcat.txt ] && grep -E -A25 "FATAL EXCEPTION|ANR in $PKG" rendimiento-logcat.txt | head -120
+    exit 1
+}
 ui() {
     : > ui.xml
     for _ in 1 2 3 4 5; do
