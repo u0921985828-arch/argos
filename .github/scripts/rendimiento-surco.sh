@@ -75,6 +75,8 @@ for _ in $(seq 1 200); do
 done
 p=$(problemas); [ -n "$p" ] && { echo "$p"; fallo "Surco se cayó o se colgó leyendo $total canciones"; }
 nota "lectura de etiquetas de $total canciones: $(( $(date +%s) - t0 )) s"
+sleep 2; adb logcat -d > rendimiento-logcat.txt 2>/dev/null || true
+nota "  $(grep -m1 "SurcoScan" rendimiento-logcat.txt | sed 's/^.*SurcoScan: //')"
 [ -n "$listo" ] || { grep -o 'text="[^"]*"' ui.xml | head -20; fallo "Inicio no llegó a enseñar las $total canciones"; }
 
 # Segundo arranque: ya con la caché (lo normal cada día).

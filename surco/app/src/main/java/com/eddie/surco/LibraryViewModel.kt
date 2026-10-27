@@ -23,12 +23,15 @@ import com.eddie.surco.player.PlayerConnection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
+import android.os.SystemClock
+import android.util.Log
 
 sealed interface Screen {
     data object Home : Screen
@@ -71,6 +74,13 @@ enum class LibraryTab(@StringRes private val labelRes: Int) {
 
 /** Menú de una canción; si viene de una lista, dónde está en ella (para poder quitarla). */
 data class SongSheetState(val track: Track, val playlistId: Long? = null, val playlistIndex: Int = -1, val fromPlayer: Boolean = false)
+
+/**
+ * Lectores de etiquetas a la vez. Leer es sobre todo esperar al almacenamiento (en Android 11+ cada
+ * archivo pasa por FUSE): más lectores que núcleos; no más de 8 por la memoria de las portadas
+ * incrustadas, que jaudiotagger lee enteras.
+ */
+private val TAG_READERS = (Runtime.getRuntime().availableProcessors() * 2).coerceIn(4, 8)
 
 class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     private val scanner = LibraryScanner(app)
@@ -157,7 +167,7 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     private var scannedOnce = false
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val tagReaders = Dispatchers.IO.limitedParallelism(4)
+    private val tagReaders = Dispatchers.IO.limitedParallelism(TAG_READERS)
 
     /** Una vez por proceso (girar la pantalla no vuelve a escanear); [force] relee todo. */
     fun scan(force: Boolean = false) {
@@ -177,25 +187,49 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
             if (todo.isNotEmpty()) {
                 val list = current.toMutableList()
                 val done = AtomicInteger(0)
+                val next = AtomicInteger(0)
+                val reading = AtomicLong(0)
+                val t0 = SystemClock.elapsedRealtime()
                 progress.value = 0 to todo.size
-                var lastEmit = System.currentTimeMillis()
-                var lastSave = lastEmit
-                // Lectura de etiquetas: 4 a la vez (con portadas incrustadas, más gasta mucha memoria).
-                todo.chunked(32).forEach { chunk ->
-                    chunk.map { i ->
-                        async(tagReaders) {
-                            val r = scanner.enrich(list[i])
-                            progress.value = done.incrementAndGet() to todo.size
-                            i to r
+                // La interfaz se rehace con lo leído: cada segundo con una biblioteca normal; con
+                // miles de canciones, cada 4 s (rehacer grupos y órdenes de 10.000 cada segundo le
+                // quitaba tiempo a la lectura). Lo leído se guarda cada 20 s.
+                val emitEvery = if (todo.size > 2000) 4000L else 1000L
+                var lastEmit = t0
+                var lastSave = t0
+                // Lectores sin esperas entre tandas: cada uno coge la siguiente canción en cuanto
+                // acaba (con tandas de 32, la más lenta de cada tanda paraba a las demás). Leer es
+                // sobre todo esperar al almacenamiento: más lectores que núcleos.
+                coroutineScope {
+                    repeat(TAG_READERS) {
+                        launch(tagReaders) {
+                            while (true) {
+                                val k = next.getAndIncrement()
+                                if (k >= todo.size) break
+                                val i = todo[k]
+                                val s0 = SystemClock.elapsedRealtime()
+                                val r = scanner.enrich(list[i])
+                                reading.addAndGet(SystemClock.elapsedRealtime() - s0)
+                                synchronized(list) { list[i] = r }
+                                progress.value = done.incrementAndGet() to todo.size
+                            }
                         }
-                    }.awaitAll().forEach { (i, r) -> list[i] = r }
-                    val now = System.currentTimeMillis()
-                    // La interfaz se rehace como mucho una vez por segundo y lo leído se guarda cada 20 s.
-                    if (now - lastEmit > 1000) { tracks.value = list.toList(); lastEmit = now }
-                    if (now - lastSave > 20_000) { scanner.saveCache(list); lastSave = now }
+                    }
+                    launch {
+                        while (done.get() < todo.size) {
+                            delay(500)
+                            val now = SystemClock.elapsedRealtime()
+                            if (now - lastEmit >= emitEvery) { tracks.value = synchronized(list) { list.toList() }; lastEmit = now }
+                            if (now - lastSave > 20_000) { scanner.saveCache(synchronized(list) { list.toList() }); lastSave = now }
+                        }
+                    }
                 }
                 tracks.value = list.toList()
                 UserStore.reconcile(tracks.value)
+                val wall = SystemClock.elapsedRealtime() - t0
+                // Para medir (rendimiento-surco.sh lo saca del logcat): cuánto fue leer y cuánto lo demás.
+                Log.i("SurcoScan", "etiquetas: ${todo.size} canciones en $wall ms con $TAG_READERS lectores; " +
+                    "leer ${reading.get() / todo.size} ms por canción (suma ${reading.get()} ms)")
             }
             progress.value = null
             scanner.saveCache(tracks.value)

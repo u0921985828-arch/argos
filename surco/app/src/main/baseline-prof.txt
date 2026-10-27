@@ -1,0 +1,6 @@
+# Perfil de arranque de Surco: el código de la app se compila por adelantado al instalarla (no al
+# vuelo la primera vez que se usa), así arranca antes y no da tirones al desplazar las listas.
+# Compose, Media3 y el resto de bibliotecas traen el suyo; profileinstaller los instala también
+# cuando el APK no viene de Play.
+HSPLcom/eddie/surco/**->**(**)**
+Lcom/eddie/surco/**;
