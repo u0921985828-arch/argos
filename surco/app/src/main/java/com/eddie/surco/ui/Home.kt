@@ -150,7 +150,7 @@ fun BottomNav(vm: LibraryViewModel) {
                 icon = { Icon(t.icon(), null) },
                 label = { Text(t.label, fontSize = 12.sp) },
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = Ink, indicatorColor = Copper, selectedTextColor = Copper,
+                    selectedIconColor = Paper, indicatorColor = Copper.copy(alpha = 0.22f), selectedTextColor = Paper,
                     unselectedIconColor = Muted, unselectedTextColor = Muted,
                 ),
             )
