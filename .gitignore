@@ -19,3 +19,4 @@ android/local.properties
 
 # Contador del modo absoluto: estado de trabajo, no del proyecto.
 .modo-absoluto/
+surco/entrega/
