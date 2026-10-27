@@ -80,3 +80,22 @@ dependencies {
     // Gestos de dos dedos de verdad (pellizcar la cuadrícula de álbumes) en GridZoomTest.
     androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
 }
+
+// Para comprobar el Kotlin fuera de Android Studio (el contenedor de desarrollo no llega a Google
+// Maven): deja en build/classpath los .jar con los que se compila la app y el plugin de Compose.
+// El CI los publica en la rama `classpath-surco` cuando cambian las dependencias.
+tasks.register("exportClasspath") {
+    val view = configurations.getByName("debugCompileClasspath").incoming.artifactView {
+        attributes { attribute(Attribute.of("artifactType", String::class.java), "android-classes-jar") }
+    }
+    val plugins = configurations.getByName("kotlinCompilerPluginClasspathDebug")
+    doLast {
+        val out = layout.buildDirectory.dir("classpath").get().asFile.apply { deleteRecursively(); mkdirs() }
+        // Los de las .aar se llaman todos classes.jar: el nombre de la dependencia delante.
+        view.artifacts.forEach { a ->
+            val name = a.id.componentIdentifier.displayName.replace(Regex("[^A-Za-z0-9._-]"), "_")
+            a.file.copyTo(File(out, "$name-${a.file.name}"), overwrite = true)
+        }
+        plugins.files.forEach { it.copyTo(File(out, "plugin-${it.name}"), overwrite = true) }
+    }
+}

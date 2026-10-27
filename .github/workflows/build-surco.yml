@@ -59,6 +59,31 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon testDebugUnitTest assembleDebug assembleRelease assembleDebugAndroidTest lintDebug
 
+      # Los .jar de compilación, para comprobar el Kotlin sin Android en el contenedor de desarrollo
+      # (no llega a Google Maven). Solo se publican si cambian las dependencias.
+      - name: Publish compile classpath to the `classpath-surco` branch
+        working-directory: surco
+        run: |
+          set -e
+          sum=$(cat app/build.gradle.kts build.gradle.kts settings.gradle.kts 2>/dev/null | sha256sum | cut -c1-16)
+          old=$(git ls-remote --heads origin classpath-surco | cut -c1-7)
+          if [ -n "$old" ] && git fetch -q --depth 1 origin classpath-surco && [ "$(git show FETCH_HEAD:SUMA 2>/dev/null)" = "$sum" ]; then
+            echo "dependencias sin cambios ($sum)"; exit 0
+          fi
+          ./gradlew --no-daemon -q exportClasspath
+          work=$(mktemp -d)
+          cp app/build/classpath/*.jar "$work/"
+          echo "$sum" > "$work/SUMA"
+          cd "$work"
+          git init -q -b classpath-surco
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Classpath de Surco ($sum)"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" classpath-surco
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Lint without errors
         run: python3 .github/scripts/lint-surco.py surco/app/build/reports/lint-results-debug.xml
 
@@ -168,9 +193,6 @@ jobs:
             bash .github/scripts/diseno-surco.sh capturas13 1.3
             bash .github/scripts/auto-surco.sh
             bash .github/scripts/idioma-surco.sh capturas-en
-            bash .github/scripts/rendimiento-surco.sh mil.tar 10000
-            bash .github/scripts/bateria-surco.sh
-            adb install -r Surco.apk >/dev/null && python3 .github/scripts/botones-surco.py
 
       # Las capturas en una rama (un solo commit, se reescribe) para revisarlas sin descargar artefactos.
       - name: Publish screenshots to the `capturas-surco` branch
@@ -203,6 +225,115 @@ jobs:
         if: always()
         with:
           name: smoke-surco
+          path: |
+            *.png
+            ui.xml
+            logcat.txt
+            crash.txt
+            flinger.txt
+            salida.txt
+            auto.txt
+            auto-logcat.txt
+            rendimiento.txt
+            rendimiento-logcat.txt
+            bateria.txt
+            bateria-auto.txt
+            botones.txt
+            gfxinfo.txt
+
+  # Lo largo (10.000 canciones, consumo y todos los botones uno a uno) en su propio emulador, a la
+  # vez que el humo: el APK y las pruebas de siempre no esperan a esto.
+  medidas:
+    needs: build
+    # Fijado: en ubuntu-latest (26.04 desde octubre de 2026) instalar ffmpeg tarda 30 min y la
+    # descarga del emulador se cortó; con 24.04 el humo entero iba en unos 18 min.
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with: { name: surco-apk }
+
+      # Dos canciones con etiquetas que MediaStore no lee: un MP3 (ID3v2.4) y
+      # un FLAC (Vorbis). Valores en ASCII: `adb shell input text` no escribe tildes.
+      - name: Make test music
+        run: |
+          # Sin reconstruir el índice de man (lo que hacía tardar 30 min la instalación en los ejecutores nuevos).
+          sudo rm -f /var/lib/man-db/auto-update
+          sudo apt-get install -y -qq --no-install-recommends ffmpeg >/dev/null
+          mkdir musica
+          ffmpeg -loglevel error -f lavfi -i "sine=frequency=440:duration=20" -c:a libmp3lame -b:a 192k \
+            -id3v2_version 4 -metadata title="Prueba Uno" -metadata artist="Banda Surco" \
+            -metadata album="Disco de Prueba" -metadata genre="Rock" -metadata date=2019 \
+            -metadata TBPM=128 -metadata TMOO=zorzal musica/uno.mp3
+          ffmpeg -loglevel error -f lavfi -i "sine=frequency=330:duration=20" -c:a flac \
+            -metadata TITLE="Prueba Dos" -metadata ARTIST="Otra Banda" -metadata ALBUM="Disco de Prueba" \
+            -metadata GENRE="Jazz" -metadata DATE=1987 -metadata BPM=95 -metadata LABEL=sellonorte \
+            musica/dos.flac
+          # Caso reservado: 96 kHz, 24 bits, un canal.
+          ffmpeg -loglevel error -f lavfi -i "sine=frequency=550:duration=20:sample_rate=96000" -ac 1 -c:a flac -sample_fmt s32 \
+            -bits_per_raw_sample 24 -metadata TITLE="Prueba Tres" -metadata ARTIST="Tercera Banda" -metadata MOOD=tres96 \
+            musica/tres.flac
+          # Caso reservado: WAV en coma flotante, 192 kHz, estéreo.
+          ffmpeg -loglevel error -f lavfi -i "sine=frequency=660:duration=20:sample_rate=192000" -ac 2 -c:a pcm_f32le \
+            -metadata title="Prueba Cuatro" -metadata artist="Cuarta Banda" -metadata comment=cuatro192 \
+            musica/cuatro.wav
+          ls -l musica
+          # Biblioteca grande para medir (rendimiento-surco.sh): 10.000 MP3 cortos con etiquetas distintas.
+          ffmpeg -loglevel error -f lavfi -i "anullsrc=r=22050:cl=mono" -t 0.5 -c:a libmp3lame -b:a 32k \
+            -write_xing 0 -id3v2_version 0 -map_metadata -1 silencio.mp3
+          python3 .github/scripts/mil-canciones.py silencio.mp3 10000 mil.tar
+          # Para medir lo que gasta (bateria-surco.sh): 3 min de música en MP3 y en FLAC 24/96.
+          ffmpeg -loglevel error -f lavfi -i "sine=frequency=440:duration=180,aformat=channel_layouts=stereo" \
+            -c:a libmp3lame -b:a 320k bateria.mp3
+          ffmpeg -loglevel error -f lavfi -i "sine=frequency=440:duration=180:sample_rate=96000,aformat=channel_layouts=stereo" \
+            -c:a flac -sample_fmt s32 -bits_per_raw_sample 24 bateria.flac
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          # Después de la prueba, el recorrido de diseño con la letra normal y con la letra grande.
+          script: |
+            bash .github/scripts/smoke-surco.sh Surco.apk
+            bash .github/scripts/auto-surco.sh
+            bash .github/scripts/rendimiento-surco.sh mil.tar 10000
+            bash .github/scripts/bateria-surco.sh
+            adb install -r Surco.apk >/dev/null && python3 .github/scripts/botones-surco.py
+
+      # Las medidas en su rama (un solo commit, se reescribe).
+      - name: Publish measurements to the `medidas-surco` branch
+        if: always()
+        run: |
+          set -e
+          work=$(mktemp -d)
+          for f in rendimiento.txt bateria.txt botones.txt; do [ -f "$f" ] && cp "$f" "$work/"; done
+          [ -n "$(ls "$work")" ] || exit 0
+          cd "$work"
+          git init -q -b medidas-surco
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Medidas de Surco de ${GITHUB_SHA::8}"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" medidas-surco
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: medidas-surco
           path: |
             *.png
             ui.xml
