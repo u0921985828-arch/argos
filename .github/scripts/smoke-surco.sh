@@ -186,13 +186,19 @@ fallo() { echo "::error::$1"; grep -o 'text="[^"]*"\|content-desc="[^"]*"' ui.xm
 cayo() { if crashed; then echo "::error::Surco se cayó $1"; sed -n '/FATAL EXCEPTION/,$p' crash.txt | head -60; exit 1; fi; }
 estado() { adb shell dumpsys media_session | grep -m1 -oE 'state=PlaybackState \{state=[A-Z_]*\(?[0-9]+\)?' || true; }
 cayo "al reproducir"
-echo "sesión multimedia: $(estado) (3 = sonando)"
+st=$(estado)
+echo "sesión multimedia: $st (3 = sonando)"
+if echo "$st" | grep -q "ERROR"; then
+    # El porqué del error de reproducción, en el registro del CI (el artefacto no siempre se baja).
+    adb logcat -d 2>/dev/null | grep -E "ExoPlayer|PlaybackException|MediaCodec|AudioTrack|SurcoAudio|Surco" | grep -E " E | W " | tail -40 || true
+    fallo "«Prueba Dos» no suena: la sesión está en error"
+fi
 
 # --- Surco 2.5: notificación de música con botones propios (favorita y aleatorio) ---
 # En pausa: con música la persiana tarda en volcarse y «Prueba Dos» (20 s) se acabaría antes de
 # seguir. La notificación sigue ahí en pausa.
 adb shell input keyevent KEYCODE_MEDIA_PAUSE; sleep 1
-notif() { adb shell dumpsys notification --noredact 2>/dev/null | tr -d '\r'; }
+notif() { adb shell dumpsys notification --noredact 2>/dev/null | tr -d '\r' || true; }
 for _ in 1 2 3 4 5; do notif > notif.txt; grep -q 'Marcar favorita\|Quitar de favoritas' notif.txt && break; sleep 1; done
 grep -q 'Marcar favorita' notif.txt || { grep -n -A12 'pkg=com.eddie.surco' notif.txt | head -60; fallo "la notificación no lleva el botón «Marcar favorita»"; }
 grep -q '"Activar aleatorio"' notif.txt || fallo "la notificación no lleva el botón «Activar aleatorio»"
