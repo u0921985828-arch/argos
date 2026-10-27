@@ -35,11 +35,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eddie.surco.LibraryViewModel
+import com.eddie.surco.R
+import com.eddie.surco.Res
 import com.eddie.surco.audio.BUILTIN_PRESETS
 import com.eddie.surco.audio.CROSSFEED_LEVELS
 import com.eddie.surco.audio.DspParams
@@ -47,13 +52,19 @@ import com.eddie.surco.audio.EQ_FREQS
 import com.eddie.surco.audio.EQ_MAX_DB
 import com.eddie.surco.audio.SurcoSettings
 import com.eddie.surco.audio.peakGainDb
+import com.eddie.surco.audio.presetLabel
+import com.eddie.surco.audio.presetLabelRes
 import com.eddie.surco.audio.responseDb
 import kotlin.math.floor
 import kotlin.math.log10
 import kotlin.math.pow
 
-private val CROSSFEED_NAMES = listOf("Apagado", "Suave", "Medio", "Fuerte")
+private val CROSSFEED_NAMES = listOf(R.string.eq_off, R.string.eq_crossfeed_light, R.string.eq_crossfeed_medium, R.string.eq_crossfeed_strong)
 private const val CUSTOM = "Personalizado"
+
+/** Nombre visible de un preajuste: los de fábrica y «Personalizado» traducidos, los del usuario tal cual. */
+@Composable
+private fun presetText(name: String): String = presetLabelRes(name)?.let { stringResource(it) } ?: name
 
 private fun freqLabel(f: Float) = if (f >= 1000) "${(f / 1000).let { if (it % 1f == 0f) it.toInt().toString() else it.toString() }}k" else f.toInt().toString()
 
@@ -67,11 +78,13 @@ fun EqualizerScreen(vm: LibraryViewModel) {
     fun setBands(b: List<Float>) = SurcoSettings.update { it.copy(dsp = it.dsp.copy(bands = b), preset = CUSTOM) }
 
     Column(Modifier.fillMaxSize()) {
-        TopBar("Ecualizador", if (d.eqOn) prefs.preset else "Apagado", onBack = { vm.pop() }) {
+        TopBar(stringResource(R.string.eq_title), if (d.eqOn) presetText(prefs.preset) else stringResource(R.string.eq_off), onBack = { vm.pop() }) {
+            // Con nombre para TalkBack: el interruptor solo no dice qué enciende.
+            val switchDesc = stringResource(R.string.eq_switch)
             Switch(
                 checked = d.eqOn, onCheckedChange = { on -> SurcoSettings.updateDsp { it.copy(eqOn = on) } },
                 colors = SwitchDefaults.colors(checkedThumbColor = Ink, checkedTrackColor = Copper),
-                modifier = Modifier.padding(end = 12.dp),
+                modifier = Modifier.padding(end = 12.dp).semantics { contentDescription = switchDesc },
             )
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
@@ -85,18 +98,18 @@ fun EqualizerScreen(vm: LibraryViewModel) {
                     FilterChip(
                         selected = prefs.preset == name && d.eqOn,
                         onClick = { SurcoSettings.update { it.copy(dsp = it.dsp.copy(bands = bands, eqOn = true), preset = name) } },
-                        label = { Text(name) },
+                        label = { Text(presetText(name)) },
                         colors = chipColors(), modifier = Modifier.height(ChipHeight),
                     )
                 }
                 item {
-                    FilterChip(selected = false, onClick = { saving = true }, label = { Text("+ Guardar") }, colors = chipColors(), modifier = Modifier.height(ChipHeight))
+                    FilterChip(selected = false, onClick = { saving = true }, label = { Text(stringResource(R.string.eq_save_chip)) }, colors = chipColors(), modifier = Modifier.height(ChipHeight))
                 }
             }
 
             if (prefs.preset in prefs.customPresets) {
                 TextButton(onClick = { deleting = prefs.preset }, modifier = Modifier.padding(horizontal = 12.dp)) {
-                    Text("Borrar el preajuste «${prefs.preset}»", color = Muted, fontSize = 13.sp)
+                    Text(stringResource(R.string.eq_delete_preset_button, prefs.preset), color = Muted, fontSize = 13.sp)
                 }
             }
             Row(
@@ -110,7 +123,7 @@ fun EqualizerScreen(vm: LibraryViewModel) {
                             color = if (d.bands[i] == 0f) Muted else Copper, fontSize = 10.sp, fontFamily = FontFamily.Monospace,
                         )
                         VerticalSlider(
-                            value = d.bands[i], min = -EQ_MAX_DB, max = EQ_MAX_DB, label = "Banda de ${freqLabel(f)}Hz",
+                            value = d.bands[i], min = -EQ_MAX_DB, max = EQ_MAX_DB, label = stringResource(R.string.eq_band, freqLabel(f)),
                             onChange = { v -> if (v != d.bands[i]) setBands(d.bands.toMutableList().also { it[i] = v }) },
                         )
                         Text(freqLabel(f), color = Muted, fontSize = 10.sp, textAlign = TextAlign.Center)
@@ -120,75 +133,82 @@ fun EqualizerScreen(vm: LibraryViewModel) {
 
             val peak = remember(d) { peakGainDb(d) }
             SwitchRow(
-                "Preamplificación automática",
-                "Baja el volumen lo que suben las bandas y el tono: nunca satura y el limitador no tiene que actuar.",
+                stringResource(R.string.eq_auto_preamp),
+                stringResource(R.string.eq_auto_preamp_desc),
                 prefs.autoPreamp,
             ) { a -> SurcoSettings.update { it.copy(autoPreamp = a) } }
             if (prefs.autoPreamp) {
-                Text("Preamplificación ${dbText(d.preampDb)}", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
+                Text(stringResource(R.string.eq_preamp_value, dbText(d.preampDb)), color = Muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
             } else {
                 LabeledSlider(
-                    "Preamplificación", d.preampDb, -15f..6f, dbText(d.preampDb), steps = 41,
+                    stringResource(R.string.eq_preamp), d.preampDb, -15f..6f, dbText(d.preampDb), steps = 41,
                     onChange = { v -> SurcoSettings.updateDsp { it.copy(preampDb = v) } },
                     onReset = { SurcoSettings.updateDsp { it.copy(preampDb = 0f) } },
                 )
                 if (peak > 0.3) {
                     Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "La curva sube ${dbText(peak.toFloat())}: " + if (d.limiter) "el limitador lo contiene, con algo de compresión." else "puede saturar.",
+                            stringResource(if (d.limiter) R.string.eq_peak_limited else R.string.eq_peak_clips, dbText(peak.toFloat())),
                             color = Copper, fontSize = 12.sp, modifier = Modifier.weight(1f),
                         )
                         TextButton(onClick = {
                             SurcoSettings.updateDsp { it.copy(preampDb = (it.preampDb - floor(peak * 2 + 1).toFloat() / 2).coerceAtLeast(-15f)) }
-                        }) { Text("Ajustar") }
+                        }) { Text(stringResource(R.string.eq_adjust)) }
                     }
                 }
             }
 
-            SectionLabel("Tono")
-            LabeledSlider("Graves", d.bassDb, -12f..12f, dbText(d.bassDb), steps = 47,
+            SectionLabel(stringResource(R.string.eq_tone))
+            LabeledSlider(stringResource(R.string.eq_bass), d.bassDb, -12f..12f, dbText(d.bassDb), steps = 47,
                 onChange = { v -> SurcoSettings.updateDsp { it.copy(bassDb = v) } }, onReset = { SurcoSettings.updateDsp { it.copy(bassDb = 0f) } })
-            LabeledSlider("Agudos", d.trebleDb, -12f..12f, dbText(d.trebleDb), steps = 47,
+            LabeledSlider(stringResource(R.string.eq_treble), d.trebleDb, -12f..12f, dbText(d.trebleDb), steps = 47,
                 onChange = { v -> SurcoSettings.updateDsp { it.copy(trebleDb = v) } }, onReset = { SurcoSettings.updateDsp { it.copy(trebleDb = 0f) } })
 
-            SectionLabel("Estéreo")
+            SectionLabel(stringResource(R.string.eq_stereo))
             LabeledSlider(
-                "Balance", d.balance, -1f..1f,
-                when { d.balance < -0.01f -> "I ${(-d.balance * 100).toInt()} %"; d.balance > 0.01f -> "D ${(d.balance * 100).toInt()} %"; else -> "Centro" },
+                stringResource(R.string.eq_balance), d.balance, -1f..1f,
+                when {
+                    d.balance < -0.01f -> stringResource(R.string.eq_balance_left, (-d.balance * 100).toInt())
+                    d.balance > 0.01f -> stringResource(R.string.eq_balance_right, (d.balance * 100).toInt())
+                    else -> stringResource(R.string.eq_balance_center)
+                },
                 steps = 39, onChange = { v -> SurcoSettings.updateDsp { it.copy(balance = if (kotlin.math.abs(v) < 0.04f) 0f else v) } },
             )
-            Text("Crossfeed para auriculares", fontSize = 15.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
-            Text("Mezcla un poco de cada canal en el otro, como unos altavoces: cansa menos con grabaciones muy separadas.",
+            Text(stringResource(R.string.eq_crossfeed), fontSize = 15.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+            Text(stringResource(R.string.eq_crossfeed_desc),
                 color = Muted, fontSize = 12.sp, lineHeight = 15.sp, modifier = Modifier.padding(horizontal = 20.dp))
             // Desliza: con letra grande «Fuerte» se partía en dos líneas dentro del chip.
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 CROSSFEED_LEVELS.indices.forEach { lvl ->
                     FilterChip(
                         selected = d.crossfeed == lvl, onClick = { SurcoSettings.updateDsp { it.copy(crossfeed = lvl) } },
-                        label = { Text(CROSSFEED_NAMES[lvl], maxLines = 1, softWrap = false) },
+                        label = { Text(stringResource(CROSSFEED_NAMES[lvl]), maxLines = 1, softWrap = false) },
                         colors = chipColors(), modifier = Modifier.height(ChipHeight),
                     )
                 }
             }
-            SwitchRow("Mono", "Suma los dos canales: para un solo auricular o un altavoz.", d.mono) { m -> SurcoSettings.updateDsp { it.copy(mono = m) } }
-            SwitchRow("Limitador", "Solo actúa si la curva pasa de 0 dB (con la preamplificación manual). Mono y balance no lo activan.", d.limiter) { l -> SurcoSettings.updateDsp { it.copy(limiter = l) } }
+            SwitchRow(stringResource(R.string.eq_mono), stringResource(R.string.eq_mono_desc), d.mono) { m -> SurcoSettings.updateDsp { it.copy(mono = m) } }
+            SwitchRow(stringResource(R.string.eq_limiter), stringResource(R.string.eq_limiter_desc), d.limiter) { l -> SurcoSettings.updateDsp { it.copy(limiter = l) } }
 
             TextButton(
                 onClick = { SurcoSettings.update { it.copy(dsp = DspParams(), preset = "Plano") } },
                 modifier = Modifier.padding(horizontal = 12.dp),
-            ) { Text("Restablecer todo", color = Muted) }
+            ) { Text(stringResource(R.string.eq_reset_all), color = Muted) }
         }
     }
 
-    if (saving) NameDialog("Guardar preajuste", onDismiss = { saving = false }) { typed ->
+    if (saving) NameDialog(stringResource(R.string.eq_save_preset), onDismiss = { saving = false }) { typed ->
         // Un nombre de fábrica repetido confundiría cuál está puesto: el propio lleva coletilla.
-        val name = if (BUILTIN_PRESETS.any { it.first.equals(typed, ignoreCase = true) } || typed == CUSTOM) "$typed (propio)" else typed
+        // Se compara con el identificador guardado y con el nombre que se ve en el idioma del móvil.
+        val taken = BUILTIN_PRESETS.any { it.first.equals(typed, ignoreCase = true) || presetLabel(it.first).equals(typed, ignoreCase = true) } ||
+            typed == CUSTOM || typed.equals(presetLabel(CUSTOM), ignoreCase = true)
+        val name = if (taken) Res.str(R.string.eq_own_suffix, typed) else typed
         SurcoSettings.update { it.copy(customPresets = it.customPresets + (name to it.dsp.bands), preset = name) }
         saving = false
-        Notice.show("Preajuste «$name» guardado")
+        Notice.show(Res.str(R.string.eq_preset_saved, name))
     }
     deleting?.let { name ->
-        ConfirmSheet("¿Borrar «$name»?", "Solo se borra el preajuste: el sonido de ahora no cambia.", "Borrar preajuste",
+        ConfirmSheet(stringResource(R.string.eq_delete_title, name), stringResource(R.string.eq_delete_text), stringResource(R.string.eq_delete_confirm),
             onDismiss = { deleting = null }) {
             SurcoSettings.update { it.copy(customPresets = it.customPresets - name, preset = if (it.preset == name) CUSTOM else it.preset) }
             deleting = null

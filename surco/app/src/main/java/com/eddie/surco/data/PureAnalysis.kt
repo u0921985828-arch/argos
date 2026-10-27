@@ -20,8 +20,13 @@ data class MusicKey(val pitch: Int, val minor: Boolean) {
     val camelot: Int get() = camelotOfMajor(if (minor) (pitch + 3) % 12 else pitch)
     /** «8A» (menor) o «8B» (mayor). */
     val code: String get() = "$camelot${if (minor) 'A' else 'B'}"
-    /** «La menor · 8A». */
-    val label: String get() = "${NOTE_NAMES[pitch]} ${if (minor) "menor" else "mayor"} · $code"
+    /** «La menor · 8A» (en el idioma de la app: «A minor · 8A»). */
+    val label: String get() {
+        val names = Texts.t("data_note_names", NOTE_NAMES.joinToString(",")).split(',')
+        val note = names.getOrNull(pitch)?.trim() ?: NOTE_NAMES[pitch]
+        val mode = if (minor) Texts.t("data_key_minor", "%1\$s menor") else Texts.t("data_key_major", "%1\$s mayor")
+        return "${mode.format(note)} · $code"
+    }
     /** Orden en la rueda: 1A, 1B, 2A, 2B… */
     val order: Int get() = camelot * 2 + if (minor) 0 else 1
 }
@@ -188,5 +193,5 @@ fun estimateBpm(x: FloatArray, sr: Int): Float? {
 
 private fun isPeak(a: DoubleArray, i: Int) = i > 0 && i + 1 < a.size && a[i] >= a[i - 1] && a[i] >= a[i + 1]
 
-/** Texto del BPM para la etiqueta: «128» o «128,5». */
-fun bpmText(b: Float): String = if (b % 1f == 0f) "${b.toInt()}" else "%.1f".format(b).replace('.', ',')
+/** Texto del BPM para la etiqueta: «128» o «128,5» («128.5» en inglés). */
+fun bpmText(b: Float): String = if (b % 1f == 0f) "${b.toInt()}" else "%.1f".format(Texts.locale(), b)

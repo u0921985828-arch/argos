@@ -131,4 +131,7 @@
     <string name="settings_version">Versión</string>
     <string name="settings_formats">Formatos</string>
     <string name="settings_formats_help">MP3, AAC, FLAC, ALAC, Opus, Vorbis y WAV (también en coma flotante). Letras de la etiqueta LYRICS o de un .lrc al lado.</string>
+    <string name="settings_accent_system">Del sistema</string>
+    <string name="settings_language_section">Idioma</string>
+    <string name="settings_language_system">El del móvil</string>
 </resources>

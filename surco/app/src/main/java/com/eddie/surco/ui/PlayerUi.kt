@@ -119,6 +119,7 @@ import com.eddie.surco.player.SleepTimer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import java.text.DecimalFormatSymbols
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -139,9 +140,9 @@ private fun rememberPosition(vm: LibraryViewModel, periodMs: Long = 400): Pair<L
 fun qualityLine(t: Track): String = listOfNotNull(
     t.format.takeIf { it.isNotBlank() },
     t.x("bits").takeIf { it.isNotBlank() },
-    t.sampleRate.takeIf { it > 0 }?.let { "%.1f kHz".format(Locale("es"), it / 1000f).replace(",0 ", " ") },
-    t.bitrate.takeIf { it > 0 }?.let { "%,d kbps".format(Locale("es"), it) },
-    t.x("bpm").takeIf { it.isNotBlank() }?.let { "${it.replace('.', ',').removeSuffix(",0")} BPM" },
+    t.sampleRate.takeIf { it > 0 }?.let { "%.1f kHz".format(appLocale(), it / 1000f).replace(Regex("[.,]0 "), " ") },
+    t.bitrate.takeIf { it > 0 }?.let { "%,d kbps".format(appLocale(), it) },
+    t.x("bpm").takeIf { it.isNotBlank() }?.let { "${it.replace('.', DecimalFormatSymbols.getInstance(appLocale()).decimalSeparator).removeSuffix(",0").removeSuffix(".0")} BPM" },
     parseKey(t.x("key"))?.code,
 ).joinToString(" · ")
 
@@ -158,7 +159,7 @@ fun outputLine(track: Track? = null): String? {
     // En el sin cortes la salida se prepara con la siguiente antes de que suene: si no casa con
     // la que suena, mejor no decir nada que decir lo de otra.
     if (track != null && track.sampleRate > 0 && track.sampleRate != i.sampleRate) return null
-    val khz = "%.1f kHz".format(Locale("es"), i.sampleRate / 1000f).replace(",0 ", " ")
+    val khz = "%.1f kHz".format(appLocale(), i.sampleRate / 1000f).replace(Regex("[.,]0 "), " ")
     val bits = track?.x("bits")?.takeIf { it.isNotBlank() }
     val fileBits = bits?.take(2)?.trim()?.toIntOrNull() ?: 0
     // Si el decodificador del móvil no da float, lo dice en vez de presumir de 24 bits.
@@ -167,7 +168,7 @@ fun outputLine(track: Track? = null): String? {
     val changes = listOfNotNull(
         if (!prefs.dsp.neutral) stringResource(if (i.float) R.string.player_output_effects else R.string.player_output_effects_dither) else null,
         if (prefs.replayGain != com.eddie.surco.audio.ReplayGainMode.OFF) "ReplayGain" else null,
-        if (prefs.speed != 1f) "%.2f×".format(Locale("es"), prefs.speed) else null,
+        if (prefs.speed != 1f) "%.2f×".format(appLocale(), prefs.speed) else null,
     )
     val tail = when {
         changes.isNotEmpty() -> changes.joinToString(", ")
@@ -340,7 +341,7 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
             val active = buildList {
                 if (sleepTrack) add(Icons.Default.Timer to stopsAtEnd)
                 else sleepEnd?.let { add(Icons.Default.Timer to stringResource(R.string.player_sleep_pill_in, sleepRemaining(it))) }
-                if (prefs.speed != 1f) add(Icons.Default.Speed to "%.2f×".format(Locale("es"), prefs.speed).replace(",00", ""))
+                if (prefs.speed != 1f) add(Icons.Default.Speed to "%.2f×".format(appLocale(), prefs.speed).replace(Regex("[.,]00"), ""))
             }
             if (active.isNotEmpty()) {
                 Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -589,7 +590,7 @@ fun SleepDialog(vm: LibraryViewModel) {
 fun SpeedDialog(vm: LibraryViewModel) {
     val prefs by SurcoSettings.state.collectAsState()
     SurcoSheet(stringResource(R.string.player_speed), onDismiss = { vm.speedOpen = false }, dismiss = null, confirm = stringResource(R.string.player_done), onConfirm = { vm.speedOpen = false }) {
-        LabeledSlider(stringResource(R.string.player_speed), prefs.speed, 0.5f..2f, "%.2f×".format(Locale("es"), prefs.speed), steps = 29,
+        LabeledSlider(stringResource(R.string.player_speed), prefs.speed, 0.5f..2f, "%.2f×".format(appLocale(), prefs.speed), steps = 29,
             onChange = { v -> SurcoSettings.update { it.copy(speed = (v * 20).roundToInt() / 20f) } },
             onReset = { SurcoSettings.update { it.copy(speed = 1f) } })
         SwitchRow(stringResource(R.string.player_keep_pitch), stringResource(R.string.player_keep_pitch_sub), prefs.keepPitch) { k ->

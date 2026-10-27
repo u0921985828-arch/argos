@@ -168,4 +168,7 @@ fun fmtTotal(ms: Long): String {
     return if (min >= 60) Res.str(R.string.app_total_hm, min / 60, min % 60) else Res.str(R.string.app_total_m, min)
 }
 
+/** El idioma de la app (el del móvil o el elegido en Ajustes): para números y fechas. */
+fun appLocale(): Locale = Res.app.resources.configuration.locales[0]
+
 fun songs(n: Int): String = Res.plural(R.plurals.app_songs, n)

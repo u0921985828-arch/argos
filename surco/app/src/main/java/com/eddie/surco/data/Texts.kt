@@ -1,5 +1,7 @@
 package com.eddie.surco.data
 
+import java.util.Locale
+
 /**
  * Textos de la parte pura (nombres de etiquetas, carpetas del coche, plurales…). Sin Android: la
  * app pone [lookup] y [plural] para leerlos de los recursos, en el idioma elegido; las pruebas en
@@ -17,4 +19,7 @@ object Texts {
     /** [one] y [other] llevan «%d» donde va el número. */
     fun n(key: String, n: Int, one: String, other: String): String =
         plural(key, n) ?: (if (n == 1) one else other).replace("%d", n.toString())
+
+    /** Idioma de los textos (meses, coma o punto decimal): el de los recursos, «es» por defecto. */
+    fun locale(): Locale = Locale.forLanguageTag(t("data_locale", "es"))
 }

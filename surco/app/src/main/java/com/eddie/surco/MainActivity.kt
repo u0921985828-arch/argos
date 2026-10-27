@@ -44,6 +44,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.DisposableEffect
 import com.eddie.surco.audio.ACCENTS
 import com.eddie.surco.audio.ACCENT_FROM_ART
+import com.eddie.surco.audio.ACCENT_SYSTEM
+import androidx.compose.material3.dynamicDarkColorScheme
 import com.eddie.surco.data.legibleAccent
 import com.eddie.surco.ui.Accent
 import com.eddie.surco.ui.artColor
@@ -129,6 +131,11 @@ private fun Root(vm: LibraryViewModel = viewModel()) {
     // Acento fijo de Ajustes → Interfaz («Del disco» lo pone App con la portada que suena).
     val accent = SurcoSettings.state.collectAsState().value.accent
     LaunchedEffect(accent) { ACCENTS[accent]?.let { Accent.color = Color(0xFF000000.toInt() or it) } }
+    // Material You (Android 12+): el color del fondo de pantalla, aclarado hasta que se lea sobre el fondo.
+    if (accent == ACCENT_SYSTEM && Build.VERSION.SDK_INT >= 31) {
+        val sys = dynamicDarkColorScheme(ctx).primary
+        LaunchedEffect(sys) { Accent.color = Color(0xFF000000.toInt() or legibleAccent(sys.toArgb() and 0xFFFFFF, 0x20242C)) }
+    }
     // Si se da (o se quita) el permiso desde Ajustes del sistema, se nota al volver.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { granted = check() }
     LaunchedEffect(granted) { if (granted) vm.scan() }

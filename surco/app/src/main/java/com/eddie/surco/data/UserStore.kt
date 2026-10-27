@@ -85,7 +85,7 @@ object UserStore {
 
     fun createPlaylist(name: String, ids: List<Long> = emptyList()): Long {
         val id = System.currentTimeMillis()
-        update { d -> d.copy(playlists = d.playlists + Playlist(id, name.trim().ifBlank { "Lista" }, ids)) }
+        update { d -> d.copy(playlists = d.playlists + Playlist(id, name.trim().ifBlank { Texts.t("data_playlist_default", "Lista") }, ids)) }
         return id
     }
     fun renamePlaylist(id: Long, name: String) = editPlaylist(id) { it.copy(name = name.trim().ifBlank { it.name }) }
@@ -188,10 +188,13 @@ object UserStore {
 
 fun Track.stableKeys() = stableKeys(path, title, artist, album, durationMs)
 
-/** Listas que se hacen solas a partir de lo escuchado. */
-enum class SmartList(val label: String) {
-    FAVORITES("Favoritas"), MOST_PLAYED("Más escuchadas"), RECENT("Escuchadas hace poco"),
-    ADDED("Añadidas hace poco"), NEVER("Sin escuchar");
+/** Listas que se hacen solas a partir de lo escuchado. [label] es lo que se ve, en el idioma de la app. */
+enum class SmartList(private val labelKey: String, private val labelEs: String) {
+    FAVORITES("data_smart_favorites", "Favoritas"), MOST_PLAYED("data_smart_most_played", "Más escuchadas"),
+    RECENT("data_smart_recent", "Escuchadas hace poco"), ADDED("data_smart_added", "Añadidas hace poco"),
+    NEVER("data_smart_never", "Sin escuchar");
+
+    val label: String get() = Texts.t(labelKey, labelEs)
 
     fun tracks(all: List<Track>, d: UserData): List<Track> = when (this) {
         FAVORITES -> all.filter { it.id in d.favorites }

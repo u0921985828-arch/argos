@@ -18,15 +18,16 @@ adb shell am instrument -w "$PKG.test/androidx.test.runner.AndroidJUnitRunner" >
 adb logcat -d > auto-logcat.txt || true
 grep -E "OK \(|FAILURES|Tests run" auto.txt || true
 grep -E "SurcoAuto" auto-logcat.txt | sed 's/^.*SurcoAuto: /  /' || true
-# Cuatro pruebas: el navegador de Media3, el camino de Android Auto (MediaBrowser del sistema,
-# toque y voz), el widget puesto por un anfitrión (enseña la canción, reproducir y pausar) y sus capturas.
+# Cinco pruebas: el navegador de Media3, el camino de Android Auto (MediaBrowser del sistema,
+# toque y voz), el widget puesto por un anfitrión (enseña la canción, reproducir y pausar), sus
+# capturas y la cuadrícula de álbumes pellizcada con dos dedos (de 2 a 5 portadas por fila y vuelta).
 mkdir -p capturas
 adb pull "/sdcard/Android/data/$PKG/files/widget/." capturas/ >/dev/null 2>&1 || true
-ls capturas/widget_*.png 2>/dev/null || true
-if ! grep -q "OK (4 tests)" auto.txt; then
-    echo "::error::fallaron las pruebas de Android Auto o del widget (ver auto.txt y auto-logcat.txt)"
+ls capturas/widget_*.png capturas/rejilla_*.png 2>/dev/null || true
+if ! grep -q "OK (5 tests)" auto.txt; then
+    echo "::error::fallaron las pruebas de Android Auto, del widget o de la cuadrícula (ver auto.txt y auto-logcat.txt)"
     sed -n '1,120p' auto.txt
     grep -E "PlaybackService|MediaSession|MediaButtonReceiver|SurcoWidget|AndroidRuntime|SurcoAuto" auto-logcat.txt | tail -60 || true
     exit 1
 fi
-echo "Android Auto y widget: navegación, búsqueda, reproducción en contexto y mandos del widget, bien"
+echo "Android Auto, widget y cuadrícula: navegación, búsqueda, reproducción en contexto, mandos del widget y pellizco de 2 a 5, bien"

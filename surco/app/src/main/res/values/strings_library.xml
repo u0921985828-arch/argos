@@ -106,4 +106,6 @@
     <string name="library_my_lists">My playlists</string>
     <string name="library_lists_empty">No playlists yet. Create one with + or long-press a song and choose “Add to a playlist”.</string>
     <string name="library_create">Create</string>
+    <string name="library_zoom_in">Bigger covers</string>
+    <string name="library_zoom_out">Smaller covers</string>
 </resources>

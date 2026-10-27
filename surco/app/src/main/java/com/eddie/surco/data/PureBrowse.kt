@@ -74,7 +74,8 @@ object BrowseIds {
 class BrowseTree(private val songs: List<BrowseSong>, private val smart: List<BrowseList>, private val playlists: List<BrowseList>) {
     private val byId = songs.associateBy { it.id }
     private fun songsOf(ids: List<Long>) = ids.mapNotNull { byId[it] }
-    private fun plural(n: Int) = if (n == 1) "1 canción" else "$n canciones"
+    private fun plural(n: Int) = Texts.n("data_songs", n, "%d canción", "%d canciones")
+    private fun shuffleAll() = Texts.t("data_car_shuffle_all", "Mezclar todo")
     private fun albumOrder(l: List<BrowseSong>) = l.sortedWith(compareBy({ fold(it.album) }, { it.discNo }, { it.trackNo }, { fold(it.title) }))
 
     private val albums by lazy { songs.filter { it.albumKey != null }.groupBy { it.albumKey!! } }
@@ -87,16 +88,16 @@ class BrowseTree(private val songs: List<BrowseSong>, private val smart: List<Br
     /** Hijos de una carpeta, o null si no existe (o ya no existe). */
     fun children(parent: String): List<BrowseNode>? = when {
         parent == BrowseIds.ROOT -> listOf(
-            BrowseNode(BrowseIds.HOME, "Para ti"),
-            BrowseNode(BrowseIds.LISTS, "Listas"),
-            BrowseNode(BrowseIds.ALBUMS, "Álbumes", grid = true),
-            BrowseNode(BrowseIds.ARTISTS, "Artistas"),
+            BrowseNode(BrowseIds.HOME, Texts.t("data_car_for_you", "Para ti")),
+            BrowseNode(BrowseIds.LISTS, Texts.t("data_car_lists", "Listas")),
+            BrowseNode(BrowseIds.ALBUMS, Texts.t("data_car_albums", "Álbumes"), grid = true),
+            BrowseNode(BrowseIds.ARTISTS, Texts.t("data_car_artists", "Artistas")),
         )
         parent == BrowseIds.HOME -> buildList {
-            if (songs.isNotEmpty()) add(BrowseNode(BrowseIds.SHUFFLE_ALL, "Mezclar todo", plural(songs.size), playable = true))
+            if (songs.isNotEmpty()) add(BrowseNode(BrowseIds.SHUFFLE_ALL, shuffleAll(), plural(songs.size), playable = true))
             smart.filter { songsOf(it.ids).isNotEmpty() }.forEach { add(listNode(it)) }
-            if (genres.isNotEmpty()) add(BrowseNode(BrowseIds.GENRES, "Por género", "${genres.size} géneros"))
-            if (tempos.isNotEmpty()) add(BrowseNode(BrowseIds.TEMPO, "Por ritmo", "BPM"))
+            if (genres.isNotEmpty()) add(BrowseNode(BrowseIds.GENRES, Texts.t("data_car_by_genre", "Por género"), Texts.n("data_genres", genres.size, "%d género", "%d géneros")))
+            if (tempos.isNotEmpty()) add(BrowseNode(BrowseIds.TEMPO, Texts.t("data_car_by_tempo", "Por ritmo"), "BPM"))
         }
         parent == BrowseIds.LISTS -> (smart + playlists).filter { songsOf(it.ids).isNotEmpty() }.map { listNode(it) }
         parent == BrowseIds.ALBUMS -> albums.entries.sortedBy { fold(it.value.first().album) }.map { (k, l) ->
@@ -131,7 +132,7 @@ class BrowseTree(private val songs: List<BrowseSong>, private val smart: List<Br
     fun item(id: String): BrowseNode? {
         if (id == BrowseIds.ROOT) return root()
         BrowseIds.parseSong(id)?.let { (_, sid) -> byId[sid]?.let { return BrowseNode(id, it.title, it.artist, playable = true, songId = it.id) } }
-        if (id == BrowseIds.SHUFFLE_ALL) return BrowseNode(id, "Mezclar todo", plural(songs.size), playable = true)
+        if (id == BrowseIds.SHUFFLE_ALL) return BrowseNode(id, shuffleAll(), plural(songs.size), playable = true)
         return listOf(BrowseIds.ROOT, BrowseIds.HOME, BrowseIds.LISTS, BrowseIds.ALBUMS, BrowseIds.ARTISTS, BrowseIds.GENRES, BrowseIds.TEMPO)
             .asSequence().mapNotNull { children(it) }.flatten().firstOrNull { it.id == id }
     }

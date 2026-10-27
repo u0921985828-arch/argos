@@ -1,5 +1,6 @@
 package com.eddie.surco.ui
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.lazy.LazyRow
@@ -68,12 +69,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eddie.surco.LibraryViewModel
+import com.eddie.surco.R
+import com.eddie.surco.Res
 import com.eddie.surco.Screen
 import com.eddie.surco.data.Group
 import com.eddie.surco.data.TagField
@@ -97,7 +101,7 @@ import kotlinx.coroutines.withContext
 fun TagsScreen(vm: LibraryViewModel, tracks: List<Track>) {
     val fields = rememberOffMain(tracks, initial = emptyList()) { availableFields(tracks) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
-        item { TabHeader("Etiquetas", "Tu música ordenada por lo que dicen sus archivos") }
+        item { TabHeader(stringResource(R.string.library_tags_title), stringResource(R.string.library_tags_subtitle)) }
         fields.groupBy { it.first.group }.forEach { (section, list) ->
             item(key = "sec-$section") { SectionLabel(section) }
             item(key = "grid-$section") {
@@ -112,7 +116,7 @@ fun TagsScreen(vm: LibraryViewModel, tracks: List<Track>) {
             }
         }
         if (tracks.isEmpty()) item {
-            Text("Cuando haya canciones en el móvil, aquí salen todas sus etiquetas.", color = Muted, modifier = Modifier.padding(24.dp))
+            Text(stringResource(R.string.library_tags_empty), color = Muted, modifier = Modifier.padding(24.dp))
         }
     }
 }
@@ -163,10 +167,10 @@ fun GroupsScreen(vm: LibraryViewModel, field: TagField, tracks: List<Track>) {
         }
     }
     Column(Modifier.fillMaxSize()) {
-        TopBar(field.label, "${all.size} grupos", onBack = { vm.pop() })
+        TopBar(field.label, plural(R.plurals.library_groups, all.size), onBack = { vm.pop() })
         Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = !byCount, onClick = { byCount = false }, label = { Text(if (numeric) "Por orden" else "A – Z") }, colors = chipColors(), modifier = Modifier.height(ChipHeight))
-            FilterChip(selected = byCount, onClick = { byCount = true }, label = { Text("Más canciones") }, colors = chipColors(), modifier = Modifier.height(ChipHeight))
+            FilterChip(selected = !byCount, onClick = { byCount = false }, label = { Text(stringResource(if (numeric) R.string.library_sort_in_order else R.string.library_sort_az)) }, colors = chipColors(), modifier = Modifier.height(ChipHeight))
+            FilterChip(selected = byCount, onClick = { byCount = true }, label = { Text(stringResource(R.string.library_sort_most_songs)) }, colors = chipColors(), modifier = Modifier.height(ChipHeight))
         }
         val showArt = field in setOf(TagField.ALBUM, TagField.ARTIST, TagField.ALBUM_ARTIST, TagField.FOLDER)
         val max = remember(all) { all.maxOfOrNull { it.tracks.size } ?: 1 }
@@ -189,7 +193,7 @@ fun GroupsScreen(vm: LibraryViewModel, field: TagField, tracks: List<Track>) {
                             }
                         }
                     }
-                    IconButton(onClick = { vm.player.play(g.tracks.sortedForAlbum(), 0) }) { Icon(Icons.Default.PlayArrow, "Reproducir", tint = Muted) }
+                    IconButton(onClick = { vm.player.play(g.tracks.sortedForAlbum(), 0) }) { Icon(Icons.Default.PlayArrow, stringResource(R.string.library_play), tint = Muted) }
                 }
             }
         }
@@ -200,9 +204,11 @@ fun GroupsScreen(vm: LibraryViewModel, field: TagField, tracks: List<Track>) {
 private fun List<Track>.sortedForAlbum() = sortedWith(compareBy({ it.album.lowercase() }, { it.discNo }, { it.trackNo }, { it.title.lowercase() }))
 
 // ======================= CANCIONES =======================
-enum class SongSort(val label: String) {
-    CUSTOM("Orden de la lista"), TITLE("Título"), ARTIST("Artista"), ALBUM("Álbum y pista"), YEAR("Año"),
-    DURATION("Duración"), ADDED("Recientes"), PLAYS("Más escuchadas"), BPM("BPM"), KEY("Tonalidad (rueda Camelot)"),
+enum class SongSort(@StringRes val label: Int) {
+    CUSTOM(R.string.library_songsort_custom), TITLE(R.string.library_songsort_title), ARTIST(R.string.library_songsort_artist),
+    ALBUM(R.string.library_songsort_album), YEAR(R.string.library_songsort_year), DURATION(R.string.library_songsort_duration),
+    ADDED(R.string.library_songsort_added), PLAYS(R.string.library_songsort_plays), BPM(R.string.library_songsort_bpm),
+    KEY(R.string.library_songsort_key),
 }
 
 private fun Track.bpmOrNull() = x("bpm").replace(',', '.').toFloatOrNull()?.takeIf { it > 0 }
@@ -221,7 +227,7 @@ fun CompatibleScreen(vm: LibraryViewModel, id: Long, tracks: List<Track>, byId: 
         }.sortedBy { o -> b?.let { bb -> o.bpmOrNull()?.let { kotlin.math.abs(it - bb) } } ?: 0f }
     }
     val sub = listOfNotNull(k?.label, b?.let { "${bpmText(it)} BPM" }).joinToString(" · ")
-    SongListScreen(vm, "Para mezclar con «${t.title}»", sub, list, SongSort.CUSTOM, custom = true)
+    SongListScreen(vm, stringResource(R.string.library_mix_with, t.title), sub, list, SongSort.CUSTOM, custom = true)
 }
 
 @Composable
@@ -230,14 +236,14 @@ fun SongsScreen(vm: LibraryViewModel, s: Screen.Songs, tracks: List<Track>) {
         if (s.field == null || s.key == null) tracks
         else tracks.filter { t -> s.field.buckets(t).any { it.key == s.key } }
     }
-    SongListScreen(vm, s.title, s.field?.label ?: "Biblioteca", list, if (s.field == TagField.ALBUM) SongSort.ALBUM else SongSort.TITLE, custom = false)
+    SongListScreen(vm, s.title, s.field?.label ?: stringResource(R.string.library_library), list, if (s.field == TagField.ALBUM) SongSort.ALBUM else SongSort.TITLE, custom = false)
 }
 
 @Composable
 fun SmartScreen(vm: LibraryViewModel, sl: SmartList, tracks: List<Track>) {
     val user by UserStore.state.collectAsState()
     val list = remember(tracks, user, sl) { sl.tracks(tracks, user) }
-    SongListScreen(vm, sl.label, "Lista automática", list, if (sl == SmartList.FAVORITES || sl == SmartList.NEVER) SongSort.TITLE else SongSort.CUSTOM, custom = true)
+    SongListScreen(vm, sl.label, stringResource(R.string.library_smart_list), list, if (sl == SmartList.FAVORITES || sl == SmartList.NEVER) SongSort.TITLE else SongSort.CUSTOM, custom = true)
 }
 
 @Composable
@@ -251,20 +257,21 @@ fun PlaylistScreen(vm: LibraryViewModel, id: Long, byId: Map<Long, Track>) {
     val sourceIndex = remember(entries) { entries.map { it.first } }
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
-    SongListScreen(vm, pl.name, "Lista · ${songs(list.size)}", list, SongSort.CUSTOM, custom = true, playlistId = id,
+    SongListScreen(vm, pl.name, stringResource(R.string.library_playlist_subtitle, songs(list.size)), list, SongSort.CUSTOM, custom = true, playlistId = id,
         sourceIndex = sourceIndex,
         menu = { close ->
-            DropdownMenuItem(text = { Text("Cambiar el nombre") }, onClick = { close(); renaming = true })
-            DropdownMenuItem(text = { Text("Borrar la lista") }, onClick = { close(); deleting = true })
+            DropdownMenuItem(text = { Text(stringResource(R.string.library_rename)) }, onClick = { close(); renaming = true })
+            DropdownMenuItem(text = { Text(stringResource(R.string.library_delete_playlist)) }, onClick = { close(); deleting = true })
         })
-    if (renaming) NameDialog("Nombre de la lista", initial = pl.name, onDismiss = { renaming = false }) { n -> UserStore.renamePlaylist(id, n); renaming = false }
-    if (deleting) ConfirmSheet("¿Borrar «${pl.name}»?", "Las canciones no se tocan; solo desaparece la lista.", "Borrar lista",
+    if (renaming) NameDialog(stringResource(R.string.library_playlist_name), initial = pl.name, onDismiss = { renaming = false }) { n -> UserStore.renamePlaylist(id, n); renaming = false }
+    if (deleting) ConfirmSheet(stringResource(R.string.library_delete_title, pl.name), stringResource(R.string.library_delete_text),
+        stringResource(R.string.library_delete_confirm),
         onDismiss = { deleting = false }) {
         deleting = false
         val gone = pl
         val at = UserStore.state.value.playlists.indexOfFirst { it.id == id }
         UserStore.deletePlaylist(id); vm.pop()
-        Notice.show("Lista «${gone.name}» borrada", "Deshacer") { UserStore.restorePlaylist(gone, at) }
+        Notice.show(Res.str(R.string.library_playlist_deleted, gone.name), Res.str(R.string.library_undo)) { UserStore.restorePlaylist(gone, at) }
     }
 }
 
@@ -299,24 +306,24 @@ fun SongListScreen(
     Column(Modifier.fillMaxSize()) {
         TopBar(title, subtitle, onBack = { vm.pop() }) {
             Box {
-                IconButton(onClick = { sortMenu = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Ordenar") }
+                IconButton(onClick = { sortMenu = true }) { Icon(Icons.AutoMirrored.Filled.Sort, stringResource(R.string.library_sort)) }
                 DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
                     SongSort.entries.filter { custom || it != SongSort.CUSTOM }.forEach { o ->
                         DropdownMenuItem(
-                            text = { Text(o.label, color = if (o == sort) Copper else Paper) },
+                            text = { Text(stringResource(o.label), color = if (o == sort) Copper else Paper) },
                             onClick = { sort = o; sortMenu = false },
                         )
                     }
                 }
             }
             Box {
-                IconButton(onClick = { moreMenu = true }) { Icon(Icons.Default.MoreVert, "Más") }
+                IconButton(onClick = { moreMenu = true }) { Icon(Icons.Default.MoreVert, stringResource(R.string.library_more)) }
                 DropdownMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
-                    DropdownMenuItem(text = { Text("Todo a la cola") }, onClick = {
+                    DropdownMenuItem(text = { Text(stringResource(R.string.library_all_to_queue)) }, onClick = {
                         moreMenu = false; vm.player.enqueue(tracksSorted)
-                        Notice.show("${songs(tracksSorted.size)} a la cola", "Ver cola") { vm.queueOpen = true }
+                        Notice.show(Res.str(R.string.library_queued, songs(tracksSorted.size)), Res.str(R.string.library_view_queue)) { vm.queueOpen = true }
                     }, enabled = list.isNotEmpty())
-                    DropdownMenuItem(text = { Text("Todo a una lista") }, onClick = { moreMenu = false; vm.addTo = tracksSorted }, enabled = list.isNotEmpty())
+                    DropdownMenuItem(text = { Text(stringResource(R.string.library_all_to_playlist)) }, onClick = { moreMenu = false; vm.addTo = tracksSorted }, enabled = list.isNotEmpty())
                     menu?.invoke { moreMenu = false }
                 }
             }
@@ -329,25 +336,27 @@ fun SongListScreen(
                     Column(Modifier.weight(1f)) {
                         Text("${songs(list.size)} · ${fmtTotal(list.sumOf { it.durationMs })}", color = Muted, fontSize = 13.sp)
                         val artists = remember(list) { list.map { it.artist }.filter { it.isNotBlank() }.distinct() }
-                        if (artists.isNotEmpty())
-                            Text(artists.take(4).joinToString(", ") + if (artists.size > 4) " y ${artists.size - 4} más" else "",
+                        if (artists.isNotEmpty()) {
+                            val shown = artists.take(4).joinToString(", ")
+                            Text(if (artists.size > 4) stringResource(R.string.library_names_and_more, shown, artists.size - 4) else shown,
                                 fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
                         Spacer(Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = { vm.player.play(tracksSorted, 0) }, enabled = list.isNotEmpty(), contentPadding = PaddingValues(horizontal = 14.dp)) {
-                                Icon(Icons.Default.PlayArrow, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("Reproducir")
+                                Icon(Icons.Default.PlayArrow, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text(stringResource(R.string.library_play))
                             }
                             OutlinedButton(onClick = { vm.player.play(tracksSorted, 0, shuffled = true) }, enabled = list.isNotEmpty(),
                                 contentPadding = PaddingValues(horizontal = 12.dp),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Copper)) {
-                                Icon(Icons.Default.Shuffle, "Aleatorio", Modifier.size(18.dp))
+                                Icon(Icons.Default.Shuffle, stringResource(R.string.library_shuffle), Modifier.size(18.dp))
                             }
                         }
                     }
                 }
                 HorizontalDivider(color = Panel2)
                 if (list.isEmpty()) Text(
-                    if (playlistId != null) "Lista vacía. Mantén pulsada una canción y elige «A una lista»." else "Nada por aquí todavía.",
+                    stringResource(if (playlistId != null) R.string.library_playlist_empty else R.string.library_nothing_here),
                     color = Muted, modifier = Modifier.padding(24.dp),
                 )
             }
@@ -364,8 +373,10 @@ fun SongListScreen(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SongRow(t: Track, number: Int?, playing: Boolean, onClick: () -> Unit, onLong: () -> Unit) {
+    val moreOptions = stringResource(R.string.library_more_options)
+    val unknown = stringResource(R.string.library_unknown)
     Row(
-        Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLong, onLongClickLabel = "Más opciones")
+        Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLong, onLongClickLabel = moreOptions)
             .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -378,20 +389,20 @@ fun SongRow(t: Track, number: Int?, playing: Boolean, onClick: () -> Unit, onLon
         Column(Modifier.weight(1f)) {
             Text(t.title, color = if (playing) Copper else Paper, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 fontWeight = if (playing) FontWeight.SemiBold else FontWeight.Normal)
-            Text(listOf(t.artist, t.album).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "Desconocido" },
+            Text(listOf(t.artist, t.album).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { unknown },
                 color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.width(8.dp))
         Text(fmtTime(t.durationMs), color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
         // El menú (a continuación, a la cola, a una lista…) también a la vista, no solo con pulsación larga.
-        IconButton(onClick = onLong) { Icon(Icons.Default.MoreVert, "Más opciones", tint = Muted) }
+        IconButton(onClick = onLong) { Icon(Icons.Default.MoreVert, moreOptions, tint = Muted) }
     }
 }
 
 @Composable
 fun TopBar(title: String, subtitle: String, onBack: (() -> Unit)?, actions: @Composable RowScope.() -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Atrás") }
+        if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.library_back)) }
         else Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
             Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)

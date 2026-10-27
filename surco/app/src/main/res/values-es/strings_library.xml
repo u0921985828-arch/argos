@@ -111,4 +111,6 @@
     <string name="library_my_lists">Mis listas</string>
     <string name="library_lists_empty">Todavía no hay listas. Crea una con + o mantén pulsada una canción y elige «A una lista».</string>
     <string name="library_create">Crear</string>
+    <string name="library_zoom_in">Portadas más grandes</string>
+    <string name="library_zoom_out">Portadas más pequeñas</string>
 </resources>

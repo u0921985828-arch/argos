@@ -67,6 +67,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.pointer.pointerInput
+import com.eddie.surco.audio.ALBUM_COLUMNS
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.launch
@@ -79,6 +89,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -88,6 +99,8 @@ import androidx.compose.ui.unit.sp
 import com.eddie.surco.AlbumSort
 import com.eddie.surco.LibraryTab
 import com.eddie.surco.LibraryViewModel
+import com.eddie.surco.R
+import com.eddie.surco.Res
 import com.eddie.surco.Screen
 import com.eddie.surco.SongSheetState
 import com.eddie.surco.Tab
@@ -153,9 +166,9 @@ private fun albumKey(t: Track) = TagField.ALBUM.buckets(t).firstOrNull()?.key
 fun albumArtist(g: Group): String {
     val names = g.tracks.map { it.albumArtist.ifBlank { it.artist } }.filter { it.isNotBlank() }.distinct()
     return when {
-        names.isEmpty() -> "Desconocido"
+        names.isEmpty() -> Res.str(R.string.library_unknown)
         names.size <= 2 -> names.joinToString(", ")
-        else -> names.take(2).joinToString(", ") + " y ${names.size - 2} más"
+        else -> Res.str(R.string.library_names_and_more, names.take(2).joinToString(", "), names.size - 2)
     }
 }
 
@@ -170,26 +183,31 @@ private fun List<Track>.inAlbumOrder() = sortedWith(compareBy({ it.discNo }, { i
 
 @Composable
 private fun AlbumCard(vm: LibraryViewModel, g: Group, size: Dp = 148.dp, modifier: Modifier = Modifier) {
-    Column(modifier.width(size).clip(RoundedCornerShape(12.dp)).clickable { vm.openTag(TagField.ALBUM, g.bucket.key, g.bucket.label) }) {
+    // Pequeña (4–5 por fila): sin botón de reproducir encima (taparía la portada; se toca la
+    // portada y se reproduce desde el álbum), esquinas y letra en proporción.
+    val small = size < 110.dp
+    val corner = if (small) 8.dp else 12.dp
+    Column(modifier.width(size).clip(RoundedCornerShape(corner)).clickable { vm.openTag(TagField.ALBUM, g.bucket.key, g.bucket.label) }) {
         Box {
-            Art(g.tracks.first(), size, corner = 12.dp, modifier = Modifier.size(size))
-            FilledIconButton(
+            Art(g.tracks.first(), size, corner = corner, modifier = Modifier.size(size))
+            if (!small) FilledIconButton(
                 onClick = { vm.player.play(g.tracks.inAlbumOrder(), 0) },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).size(48.dp),
                 colors = IconButtonDefaults.filledIconButtonColors(containerColor = Copper, contentColor = Ink),
-            ) { Icon(Icons.Default.PlayArrow, "Reproducir ${g.bucket.label}") }
+            ) { Icon(Icons.Default.PlayArrow, stringResource(R.string.library_play_item, g.bucket.label)) }
         }
-        Text(g.bucket.label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 17.sp,
-            modifier = Modifier.padding(top = 6.dp, start = 2.dp, end = 2.dp))
-        Text(albumArtist(g), color = Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        Text(g.bucket.label, fontSize = if (small) 12.sp else 14.sp, fontWeight = FontWeight.SemiBold, maxLines = if (small) 1 else 2,
+            overflow = TextOverflow.Ellipsis, lineHeight = if (small) 15.sp else 17.sp,
+            modifier = Modifier.padding(top = if (small) 4.dp else 6.dp, start = 2.dp, end = 2.dp))
+        Text(albumArtist(g), color = Muted, fontSize = if (small) 11.sp else 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 2.dp))
     }
 }
 
-private fun greeting(): String = when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
-    in 6..13 -> "Buenos días"
-    in 14..20 -> "Buenas tardes"
-    else -> "Buenas noches"
+private fun greeting(): Int = when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
+    in 6..13 -> R.string.library_greeting_morning
+    in 14..20 -> R.string.library_greeting_afternoon
+    else -> R.string.library_greeting_evening
 }
 
 // ======================= INICIO =======================
@@ -210,15 +228,15 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, byId: Map<Long, Track>
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
-            TabHeader(greeting(), "${songs(tracks.size)} · ${fmtTotal(tracks.sumOf { it.durationMs })}") {
-                IconButton(onClick = { vm.push(Screen.Settings()) }) { Icon(Icons.Default.Settings, "Ajustes", tint = Paper) }
+            TabHeader(stringResource(greeting()), "${songs(tracks.size)} · ${fmtTotal(tracks.sumOf { it.durationMs })}") {
+                IconButton(onClick = { vm.push(Screen.Settings()) }) { Icon(Icons.Default.Settings, stringResource(R.string.library_settings), tint = Paper) }
             }
         }
         // Sin canciones, el aviso y nada más: un «Mezclar todo» que no hace nada despista.
         if (tracks.isEmpty() && progress == null) {
             item {
                 Text(
-                    "No hay canciones en el móvil todavía. Copia música a la memoria y vuelve a abrir Surco (o Ajustes → Volver a leer).",
+                    stringResource(R.string.library_home_empty),
                     color = Muted, modifier = Modifier.padding(24.dp),
                 )
             }
@@ -228,7 +246,7 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, byId: Map<Long, Track>
         // Debajo del buscador: si apareciera encima, empujaría el buscador justo cuando se va a tocar.
         if (progress != null) item {
             Column(Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
-                Text("Leyendo etiquetas · ${progress.first} de ${progress.second}", color = Teal, fontSize = 12.sp)
+                Text(stringResource(R.string.library_reading_tags, progress.first, progress.second), color = Teal, fontSize = 12.sp)
                 Spacer(Modifier.height(6.dp))
                 LinearProgressIndicator(
                     progress = { progress.first / progress.second.coerceAtLeast(1).toFloat() },
@@ -247,40 +265,40 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, byId: Map<Long, Track>
                 Art(resume, 64.dp, modifier = Modifier.size(64.dp))
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Seguir escuchando", color = Copper, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.library_continue_listening), color = Copper, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     Text(resume.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(resume.artist, color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 FilledIconButton(
                     onClick = { vm.player.resume(byId) },
                     colors = IconButtonDefaults.filledIconButtonColors(containerColor = Copper, contentColor = Ink),
-                ) { Icon(Icons.Default.PlayArrow, "Seguir") }
+                ) { Icon(Icons.Default.PlayArrow, stringResource(R.string.library_resume)) }
             }
         }
         item {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                QuickAction(Icons.Default.Shuffle, "Mezclar todo", Modifier.weight(1f)) { vm.player.play(tracks, 0, shuffled = true) }
-                QuickAction(Icons.Default.Favorite, "Favoritas", Modifier.weight(1f)) { vm.push(Screen.Smart(SmartList.FAVORITES)) }
-                QuickAction(Icons.Default.Star, "Más escuchadas", Modifier.weight(1f)) { vm.push(Screen.Smart(SmartList.MOST_PLAYED)) }
+                QuickAction(Icons.Default.Shuffle, stringResource(R.string.library_shuffle_all), Modifier.weight(1f)) { vm.player.play(tracks, 0, shuffled = true) }
+                QuickAction(Icons.Default.Favorite, stringResource(R.string.library_favorites), Modifier.weight(1f)) { vm.push(Screen.Smart(SmartList.FAVORITES)) }
+                QuickAction(Icons.Default.Star, stringResource(R.string.library_most_played), Modifier.weight(1f)) { vm.push(Screen.Smart(SmartList.MOST_PLAYED)) }
             }
         }
         // Cada sección se puede quitar en Ajustes → Interfaz → Inicio.
         if (prefs.homeRecent && recent.isNotEmpty()) {
-            item { SectionLabel("Escuchado hace poco") }
+            item { SectionLabel(stringResource(R.string.library_recently_played)) }
             item { AlbumRow(vm, recent) }
         }
         if (prefs.homeAdded && added.isNotEmpty()) {
-            item { SectionLabel("Añadido hace poco") }
+            item { SectionLabel(stringResource(R.string.library_recently_added)) }
             item { AlbumRow(vm, added) }
         }
         if (prefs.homeTop && top.isNotEmpty()) {
-            item { SectionLabel("Lo que más suena") }
+            item { SectionLabel(stringResource(R.string.library_top)) }
             itemsIndexed(top, key = { _, t -> "top-${t.id}" }) { i, t ->
                 SongRow(t, null, t.id == vm.player.currentId, onClick = { vm.player.play(top, i) }, onLong = { vm.sheet = SongSheetState(t) })
             }
         }
         if (prefs.homeExplore) item {
-            SectionLabel("Explorar por etiquetas")
+            SectionLabel(stringResource(R.string.library_explore_tags))
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -289,7 +307,7 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, byId: Map<Long, Track>
                 listOf(TagField.GENRE, TagField.BPM, TagField.KEY, TagField.DECADE, TagField.MOOD, TagField.QUALITY, TagField.FOLDER).forEach { f ->
                     FilterChip(selected = false, onClick = { vm.push(Screen.Groups(f)) }, label = { Text(f.label) }, colors = chipColors(), modifier = Modifier.height(ChipHeight))
                 }
-                FilterChip(selected = false, onClick = { vm.selectTab(Tab.TAGS) }, label = { Text("Todas…") }, colors = chipColors(), modifier = Modifier.height(ChipHeight))
+                FilterChip(selected = false, onClick = { vm.selectTab(Tab.TAGS) }, label = { Text(stringResource(R.string.library_all_tags)) }, colors = chipColors(), modifier = Modifier.height(ChipHeight))
             }
         }
     }
@@ -305,7 +323,7 @@ private fun SearchPill(vm: LibraryViewModel) {
     ) {
         Icon(Icons.Default.Search, null, tint = Muted)
         Spacer(Modifier.width(10.dp))
-        Text("Buscar en cualquier etiqueta", color = Muted, fontSize = 15.sp)
+        Text(stringResource(R.string.library_search_hint), color = Muted, fontSize = 15.sp)
     }
 }
 
@@ -338,7 +356,10 @@ fun LibraryScreen(vm: LibraryViewModel, tracks: List<Track>) {
     val folders = rememberOffMain(tracks, initial = emptyList()) { groupTracks(tracks, TagField.FOLDER).sortedBy { fold(it.bucket.label) } }
     val songsSorted = rememberOffMain(tracks, initial = emptyList()) { tracks.sortedBy { fold(it.title) } }
     Column(Modifier.fillMaxSize()) {
-        TabHeader("Biblioteca", "${songs(tracks.size)} · ${albums.size} álbumes · ${artists.size} artistas")
+        TabHeader(
+            stringResource(R.string.library_library),
+            "${songs(tracks.size)} · ${plural(R.plurals.library_albums, albums.size)} · ${plural(R.plurals.library_artists, artists.size)}",
+        )
         SearchPill(vm)
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
@@ -358,8 +379,8 @@ fun LibraryScreen(vm: LibraryViewModel, tracks: List<Track>) {
               LazyColumn(state = state, contentPadding = PaddingValues(bottom = 16.dp)) {
                 item {
                     Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        QuickAction(Icons.Default.PlayArrow, "Reproducir", Modifier.weight(1f)) { vm.player.play(songsSorted, 0) }
-                        QuickAction(Icons.Default.Shuffle, "Aleatorio", Modifier.weight(1f)) { vm.player.play(songsSorted, 0, shuffled = true) }
+                        QuickAction(Icons.Default.PlayArrow, stringResource(R.string.library_play), Modifier.weight(1f)) { vm.player.play(songsSorted, 0) }
+                        QuickAction(Icons.Default.Shuffle, stringResource(R.string.library_shuffle), Modifier.weight(1f)) { vm.player.play(songsSorted, 0, shuffled = true) }
                     }
                 }
                 itemsIndexed(songsSorted, key = { _, t -> t.id }) { i, t ->
@@ -367,9 +388,9 @@ fun LibraryScreen(vm: LibraryViewModel, tracks: List<Track>) {
                 }
               }
             }
-            LibraryTab.ALBUMS -> LazyVerticalGrid(
-                GridCells.Adaptive(150.dp), contentPadding = PaddingValues(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(16.dp),
+            LibraryTab.ALBUMS -> ZoomableGrid { cols, cell, gap, pad -> LazyVerticalGrid(
+                GridCells.Fixed(cols), contentPadding = PaddingValues(pad),
+                horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(gap + 4.dp),
             ) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -378,12 +399,66 @@ fun LibraryScreen(vm: LibraryViewModel, tracks: List<Track>) {
                         }
                     }
                 }
-                if (albums.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { Text("Sin álbumes.", color = Muted) }
-                items(albums, key = { it.bucket.key }) { g -> AlbumCard(vm, g, size = 150.dp) }
-            }
+                if (albums.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { Text(stringResource(R.string.library_no_albums), color = Muted) }
+                items(albums, key = { it.bucket.key }) { g -> AlbumCard(vm, g, size = cell, modifier = Modifier.animateItem()) }
+            } }
             LibraryTab.ARTISTS -> GroupList(vm, TagField.ARTIST, artists, round = true)
             LibraryTab.FOLDERS -> GroupList(vm, TagField.FOLDER, folders, round = false)
         }
+    }
+}
+
+/**
+ * Cuadrícula que se pellizca: abrir los dedos agranda las portadas (menos por fila), cerrarlos las
+ * achica, de 2 a 5 por fila. Los huecos y el margen crecen y menguan con la portada, así la
+ * cuadrícula se ve igual de ordenada a cualquier tamaño. Un dedo sigue desplazando; con TalkBack,
+ * «Portadas más grandes / más pequeñas» en las acciones.
+ */
+@Composable
+private fun ZoomableGrid(content: @Composable (cols: Int, cell: Dp, gap: Dp, pad: Dp) -> Unit) {
+    val prefs by SurcoSettings.state.collectAsState()
+    val cols = prefs.albumColumns.coerceIn(ALBUM_COLUMNS)
+    val haptic = LocalHapticFeedback.current
+    fun set(n: Int) {
+        val c = n.coerceIn(ALBUM_COLUMNS)
+        if (c != SurcoSettings.state.value.albumColumns) {
+            SurcoSettings.update { it.copy(albumColumns = c) }
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+    }
+    val bigger = stringResource(R.string.library_zoom_in)
+    val smaller = stringResource(R.string.library_zoom_out)
+    BoxWithConstraints(
+        Modifier.fillMaxSize()
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    var zoom = 1f
+                    do {
+                        // Antes que la cuadrícula (Initial): con dos dedos el gesto es nuestro y no desplaza.
+                        val ev = awaitPointerEvent(PointerEventPass.Initial)
+                        if (ev.changes.count { it.pressed } >= 2) {
+                            zoom *= ev.calculateZoom()
+                            val now = SurcoSettings.state.value.albumColumns
+                            if (zoom > 1.25f) { set(now - 1); zoom = 1f }
+                            else if (zoom < 0.8f) { set(now + 1); zoom = 1f }
+                            ev.changes.forEach { it.consume() }
+                        }
+                    } while (ev.changes.any { it.pressed })
+                }
+            }
+            .semantics {
+                customActions = listOf(
+                    CustomAccessibilityAction(bigger) { set(SurcoSettings.state.value.albumColumns - 1); true },
+                    CustomAccessibilityAction(smaller) { set(SurcoSettings.state.value.albumColumns + 1); true },
+                )
+            },
+    ) {
+        // Hueco y margen en proporción a la portada: 12 y 16 dp con 2 por fila, 6 y 10 con 5.
+        val gap = (16 - 2 * cols).dp
+        val pad = (20 - 2 * cols).dp
+        val cell = (maxWidth - pad * 2 - gap * (cols - 1)) / cols
+        content(cols, cell, gap, pad)
     }
 }
 
@@ -401,7 +476,7 @@ private fun GroupList(vm: LibraryViewModel, field: TagField, groups: List<Group>
                     Text(g.bucket.label, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text("${songs(g.tracks.size)} · ${fmtTotal(g.totalMs)}", color = Muted, fontSize = 13.sp)
                 }
-                IconButton(onClick = { vm.player.play(g.tracks.inAlbumOrder(), 0) }) { Icon(Icons.Default.PlayArrow, "Reproducir", tint = Muted) }
+                IconButton(onClick = { vm.player.play(g.tracks.inAlbumOrder(), 0) }) { Icon(Icons.Default.PlayArrow, stringResource(R.string.library_play), tint = Muted) }
             }
         }
     }
@@ -422,6 +497,7 @@ private fun WithLetters(labels: List<String>, headerItems: Int = 0, list: @Compo
         if (show) {
             val scope = rememberCoroutineScope()
             val letters = index.keys.toList()
+            val indexDesc = stringResource(R.string.library_letter_index)
             var picked by remember { mutableStateOf<Char?>(null) }
             fun pick(y: Float, h: Int) {
                 val c = letters[((y / h.coerceAtLeast(1)) * letters.size).toInt().coerceIn(0, letters.lastIndex)]
@@ -429,7 +505,7 @@ private fun WithLetters(labels: List<String>, headerItems: Int = 0, list: @Compo
             }
             Column(
                 Modifier.align(Alignment.CenterEnd).fillMaxHeight(0.9f).width(28.dp)
-                    .semantics { contentDescription = "Índice de letras" }
+                    .semantics { contentDescription = indexDesc }
                     // Con la clave del índice entero: al releer la biblioteca, las posiciones cambian.
                     .pointerInput(index) {
                         detectTapGestures { pick(it.y, size.height); picked = null }
@@ -471,28 +547,28 @@ fun SearchScreen(vm: LibraryViewModel, tracks: List<Track>) {
     LaunchedEffect(Unit) { delay(120); runCatching { req.requestFocus() }; keyboard?.show() }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { vm.pop() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Atrás") }
+            IconButton(onClick = { vm.pop() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.library_back)) }
             OutlinedTextField(
                 value = vm.query, onValueChange = { vm.query = it },
                 modifier = Modifier.weight(1f).focusRequester(req),
-                placeholder = { Text("Buscar en cualquier etiqueta", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                placeholder = { Text(stringResource(R.string.library_search_hint), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 leadingIcon = { Icon(Icons.Default.Search, null) },
-                trailingIcon = { if (vm.query.isNotEmpty()) IconButton(onClick = { vm.query = "" }) { Icon(Icons.Default.Clear, "Borrar") } },
+                trailingIcon = { if (vm.query.isNotEmpty()) IconButton(onClick = { vm.query = "" }) { Icon(Icons.Default.Clear, stringResource(R.string.library_clear)) } },
                 singleLine = true, shape = RoundedCornerShape(14.dp),
                 colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = Panel, focusedContainerColor = Panel, unfocusedBorderColor = Muted.copy(alpha = 0.6f)),
             )
         }
         if (vm.query.isBlank()) {
-            Text("Título, artista, álbum, género, año, carpeta… y también estado de ánimo, sello, compositor, comentario o cualquier otra etiqueta de texto. Sin importar tildes ni mayúsculas.",
+            Text(stringResource(R.string.library_search_help),
                 color = Muted, fontSize = 13.sp, modifier = Modifier.padding(20.dp))
             return@Column
         }
         LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
             if (albumHits.isNotEmpty() && albumHits.size < results.size) {
-                item { SectionLabel("Álbumes") }
+                item { SectionLabel(stringResource(R.string.library_albums_section)) }
                 item { AlbumRow(vm, albumHits) }
             }
-            item { SectionLabel("${songs(results.size)} " + if (results.size == 1) "encontrada" else "encontradas") }
+            item { SectionLabel(plural(R.plurals.library_found, results.size)) }
             itemsIndexed(results, key = { _, t -> t.id }) { i, t ->
                 SongRow(t, null, t.id == vm.player.currentId,
                     onClick = {

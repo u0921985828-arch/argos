@@ -2,6 +2,7 @@
 <!-- Ecualizador (español). Los nombres de preajuste guardados no salen de aquí. -->
 <resources>
     <string name="eq_title">Ecualizador</string>
+    <string name="eq_switch">Usar el ecualizador</string>
     <string name="eq_off">Apagado</string>
     <string name="eq_crossfeed_light">Suave</string>
     <string name="eq_crossfeed_medium">Medio</string>

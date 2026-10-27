@@ -228,8 +228,8 @@ fun describe(t: Track): List<Pair<String, String>> = buildList {
     add(Texts.t("data_info_track", "Pista"), if (t.trackNo > 0) of(t.trackNo, t.x("track_total")) else "")
     add(Texts.t("data_info_disc", "Disco"), if (t.discNo > 0) of(t.discNo, t.x("disc_total")) else "")
     add(Texts.t("data_info_comment", "Comentario"), t.x("comment")); add("ISRC", t.x("isrc")); add(Texts.t("data_info_catalog", "Nº de catálogo"), t.x("catalog"))
-    // «Sí» es lo que se guarda en la caché al leer las etiquetas; se enseña en el idioma de la app.
     add(Texts.t("data_info_rating", "Valoración"), t.x("rating"))
+    // «Sí» es lo que se guarda en la caché al leer las etiquetas; se enseña en el idioma de la app.
     add(Texts.t("data_info_lyrics", "Letra incluida"), t.x("lyrics").let { if (it == "Sí") Texts.t("data_yes", "Sí") else it })
     add(Texts.t("data_info_codec", "Códec"), t.x("codec"))
     add(Texts.t("data_info_size", "Tamaño"), "%.1f MB".format(Texts.locale(), t.size / 1_048_576f).takeIf { t.size > 0 } ?: "")

@@ -53,6 +53,8 @@ data class Prefs(
     val homeAdded: Boolean = true,
     val homeTop: Boolean = true,
     val homeExplore: Boolean = true,
+    /** Portadas por fila en Biblioteca → Álbumes (2–5, se cambia pellizcando la cuadrícula). */
+    val albumColumns: Int = 2,
     /** Si una canción no trae letra, buscarla en LRCLIB (sale artista, título, álbum y duración). */
     val onlineLyrics: Boolean = false,
     /** Analizar BPM y tonalidad de las canciones que no los traen en las etiquetas. */
@@ -66,6 +68,10 @@ val ACCENTS = linkedMapOf(
     "Cobre" to 0xE08A4B, "Azul" to 0x5FA8E8, "Verde" to 0x5DBB7E, "Rosa" to 0xE8789F, "Violeta" to 0xA98BEB, "Ámbar" to 0xE2B13C,
 )
 const val ACCENT_FROM_ART = "Del disco"
+/** Portadas por fila que admite la cuadrícula de álbumes. */
+val ALBUM_COLUMNS = 2..5
+/** Material You (Android 12+): el color del fondo de pantalla, el mismo que usa el sistema. */
+const val ACCENT_SYSTEM = "Sistema"
 
 /**
  * Nombre visible de un acento. Los nombres de [ACCENTS] y [ACCENT_FROM_ART] son identificadores
@@ -80,6 +86,7 @@ fun accentLabelRes(id: String): Int? = when (id) {
     "Violeta" -> R.string.settings_accent_violet
     "Ámbar" -> R.string.settings_accent_amber
     ACCENT_FROM_ART -> R.string.settings_accent_art
+    ACCENT_SYSTEM -> R.string.settings_accent_system
     else -> null
 }
 
@@ -165,6 +172,7 @@ object SurcoSettings {
         put("crossfade", p.crossfadeSec); put("crossfadeKeepAlbums", p.crossfadeKeepAlbums)
         put("accent", p.accent); put("techDetails", p.techDetails); put("keepScreenOn", p.keepScreenOn)
         put("homeRecent", p.homeRecent); put("homeAdded", p.homeAdded); put("homeTop", p.homeTop); put("homeExplore", p.homeExplore)
+        put("albumColumns", p.albumColumns)
         put("excluded", JSONArray(p.excludedFolders.toList())); put("onlineLyrics", p.onlineLyrics); put("analyze", p.analyze)
     }
 
@@ -194,11 +202,12 @@ object SurcoSettings {
             autoPreamp = o.optBoolean("autoPreamp", true),
             crossfadeSec = o.optInt("crossfade", 0).coerceIn(0, 12),
             crossfadeKeepAlbums = o.optBoolean("crossfadeKeepAlbums", true),
-            accent = o.optString("accent", def.accent).takeIf { it in ACCENTS || it == ACCENT_FROM_ART } ?: def.accent,
+            accent = o.optString("accent", def.accent).takeIf { it in ACCENTS || it == ACCENT_FROM_ART || it == ACCENT_SYSTEM } ?: def.accent,
             techDetails = o.optBoolean("techDetails", false),
             keepScreenOn = o.optBoolean("keepScreenOn", false),
             homeRecent = o.optBoolean("homeRecent", true), homeAdded = o.optBoolean("homeAdded", true),
             homeTop = o.optBoolean("homeTop", true), homeExplore = o.optBoolean("homeExplore", true),
+            albumColumns = o.optInt("albumColumns", 2).coerceIn(ALBUM_COLUMNS),
             onlineLyrics = o.optBoolean("onlineLyrics", false),
             analyze = o.optBoolean("analyze", true),
             excludedFolders = o.optJSONArray("excluded")?.let { a -> List(a.length()) { a.optString(it) }.filter { it.isNotBlank() }.toSet() } ?: emptySet(),

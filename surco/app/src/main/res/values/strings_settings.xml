@@ -127,4 +127,7 @@
     <string name="settings_version">Version</string>
     <string name="settings_formats">Formats</string>
     <string name="settings_formats_help">MP3, AAC, FLAC, ALAC, Opus, Vorbis and WAV (floating point too). Lyrics from the LYRICS tag or from a .lrc file next to the song.</string>
+    <string name="settings_accent_system">From system</string>
+    <string name="settings_language_section">Language</string>
+    <string name="settings_language_system">Phone\'s language</string>
 </resources>

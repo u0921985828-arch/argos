@@ -38,6 +38,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +62,10 @@ import com.eddie.surco.R
 import com.eddie.surco.Screen
 import com.eddie.surco.audio.ACCENTS
 import com.eddie.surco.audio.ACCENT_FROM_ART
+import com.eddie.surco.audio.ACCENT_SYSTEM
+import android.app.LocaleManager
+import android.os.Build
+import android.os.LocaleList
 import com.eddie.surco.audio.ReplayGainMode
 import com.eddie.surco.audio.SurcoSettings
 import com.eddie.surco.audio.accentLabelRes
@@ -77,7 +84,7 @@ enum class SettingsPage(@StringRes val title: Int, @StringRes val subtitle: Int,
     ABOUT(R.string.settings_about_title, R.string.settings_about_sub, Icons.Default.Info),
 }
 
-const val SURCO_VERSION = "Surco 2.5"
+const val SURCO_VERSION = "Surco 2.6"
 
 @Composable
 fun SettingsScreen(vm: LibraryViewModel) {
@@ -243,11 +250,30 @@ private fun LookPage() {
             Swatch(label, Color(0xFF000000.toInt() or rgb), prefs.accent == name) { SurcoSettings.update { it.copy(accent = name) } }
         }
     }
+    // Fijo (los de arriba), de la portada que suena o, en Android 12+, el del sistema (Material You).
+    val mode = when (prefs.accent) { ACCENT_FROM_ART, ACCENT_SYSTEM -> prefs.accent; else -> "" }
     ChipChoice(
-        listOf(false to stringResource(R.string.settings_accent_fixed), true to stringResource(R.string.settings_accent_art)),
-        prefs.accent == ACCENT_FROM_ART,
-    ) { art ->
-        SurcoSettings.update { it.copy(accent = if (art) ACCENT_FROM_ART else if (it.accent == ACCENT_FROM_ART) "Cobre" else it.accent) }
+        buildList {
+            add("" to stringResource(R.string.settings_accent_fixed))
+            add(ACCENT_FROM_ART to stringResource(R.string.settings_accent_art))
+            if (Build.VERSION.SDK_INT >= 31) add(ACCENT_SYSTEM to stringResource(R.string.settings_accent_system))
+        },
+        mode,
+    ) { m ->
+        SurcoSettings.update { it.copy(accent = m.ifEmpty { if (it.accent in ACCENTS) it.accent else "Cobre" }) }
+    }
+    // Idioma de Surco, aparte del del móvil (Android 13+; antes, el del sistema). Cada idioma con su
+    // propio nombre, como en los ajustes del sistema.
+    if (Build.VERSION.SDK_INT >= 33) {
+        val ctx = LocalContext.current
+        val lm = remember { ctx.getSystemService(LocaleManager::class.java) }
+        var lang by remember { mutableStateOf(lm.applicationLocales.get(0)?.language.orEmpty()) }
+        SectionLabel(stringResource(R.string.settings_language_section))
+        ChipChoice(listOf("" to stringResource(R.string.settings_language_system), "en" to "English", "es" to "Español"), lang) { t ->
+            lang = t
+            // La actividad se recrea sola con el idioma nuevo.
+            lm.applicationLocales = if (t.isEmpty()) LocaleList.getEmptyLocaleList() else LocaleList.forLanguageTags(t)
+        }
     }
     SectionLabel(stringResource(R.string.settings_now_playing_section))
     SwitchRow(stringResource(R.string.settings_tech), stringResource(R.string.settings_tech_help), prefs.techDetails) { t ->

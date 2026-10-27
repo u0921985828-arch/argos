@@ -42,10 +42,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eddie.surco.LibraryViewModel
+import com.eddie.surco.R
 import com.eddie.surco.Screen
 import com.eddie.surco.audio.ReplayGainMode
 import com.eddie.surco.audio.SurcoSettings
@@ -69,18 +71,21 @@ fun PlaylistsScreen(vm: LibraryViewModel, tracks: List<Track>) {
     var creating by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         // Cabecera de pestaña, como Inicio, Biblioteca y Etiquetas: con TopBar parecía una subpantalla.
-        TabHeader("Listas", if (user.playlists.isEmpty()) "Automáticas y tuyas" else "${user.playlists.size} propias") {
-            IconButton(onClick = { creating = true }) { Icon(Icons.Default.Add, "Lista nueva", tint = Paper) }
+        TabHeader(
+            stringResource(R.string.library_lists_title),
+            if (user.playlists.isEmpty()) stringResource(R.string.library_lists_subtitle) else plural(R.plurals.library_own_lists, user.playlists.size),
+        ) {
+            IconButton(onClick = { creating = true }) { Icon(Icons.Default.Add, stringResource(R.string.library_new_playlist), tint = Paper) }
         }
         LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
-            item { SectionLabel("Automáticas") }
+            item { SectionLabel(stringResource(R.string.library_smart_section)) }
             items(SmartList.entries.toList()) { sl ->
                 val n = remember(tracks, user, sl) { sl.tracks(tracks, user).size }
                 ListRow(sl.icon(), sl.label, songs(n), dim = n == 0) { vm.push(Screen.Smart(sl)) }
             }
-            item { SectionLabel("Mis listas") }
+            item { SectionLabel(stringResource(R.string.library_my_lists)) }
             if (user.playlists.isEmpty()) item {
-                Text("Todavía no hay listas. Crea una con + o mantén pulsada una canción y elige «A una lista».",
+                Text(stringResource(R.string.library_lists_empty),
                     color = Muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
             }
             items(user.playlists, key = { it.id }) { pl ->
@@ -88,7 +93,7 @@ fun PlaylistsScreen(vm: LibraryViewModel, tracks: List<Track>) {
             }
         }
     }
-    if (creating) NameDialog("Lista nueva", confirm = "Crear", onDismiss = { creating = false }) { name ->
+    if (creating) NameDialog(stringResource(R.string.library_new_playlist), confirm = stringResource(R.string.library_create), onDismiss = { creating = false }) { name ->
         val id = UserStore.createPlaylist(name)
         creating = false
         vm.push(Screen.PlaylistView(id))
