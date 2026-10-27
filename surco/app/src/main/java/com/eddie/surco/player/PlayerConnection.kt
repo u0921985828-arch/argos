@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
@@ -31,7 +32,9 @@ class PlayerConnection(ctx: Context) {
     var shuffle by mutableStateOf(false); private set
     var repeat by mutableIntStateOf(Player.REPEAT_MODE_OFF); private set
     var speed by mutableFloatStateOf(1f); private set
-    /** Si la canción deja saltar. Mientras no se sabe la duración, sí (para que la barra no parpadee al empezar). */
+    /** Sentido del último paso de canción (1 siguiente o sola al acabar, -1 anterior): para la animación. */
+    var step by mutableIntStateOf(1); private set
+    /** Si la canción deja saltar. Mientras se prepara, sí (para que la barra no parpadee al empezar). */
     var seekable by mutableStateOf(true); private set
     /** La cola en el orden en que va a sonar (con aleatorio, el orden aleatorio). */
     var queue by mutableStateOf<List<QueueEntry>>(emptyList()); private set
@@ -39,6 +42,9 @@ class PlayerConnection(ctx: Context) {
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
             sync(player, events.containsAny(Player.EVENT_TIMELINE_CHANGED, Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED))
+        }
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) step = 1
         }
     }
 
@@ -59,7 +65,7 @@ class PlayerConnection(ctx: Context) {
         shuffle = p.shuffleModeEnabled
         repeat = p.repeatMode
         speed = p.playbackParameters.speed
-        seekable = p.isCurrentMediaItemSeekable || p.duration == C.TIME_UNSET
+        seekable = p.isCurrentMediaItemSeekable || (p.duration == C.TIME_UNSET && p.playbackState != Player.STATE_READY)
         if (queueChanged) queue = buildQueue(p)
     }
 
@@ -170,8 +176,8 @@ class PlayerConnection(ctx: Context) {
     }
 
     fun toggle() { controller?.let { if (it.isPlaying) it.pause() else { if (it.playbackState == Player.STATE_IDLE) it.prepare(); it.play() } } }
-    fun next() { controller?.seekToNext() }
-    fun prev() { controller?.seekToPrevious() }
+    fun next() { step = 1; controller?.seekToNext() }
+    fun prev() { step = -1; controller?.seekToPrevious() }
     fun seek(ms: Long) { controller?.seekTo(ms) }
     fun toggleShuffle() { controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled } }
     fun cycleRepeat() {

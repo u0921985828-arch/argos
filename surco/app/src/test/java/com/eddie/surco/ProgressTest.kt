@@ -1,6 +1,6 @@
 package com.eddie.surco
 
-import com.eddie.surco.data.seekSettled
+import com.eddie.surco.data.seekShown
 import com.eddie.surco.data.shownDuration
 import com.eddie.surco.data.songDirection
 import org.junit.Assert.assertEquals
@@ -15,10 +15,11 @@ class ProgressTest {
     }
 
     @Test fun laBarraEsperaAlSalto() {
-        assertEquals(false, seekSettled(90_000, 12_000, 100))
-        assertEquals(true, seekSettled(90_000, 90_300, 100))
-        // Un archivo que no deja saltar: a los 2 s la barra vuelve a lo que suena.
-        assertEquals(true, seekSettled(90_000, 12_000, 2_100))
+        // En local el mando ya está en el destino: se enseña lo suyo.
+        assertEquals(90_100L, seekShown(90_000, 90_100, 100, playing = true))
+        // Un aparato DLNA aún dice la posición de antes: destino más lo que ha sonado.
+        assertEquals(90_800L, seekShown(90_000, 12_000, 800, playing = true))
+        assertEquals(90_000L, seekShown(90_000, 12_000, 800, playing = false))
     }
 
     @Test fun sentidoDelCambio() {

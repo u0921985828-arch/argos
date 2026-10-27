@@ -140,8 +140,8 @@ fun SurcoSlider(
     Slider(
         value = value, onValueChange = onChange, modifier = modifier, enabled = enabled, valueRange = range, steps = steps,
         onValueChangeFinished = onFinished, interactionSource = source, colors = colors,
-        thumb = { SliderDefaults.Thumb(interactionSource = source, colors = colors, thumbSize = DpSize(20.dp, 20.dp)) },
-        track = { SliderDefaults.Track(sliderState = it, colors = colors, drawStopIndicator = null, drawTick = { _, _ -> }, thumbTrackGapSize = 0.dp) },
+        thumb = { SliderDefaults.Thumb(interactionSource = source, colors = colors, enabled = enabled, thumbSize = DpSize(20.dp, 20.dp)) },
+        track = { SliderDefaults.Track(sliderState = it, colors = colors, enabled = enabled, drawStopIndicator = null, drawTick = { _, _ -> }, thumbTrackGapSize = 0.dp) },
     )
 }
 

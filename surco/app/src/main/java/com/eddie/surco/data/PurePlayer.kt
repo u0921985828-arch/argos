@@ -189,11 +189,16 @@ fun gridSpacing(cols: Int): Pair<Int, Int> = when (gridColumns(cols)) { 2 -> 12 
  */
 fun shownDuration(playerMs: Long, libraryMs: Long): Long = if (playerMs > 0) playerMs else libraryMs.coerceAtLeast(0)
 
+/** Lo que se protege la barra tras soltarla (un aparato de «Enviar a» tarda en saltar). */
+const val SEEK_GRACE_MS = 2_000L
+
 /**
- * Tras soltar la barra se enseña el destino hasta que el reproductor llega a él (a menos de 1 s) o
- * pasan 2 s: sin esto la barra volvía un instante a donde estaba antes de saltar.
+ * Posición que enseña la barra [elapsedMs] después de saltar a [targetMs]: la del reproductor si
+ * ya está por allí; si aún dice la de antes (un aparato DLNA que tarda), el destino y lo que haya
+ * sonado desde entonces. Sin esto la barra volvía un instante a donde estaba antes de saltar.
  */
-fun seekSettled(targetMs: Long, posMs: Long, elapsedMs: Long): Boolean = abs(posMs - targetMs) < 1_000 || elapsedMs > 2_000
+fun seekShown(targetMs: Long, posMs: Long, elapsedMs: Long, playing: Boolean): Long =
+    if (abs(posMs - targetMs) <= 1_000 + elapsedMs) posMs else targetMs + if (playing) elapsedMs else 0
 
 /**
  * Hacia dónde va la animación al cambiar de canción, según el sitio de cada una en la cola (en el

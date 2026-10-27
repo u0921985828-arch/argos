@@ -9,8 +9,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
-import androidx.compose.animation.using
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -91,7 +89,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.material.icons.filled.GraphicEq
 import com.eddie.surco.data.parseKey
-import com.eddie.surco.data.seekSettled
+import com.eddie.surco.data.SEEK_GRACE_MS
+import com.eddie.surco.data.seekShown
 import com.eddie.surco.data.shownDuration
 import com.eddie.surco.data.songDirection
 import androidx.compose.ui.Modifier
@@ -134,6 +133,7 @@ import com.eddie.surco.data.isPlaceholder
 import com.eddie.surco.player.SleepTimer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlin.math.abs
 import kotlinx.coroutines.withContext
 import java.text.DecimalFormatSymbols
 import java.util.Locale
@@ -169,10 +169,15 @@ private fun SeekBar(vm: LibraryViewModel, track: Track) {
     var pending by remember(p.currentId) { mutableStateOf<Pair<Long, Long>?>(null) }
     LaunchedEffect(p.currentId, p.isPlaying, track.durationMs) {
         while (true) {
-            val now = p.positionMs
             dur = shownDuration(p.durationMs, track.durationMs)
-            pending?.let { (target, at) -> if (seekSettled(target, now, SystemClock.uptimeMillis() - at)) pending = null }
-            pos = pending?.first ?: now
+            var now = p.positionMs
+            pending?.let { (target, at) ->
+                val elapsed = SystemClock.uptimeMillis() - at
+                if (elapsed > SEEK_GRACE_MS) pending = null else now = seekShown(target, now, elapsed, p.isPlaying)
+            }
+            // Solo se repinta si avanza al menos un píxel de pista (~1/1500 de la canción): lisa sin
+            // recomponer la barra entera a 120 Hz.
+            if (abs(now - pos) >= (dur / 1500).coerceAtLeast(16)) pos = now
             if (p.isPlaying) withFrameMillis { } else delay(250)
         }
     }
@@ -208,13 +213,16 @@ private fun rememberSongDirection(vm: LibraryViewModel): Int {
     val at = p.queue.indexOfFirst { it.index == p.currentIndex }
     // No es estado: solo recuerda la posición anterior para el cálculo de abajo.
     val last = remember { intArrayOf(at) }
-    return remember(at) { songDirection(last[0], at, p.queue.size).also { last[0] = at } }
+    // Con dos canciones la posición no dice el sentido (dar la vuelta parece ir atrás): el último paso.
+    return remember(at, p.step) { (if (p.queue.size <= 2) p.step else songDirection(last[0], at, p.queue.size)).also { last[0] = at } }
 }
 
 /** Entrada de una canción nueva: desliza un tercio desde el lado de [dir] y funde. */
-private fun songChange(dir: Int): ContentTransform =
-    (slideInHorizontally(tween(320)) { it * dir / 3 } + fadeIn(tween(320))) togetherWith
-        (slideOutHorizontally(tween(320)) { -it * dir / 3 } + fadeOut(tween(200))) using SizeTransform(clip = false)
+private fun songChange(dir: Int) = ContentTransform(
+    slideInHorizontally(tween(320)) { it * dir / 3 } + fadeIn(tween(320)),
+    slideOutHorizontally(tween(320)) { -it * dir / 3 } + fadeOut(tween(200)),
+    sizeTransform = SizeTransform(clip = false),
+)
 
 /** «FLAC · 24 bits · 96 kHz · 2.304 kbps» */
 fun qualityLine(t: Track): String = listOfNotNull(
