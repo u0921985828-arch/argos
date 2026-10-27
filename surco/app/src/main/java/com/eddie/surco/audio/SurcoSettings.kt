@@ -59,6 +59,8 @@ data class Prefs(
     val homeExplore: Boolean = true,
     /** Portadas por fila en Biblioteca → Álbumes (2–5, se cambia pellizcando la cuadrícula). */
     val albumColumns: Int = 2,
+    /** Apartados de Biblioteca que se ven en carátulas (los demás, en lista): nombres de LibraryTab. */
+    val libraryGrid: Set<String> = setOf("ALBUMS"),
     /** Si una canción no trae letra, buscarla en LRCLIB (sale artista, título, álbum y duración). */
     val onlineLyrics: Boolean = false,
     /** Analizar BPM y tonalidad de las canciones que no los traen en las etiquetas. */
@@ -190,6 +192,7 @@ object SurcoSettings {
         put("accent", p.accent); put("techDetails", p.techDetails); put("keepScreenOn", p.keepScreenOn); put("usbBitPerfect", p.usbBitPerfect)
         put("homeRecent", p.homeRecent); put("homeAdded", p.homeAdded); put("homeTop", p.homeTop); put("homeExplore", p.homeExplore)
         put("albumColumns", p.albumColumns)
+        put("libraryGrid", JSONArray(p.libraryGrid.toList()))
         put("excluded", JSONArray(p.excludedFolders.toList())); put("onlineLyrics", p.onlineLyrics); put("analyze", p.analyze)
     }
 
@@ -226,6 +229,7 @@ object SurcoSettings {
             homeRecent = o.optBoolean("homeRecent", true), homeAdded = o.optBoolean("homeAdded", true),
             homeTop = o.optBoolean("homeTop", true), homeExplore = o.optBoolean("homeExplore", true),
             albumColumns = o.optInt("albumColumns", 2).coerceIn(ALBUM_COLUMNS),
+            libraryGrid = o.optJSONArray("libraryGrid")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() } ?: setOf("ALBUMS"),
             onlineLyrics = o.optBoolean("onlineLyrics", false),
             analyze = o.optBoolean("analyze", true),
             excludedFolders = o.optJSONArray("excluded")?.let { a -> List(a.length()) { a.optString(it) }.filter { it.isNotBlank() }.toSet() } ?: emptySet(),

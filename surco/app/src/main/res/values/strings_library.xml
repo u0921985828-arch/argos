@@ -108,4 +108,6 @@
     <string name="library_create">Create</string>
     <string name="library_zoom_in">Bigger covers</string>
     <string name="library_zoom_out">Smaller covers</string>
+    <string name="library_view_grid">Show as covers</string>
+    <string name="library_view_list">Show as list</string>
 </resources>

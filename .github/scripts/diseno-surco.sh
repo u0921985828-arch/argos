@@ -98,6 +98,7 @@ back; ui; grep -q 'content-desc="Atrás"' ui.xml && back
 
 ui; tap "Biblioteca"; sleep 2; cap biblioteca-albumes
 tapre "Canciones"; cap biblioteca-canciones
+ui; tap "Ver en carátulas" && { sleep 2; cap biblioteca-canciones-caratulas; ui; tap "Ver en lista"; sleep 1; }
 tap "Más opciones"; sleep 1; cap menu-cancion
 back
 # Aviso propio: el corazón del minirreproductor saca la franja con «Deshacer» (dura 8 s).
@@ -105,6 +106,8 @@ ui; tap "Favorita"; cap aviso
 ui; tap "Deshacer" || true
 for _ in $(seq 1 10); do ui; grep -q 'text="Deshacer"\|text="Quitada de favoritas"\|text="Añadida a favoritas"' ui.xml || break; sleep 1; done
 ui; tapre "Artistas"; cap biblioteca-artistas
+# Cada apartado se puede ver en carátulas (y se recuerda): se mira y se deja como estaba.
+ui; tap "Ver en carátulas" && { sleep 2; cap biblioteca-artistas-caratulas; ui; tap "Ver en lista"; sleep 1; }
 ui; tapre "Carpetas"; cap biblioteca-carpetas
 ui; tapre "Álbumes"; sleep 1; ui; tap "Disco de Prueba"; sleep 2; cap album
 ui; tap "Ordenar"; cap album-ordenar; back

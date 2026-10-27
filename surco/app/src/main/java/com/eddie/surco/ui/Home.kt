@@ -67,6 +67,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.LazyGridScope
 import kotlin.math.roundToInt
 import com.eddie.surco.audio.ALBUM_COLUMNS
 import androidx.compose.ui.semantics.customActions
@@ -362,21 +368,60 @@ fun LibraryScreen(vm: LibraryViewModel, tracks: List<Track>) {
             "${songs(tracks.size)} · ${plural(R.plurals.library_albums, albums.size)} · ${plural(R.plurals.library_artists, artists.size)}",
         )
         SearchPill(vm)
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            LibraryTab.entries.forEach { t ->
-                // Sin recuento en el chip: con letra grande «Carpetas» quedaba fuera de pantalla.
-                FilterChip(
-                    selected = vm.libraryTab == t, onClick = { vm.libraryTab = t },
-                    label = { Text(t.label) },
-                    colors = chipColors(), modifier = Modifier.height(ChipHeight),
+        val prefs by SurcoSettings.state.collectAsState()
+        // Cada apartado recuerda si se ve en carátulas o en lista.
+        val grid = vm.libraryTab.name in prefs.libraryGrid
+        Row(Modifier.fillMaxWidth().padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(start = 16.dp, top = 4.dp, bottom = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                LibraryTab.entries.forEach { t ->
+                    // Sin recuento en el chip: con letra grande «Carpetas» quedaba fuera de pantalla.
+                    FilterChip(
+                        selected = vm.libraryTab == t, onClick = { vm.libraryTab = t },
+                        label = { Text(t.label) },
+                        colors = chipColors(), modifier = Modifier.height(ChipHeight),
+                    )
+                }
+            }
+            IconButton(onClick = {
+                val tab = vm.libraryTab.name
+                SurcoSettings.update { it.copy(libraryGrid = if (tab in it.libraryGrid) it.libraryGrid - tab else it.libraryGrid + tab) }
+            }) {
+                Icon(
+                    if (grid) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
+                    stringResource(if (grid) R.string.library_view_list else R.string.library_view_grid), tint = Muted,
                 )
             }
         }
+        val playAll: LazyGridScope.() -> Unit = {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    QuickAction(Icons.Default.PlayArrow, stringResource(R.string.library_play), Modifier.weight(1f)) { vm.player.play(songsSorted, 0) }
+                    QuickAction(Icons.Default.Shuffle, stringResource(R.string.library_shuffle), Modifier.weight(1f)) { vm.player.play(songsSorted, 0, shuffled = true) }
+                }
+            }
+        }
+        val albumSorts: @Composable () -> Unit = {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AlbumSort.entries.forEach { o ->
+                    FilterChip(selected = vm.albumSort == o, onClick = { vm.albumSort = o }, label = { Text(o.label) }, colors = chipColors(), modifier = Modifier.height(ChipHeight))
+                }
+            }
+        }
         when (vm.libraryTab) {
-            LibraryTab.SONGS -> WithLetters(songsSorted.map { it.title }, headerItems = 1) { state ->
+            // Canciones en carátulas: cada una con su portada (tocar suena, mantener abre su menú).
+            LibraryTab.SONGS -> if (grid) ZoomableGrid { cols, cell, gap, pad -> LazyVerticalGrid(
+                GridCells.Fixed(cols), contentPadding = PaddingValues(pad),
+                horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(gap + 4.dp),
+            ) {
+                playAll()
+                itemsIndexed(songsSorted, key = { _, t -> t.id }) { i, t ->
+                    CoverCard(t, cell, t.title, t.artist, round = false, playing = t.id == vm.player.currentId,
+                        onOpen = { vm.player.play(songsSorted, i) }, onLong = { vm.sheet = SongSheetState(t) }, modifier = Modifier.animateItem())
+                }
+            } } else WithLetters(songsSorted.map { it.title }, headerItems = 1) { state ->
               LazyColumn(state = state, contentPadding = PaddingValues(bottom = 16.dp)) {
                 item {
                     Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -389,23 +434,67 @@ fun LibraryScreen(vm: LibraryViewModel, tracks: List<Track>) {
                 }
               }
             }
-            LibraryTab.ALBUMS -> ZoomableGrid { cols, cell, gap, pad -> LazyVerticalGrid(
+            LibraryTab.ALBUMS -> if (grid) ZoomableGrid { cols, cell, gap, pad -> LazyVerticalGrid(
                 GridCells.Fixed(cols), contentPadding = PaddingValues(pad),
                 horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(gap + 4.dp),
             ) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        AlbumSort.entries.forEach { o ->
-                            FilterChip(selected = vm.albumSort == o, onClick = { vm.albumSort = o }, label = { Text(o.label) }, colors = chipColors(), modifier = Modifier.height(ChipHeight))
-                        }
-                    }
-                }
+                item(span = { GridItemSpan(maxLineSpan) }) { albumSorts() }
                 if (albums.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { Text(stringResource(R.string.library_no_albums), color = Muted) }
                 items(albums, key = { it.bucket.key }) { g -> AlbumCard(vm, g, size = cell, modifier = Modifier.animateItem()) }
-            } }
-            LibraryTab.ARTISTS -> GroupList(vm, TagField.ARTIST, artists, round = true)
-            LibraryTab.FOLDERS -> GroupList(vm, TagField.FOLDER, folders, round = false)
+            } } else GroupList(vm, TagField.ALBUM, albums, round = false, header = albumSorts)
+            LibraryTab.ARTISTS -> if (grid) GroupGrid(vm, TagField.ARTIST, artists, round = true) else GroupList(vm, TagField.ARTIST, artists, round = true)
+            LibraryTab.FOLDERS -> if (grid) GroupGrid(vm, TagField.FOLDER, folders, round = false) else GroupList(vm, TagField.FOLDER, folders, round = false)
         }
+    }
+}
+
+/** Artistas o carpetas en carátulas, en la misma cuadrícula que se pellizca que los álbumes. */
+@Composable
+private fun GroupGrid(vm: LibraryViewModel, field: TagField, groups: List<Group>, round: Boolean) = ZoomableGrid { cols, cell, gap, pad ->
+    LazyVerticalGrid(
+        GridCells.Fixed(cols), contentPadding = PaddingValues(pad),
+        horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(gap + 4.dp),
+    ) {
+        items(groups, key = { it.bucket.key }) { g ->
+            CoverCard(g.tracks.first(), cell, g.bucket.label, songs(g.tracks.size), round = round, playing = false,
+                onOpen = { vm.openTag(field, g.bucket.key, g.bucket.label) }, onLong = null,
+                onPlay = { vm.player.play(g.tracks.inAlbumOrder(), 0) }, modifier = Modifier.animateItem())
+        }
+    }
+}
+
+/**
+ * Una carátula de la cuadrícula: portada (redonda para artistas), título y subtítulo. Grande, con
+ * el botón de reproducir encima si lo tiene; pequeña (4–5 por fila), sin él y con la letra menor,
+ * como las de los álbumes.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun CoverCard(
+    art: Track, size: Dp, title: String, subtitle: String, round: Boolean, playing: Boolean,
+    onOpen: () -> Unit, onLong: (() -> Unit)?, onPlay: (() -> Unit)? = null, modifier: Modifier = Modifier,
+) {
+    val small = size < 110.dp
+    val corner = if (round) size / 2 else if (small) 8.dp else 12.dp
+    Column(
+        modifier.width(size).clip(RoundedCornerShape(if (round) 12.dp else corner))
+            .combinedClickable(onClick = onOpen, onLongClick = onLong),
+        horizontalAlignment = if (round) Alignment.CenterHorizontally else Alignment.Start,
+    ) {
+        Box {
+            Art(art, size, corner = corner, modifier = Modifier.size(size))
+            if (onPlay != null && !small) FilledIconButton(
+                onClick = onPlay,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).size(48.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(containerColor = Copper, contentColor = Ink),
+            ) { Icon(Icons.Default.PlayArrow, stringResource(R.string.library_play_item, title)) }
+        }
+        Text(title, color = if (playing) Copper else Paper, fontSize = if (small) 12.sp else 14.sp, fontWeight = FontWeight.SemiBold,
+            maxLines = if (small) 1 else 2, overflow = TextOverflow.Ellipsis, lineHeight = if (small) 15.sp else 17.sp,
+            textAlign = if (round) TextAlign.Center else TextAlign.Start,
+            modifier = Modifier.padding(top = if (small) 4.dp else 6.dp, start = 2.dp, end = 2.dp))
+        Text(subtitle, color = Muted, fontSize = if (small) 11.sp else 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 2.dp))
     }
 }
 
@@ -467,8 +556,11 @@ private fun ZoomableGrid(content: @Composable (cols: Int, cell: Dp, gap: Dp, pad
 }
 
 @Composable
-private fun GroupList(vm: LibraryViewModel, field: TagField, groups: List<Group>, round: Boolean) = WithLetters(groups.map { it.bucket.label }) { state ->
+private fun GroupList(
+    vm: LibraryViewModel, field: TagField, groups: List<Group>, round: Boolean, header: (@Composable () -> Unit)? = null,
+) = WithLetters(groups.map { it.bucket.label }, headerItems = if (header != null) 1 else 0) { state ->
     LazyColumn(state = state, contentPadding = PaddingValues(vertical = 8.dp)) {
+        if (header != null) item { Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) { header() } }
         items(groups, key = { it.bucket.key }) { g ->
             Row(
                 Modifier.fillMaxWidth().clickable { vm.openTag(field, g.bucket.key, g.bucket.label) }.padding(horizontal = 16.dp, vertical = 8.dp),

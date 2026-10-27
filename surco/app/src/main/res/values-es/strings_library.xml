@@ -113,4 +113,6 @@
     <string name="library_create">Crear</string>
     <string name="library_zoom_in">Portadas más grandes</string>
     <string name="library_zoom_out">Portadas más pequeñas</string>
+    <string name="library_view_grid">Ver en carátulas</string>
+    <string name="library_view_list">Ver en lista</string>
 </resources>
