@@ -356,20 +356,6 @@ adb logcat -d > logcat.txt || true
 adb shell dumpsys media.audio_flinger > flinger.txt 2>/dev/null || true
 grep -o "Surco salida: .*" salida.txt | sort -u || true
 
-# --- Mosaico de ajustes rápidos: pulsarlo pausa lo que suena y volver a pulsarlo lo reanuda. ---
-TILE="$PKG/.player.PlayTile"
-adb shell cmd statusbar add-tile "$TILE" >/dev/null 2>&1 || true
-sleep 1
-e=$(estado); echo "antes del mosaico: $e"
-adb shell cmd statusbar click-tile "$TILE"; sleep 3
-e=$(estado); echo "tras pulsar el mosaico: $e"
-echo "$e" | grep -qE 'state=(PAUSED|2)|\(2\)' || fallo "el mosaico no pausó ($e)"
-adb shell cmd statusbar click-tile "$TILE"; sleep 3
-e=$(estado); echo "tras pulsarlo otra vez: $e"
-echo "$e" | grep -qE 'state=(PLAYING|3)|\(3\)' || fallo "el mosaico no reanudó ($e)"
-adb shell cmd statusbar collapse; adb shell cmd statusbar remove-tile "$TILE" >/dev/null 2>&1 || true
-cayo "con el mosaico"
-
 # --- Accesos directos del icono: «Buscar» abre el buscador y «Mezclar todo» pone todo en aleatorio. ---
 adb shell input keyevent KEYCODE_MEDIA_PAUSE; sleep 1
 adb shell am start -a com.eddie.surco.action.SEARCH -n "$PKG/.MainActivity" >/dev/null; sleep 3; ui
@@ -378,8 +364,24 @@ adb shell input keyevent KEYCODE_BACK; sleep 1
 adb shell am start -a com.eddie.surco.action.SHUFFLE_ALL -n "$PKG/.MainActivity" >/dev/null; sleep 5
 e=$(estado); echo "acceso directo «Mezclar todo»: $e"
 echo "$e" | grep -qE 'state=(PLAYING|3)|\(3\)' || fallo "el acceso directo «Mezclar todo» no puso música ($e)"
-adb shell input keyevent KEYCODE_MEDIA_PAUSE; sleep 2
 cayo "con los accesos directos"
+
+# --- Mosaico de ajustes rápidos (con la música de «Mezclar todo» sonando): pulsarlo pausa y
+# volver a pulsarlo reanuda. ---
+TILE="$PKG/.player.PlayTile"
+adb shell cmd statusbar add-tile "$TILE" >/dev/null 2>&1 || true
+sleep 1
+adb shell cmd statusbar click-tile "$TILE"; sleep 3
+e=$(estado); echo "tras pulsar el mosaico: $e"
+echo "$e" | grep -qE 'state=(PAUSED|2)|\(2\)' || fallo "el mosaico no pausó ($e)"
+adb shell cmd statusbar click-tile "$TILE"; sleep 3
+e=$(estado); echo "tras pulsarlo otra vez: $e"
+echo "$e" | grep -qE 'state=(PLAYING|3)|\(3\)' || fallo "el mosaico no reanudó ($e)"
+adb shell cmd statusbar collapse; adb shell cmd statusbar remove-tile "$TILE" >/dev/null 2>&1 || true
+adb shell input keyevent KEYCODE_MEDIA_PAUSE; sleep 2
+cayo "con el mosaico"
+# «Mezclar todo» deja «Sonando» abierta: se cierra para lo siguiente.
+ui; tap "Cerrar" || adb shell input keyevent KEYCODE_BACK; sleep 1
 
 # --- Editor de etiquetas: cambiar el título de «Prueba Tres» (FLAC) con el permiso del sistema
 # («Allow»), comprobarlo en MediaStore y dejarlo como estaba. ---
@@ -398,7 +400,13 @@ edita() {  # $1 = teclas para el título (texto a añadir o borrados); $2 = tít
     sleep 1; adb shell input keyevent KEYCODE_BACK; sleep 1; ui  # cierra el teclado
     tap "Guardar" || fallo "no encuentro «Guardar» en el editor"
     ok=""
-    for _ in $(seq 1 10); do sleep 1; ui; if tap "Allow"; then ok=1; break; fi; grep -q 'text="Etiquetas guardadas"' ui.xml && { ok=1; break; }; done
+    # Sale el permiso del sistema («Allow») o, si ya se dio, se guarda sin preguntar.
+    for _ in $(seq 1 10); do
+        sleep 1; ui
+        if tap "Allow"; then ok=1; break; fi
+        grep -q 'text="Etiquetas guardadas"' ui.xml && { ok=1; break; }
+        mstitulo | grep -q "title=$2$\|title=$2," && { ok=1; break; }
+    done
     [ -n "$ok" ] || fallo "no salió el permiso del sistema para escribir el archivo"
     for _ in $(seq 1 15); do sleep 1; mstitulo | grep -q "title=$2$\|title=$2," && return 0; done
     mstitulo | head -8

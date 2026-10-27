@@ -153,6 +153,19 @@ class PlayerConnection(ctx: Context) {
         c.play()
     }
 
+    /**
+     * Antes de reescribir el archivo de [id] (editor de etiquetas): si es el que suena, el
+     * reproductor lo suelta (stop) para no leer un archivo a medio escribir. Devuelve cómo volver.
+     */
+    fun releaseIfCurrent(id: Long): (() -> Unit)? {
+        val c = controller ?: return null
+        if (c.currentMediaItem?.mediaId != id.toString()) return null
+        val pos = c.currentPosition
+        val playing = c.playWhenReady
+        c.stop()
+        return { c.prepare(); c.seekTo(pos); c.playWhenReady = playing }
+    }
+
     fun toggle() { controller?.let { if (it.isPlaying) it.pause() else { if (it.playbackState == Player.STATE_IDLE) it.prepare(); it.play() } } }
     fun next() { controller?.seekToNext() }
     fun prev() { controller?.seekToPrevious() }

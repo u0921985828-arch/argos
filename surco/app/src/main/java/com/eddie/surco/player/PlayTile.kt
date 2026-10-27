@@ -31,10 +31,11 @@ class PlayTile : TileService() {
                 openApp()
                 return@addListener
             }
-            if (c.isPlaying) c.pause() else c.play()
-            val playing = !c.isPlaying
+            // isPlaying cambia en el acto en el mando: se lee antes.
+            val was = c.isPlaying
+            if (was) c.pause() else c.play()
             c.release()
-            update(playing)
+            update(!was)
         }, ContextCompat.getMainExecutor(this))
     }
 

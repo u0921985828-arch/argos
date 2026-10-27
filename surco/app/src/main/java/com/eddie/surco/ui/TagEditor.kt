@@ -114,7 +114,11 @@ fun TagEditorScreen(vm: LibraryViewModel, id: Long, byId: Map<Long, Track>) {
         Saving.ids += id
         vm.viewModelScope.launch {
             try {
-                when (val r = withContext(Dispatchers.IO) { TagWriter.write(app, track, ch) }) {
+                // Si es la que suena, el reproductor suelta el archivo mientras se escribe y vuelve
+                // a cargarlo en el mismo punto (si no, leería un archivo a medio cambiar).
+                val resume = vm.player.releaseIfCurrent(id)
+                val result = try { withContext(Dispatchers.IO) { TagWriter.write(app, track, ch) } } finally { resume?.invoke() }
+                when (val r = result) {
                     is TagWriter.Result.Done -> {
                         vm.reread(track.copy(size = r.size))
                         Notice.show(Res.str(R.string.tags_saved))

@@ -172,6 +172,9 @@ class PlaybackService : MediaLibraryService() {
             }
             override fun onPlayerError(error: PlaybackException) = skipBroken(error)
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                // Cualquier pausa (cascos fuera, llamada, temporizador) corta también la cola del cruce:
+                // el segundo reproductor no tiene foco de audio ni se entera de los cascos.
+                if (!playWhenReady) stopGhost()
                 if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) {
                     SleepTimer.cancel()
                     exo.pauseAtEndOfMediaItems = false
@@ -211,7 +214,7 @@ class PlaybackService : MediaLibraryService() {
                             UserStore.toggleFavorite(id) // el colector de favoritas rehace los botones
                         }
                         // Por el FadingPlayer: al activarlo, la que suena va primero.
-                        CMD_SHUFFLE.customAction -> session.player.shuffleModeEnabled = !exo.shuffleModeEnabled
+                        CMD_SHUFFLE.customAction -> session.player.shuffleModeEnabled = !session.player.shuffleModeEnabled
                         else -> return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
                     }
                     return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
@@ -389,16 +392,19 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo) = session
 
+    /** El que suena ahora: el local o, con «Enviar a», el del aparato. */
+    private val active: Player get() = session?.player ?: exo
+
     /** Corazón y aleatorio según la canción y el modo de ahora. */
     private fun publishButtons() {
         val s = session ?: return
-        val fav = exo.currentMediaItem?.mediaId?.toLongOrNull()?.let { UserStore.isFavorite(it) } == true
-        val shuffle = exo.shuffleModeEnabled
+        val fav = active.currentMediaItem?.mediaId?.toLongOrNull()?.let { UserStore.isFavorite(it) } == true
+        val shuffle = active.shuffleModeEnabled
         s.setMediaButtonPreferences(ImmutableList.of(
             CommandButton.Builder(if (fav) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
                 .setDisplayName(getString(if (fav) R.string.n_unfav else R.string.n_fav))
                 .setSessionCommand(CMD_FAV)
-                .setEnabled(exo.currentMediaItem != null)
+                .setEnabled(active.currentMediaItem != null)
                 .build(),
             CommandButton.Builder(if (shuffle) CommandButton.ICON_SHUFFLE_ON else CommandButton.ICON_SHUFFLE_OFF)
                 .setDisplayName(getString(if (shuffle) R.string.n_shuffle_on else R.string.n_shuffle_off))
@@ -421,14 +427,15 @@ class PlaybackService : MediaLibraryService() {
     private fun publishWidget() {
         // El mosaico de ajustes rápidos también se entera (si está puesto).
         runCatching { TileService.requestListeningState(this, ComponentName(this, PlayTile::class.java)) }
-        val item = exo.currentMediaItem
-        val md = exo.mediaMetadata
+        val p = active
+        val item = p.currentMediaItem
+        val md = p.mediaMetadata
         SurcoWidget.publish(this, WidgetState(
             trackId = item?.mediaId?.toLongOrNull(),
             title = md.title?.toString() ?: item?.mediaMetadata?.title?.toString() ?: getString(R.string.app_name),
             artist = (md.artist ?: item?.mediaMetadata?.artist)?.toString()?.ifBlank { null } ?: getString(R.string.w_unknown),
             // Lo que va a pasar, no el instante: sin parpadeo entre pausa y reproducir al cargar.
-            playing = exo.playWhenReady && exo.playbackState != Player.STATE_ENDED && exo.playbackState != Player.STATE_IDLE,
+            playing = p.playWhenReady && p.playbackState != Player.STATE_ENDED && p.playbackState != Player.STATE_IDLE,
         ))
     }
 
@@ -466,17 +473,38 @@ class PlaybackService : MediaLibraryService() {
     private fun stopGhost() {
         ghost?.let { it.stop(); it.clearMediaItems() }
         ghostLen = 0L
+        ghostFor = null
+    }
+
+    /** Para qué canción está preparado el segundo reproductor (en pausa, un poco antes del cruce). */
+    private var ghostFor: String? = null
+
+    /**
+     * Prepara la cola del cruce un par de segundos antes, en pausa: abrir el archivo, el
+     * decodificador y su AudioTrack lleva 100–300 ms, y sin esto el cruce empezaba con un hueco.
+     */
+    private fun prepareGhost() {
+        val item = exo.currentMediaItem ?: return
+        if (ghostFor == item.mediaId) return
+        val g = ghostPlayer()
+        g.volume = 0f
+        g.setMediaItem(item, exo.currentPosition)
+        g.playbackParameters = exo.playbackParameters
+        g.playWhenReady = false
+        g.prepare()
+        ghostFor = item.mediaId
     }
 
     /** La que suena sigue en el segundo reproductor y el principal pasa ya a la siguiente. */
     private fun startOverlap(remainingMs: Long) {
         val item = exo.currentMediaItem ?: return
-        val g = ghostPlayer()
+        if (ghostFor != item.mediaId) prepareGhost()
+        val g = ghost ?: return
         ghostVol = exo.volume
         g.volume = ghostVol
-        g.setMediaItem(item, exo.currentPosition)
-        g.playbackParameters = exo.playbackParameters
-        g.prepare(); g.play()
+        // Donde va ahora la principal (el reproductor preparado está unos segundos atrás).
+        g.seekTo(exo.currentPosition)
+        g.play()
         ghostStart = SystemClock.elapsedRealtime(); ghostLen = remainingMs
         overlapping = true
         exo.seekToNextMediaItem()
@@ -505,9 +533,13 @@ class PlaybackService : MediaLibraryService() {
                 busy = busy || nearEnd || (xfadeIn && pos < fadeMs + 600)
                 val out = nearEnd && fadesOut(p)
                 if (nearEnd) lastFadedOut = out
-                // Al llegar al cruce, las dos a la vez (no con «parar al acabar esta canción»).
+                // Al llegar al cruce, las dos a la vez (no con «parar al acabar esta canción»). Antes,
+                // la cola se deja preparada; se cruza cuando está lista (o ya al final, si no llega).
                 val f = min(fadeMs, dur / 4)
-                if (out && ghostLen == 0L && dur - pos <= f && dur - pos > 200 && !SleepTimer.endOfTrack.value) {
+                val crossing = out && ghostLen == 0L && !SleepTimer.endOfTrack.value
+                if (crossing && dur - pos <= f + 2_500) prepareGhost()
+                val ready = ghost?.playbackState == Player.STATE_READY
+                if (crossing && dur - pos <= f && dur - pos > 200 && (ready || dur - pos < 600)) {
                     startOverlap(dur - pos)
                     0f // la que entra empieza en silencio y sube en las vueltas siguientes
                 } else crossfadeGain(pos, dur, fadeMs, xfadeIn, out)
@@ -645,7 +677,25 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    // Con «Enviar a» la sesión cambia de reproductor: el widget, el mosaico y los botones de la
+    // notificación siguen al nuevo (el local ya los avisa desde su propio oyente).
+    private var watched: Player? = null
+    private val remoteListener = object : Player.Listener {
+        override fun onEvents(player: Player, events: Player.Events) { publishWidget(); publishButtons() }
+    }
+
+    private fun followActive() {
+        val p = session?.player ?: return
+        val remote = p.takeIf { it !is FadingPlayer }
+        if (remote === watched) return
+        watched?.removeListener(remoteListener)
+        watched = remote
+        remote?.addListener(remoteListener)
+        publishWidget(); publishButtons()
+    }
+
     private fun onTick() {
+        followActive()
         // Escuchas: cuenta al pasar la mitad (o 4 minutos), como Last.fm.
         val id = exo.currentMediaItem?.mediaId
         val pos = exo.currentPosition

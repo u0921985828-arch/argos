@@ -55,7 +55,8 @@ class CrossfadeTest {
                 c.setMediaItems(listOf(uno.toMediaItem(), dos.toMediaItem()), 0, 12_000)
                 c.prepare(); c.play()
             }
-            Thread.sleep(2_000)
+            // La base, nada más empezar (la cola del cruce se prepara unos segundos antes de cruzar).
+            Thread.sleep(500)
             val base = players()
             var most = base
             var second = false
