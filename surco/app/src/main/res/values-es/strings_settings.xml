@@ -135,12 +135,12 @@
     <string name="settings_language_section">Idioma</string>
     <string name="settings_language_system">El del móvil</string>
     <string name="settings_usb_title">Bit-perfect por USB</string>
-    <string name="settings_usb_help">Con un DAC USB, Android suena cada canción a su frecuencia y sin tocarla (con el ecualizador, ReplayGain y la velocidad quitados). El volumen pasa a ser el del DAC.</string>
+    <string name="settings_usb_help">Con un DAC USB: cada canción a su frecuencia, sin tocarla. El volumen pasa al DAC.</string>
     <string name="settings_usb_old">Necesita Android 14 o posterior.</string>
     <string name="settings_privacy_lb">ListenBrainz está activado: cada escucha (artista, título, álbum y duración) se envía a listenbrainz.org con tu token.</string>
     <string name="settings_eq_per_output">Un ecualizador para cada salida</string>
-    <string name="settings_eq_per_output_help">El altavoz, los auriculares de cable y cada aparato Bluetooth o USB guardan su curva, y vuelve sola al conectarlos.</string>
+    <string name="settings_eq_per_output_help">Cada auricular, altavoz o DAC recuerda su curva.</string>
     <string name="settings_system_fx">Efectos de sonido del móvil</string>
-    <string name="settings_system_fx_help">Abre los efectos del fabricante (Xiaomi Sound, Dolby…) para Surco. Actúan después de Surco y se suman a su ecualizador; con bit-perfect por USB no actúan. No añaden bits que el archivo no tiene. El códec del Bluetooth (LDAC, aptX…) lo elige el móvil en los ajustes de Bluetooth.</string>
+    <string name="settings_system_fx_help">Xiaomi Sound, Dolby…: actúan después de Surco y no añaden bits.</string>
     <string name="settings_system_fx_none">Este móvil no tiene panel de efectos de sonido</string>
 </resources>

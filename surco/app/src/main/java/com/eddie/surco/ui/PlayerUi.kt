@@ -784,43 +784,49 @@ fun SongSheet(vm: LibraryViewModel, s: SongSheetState) {
                 }
             }
             // Desde «Sonando», primero lo de la escucha (a la vista sin desplegar la hoja).
+            // Acciones en dos columnas iguales: ordenadas y del mismo tamaño (en flujo libre quedaban a saltos).
             if (s.fromPlayer) {
                 Spacer(Modifier.height(14.dp))
-                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ActionChip(Icons.Default.Equalizer, stringResource(R.string.player_equalizer)) { close(); vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.Equalizer) }
-                    ActionChip(Icons.Default.Timer, stringResource(R.string.player_sleep_title)) { close(); vm.sleepOpen = true }
-                    ActionChip(Icons.Default.Speed, stringResource(R.string.player_speed)) { close(); vm.speedOpen = true }
-                }
+                ActionGrid(listOf(
+                    Act(Icons.Default.Equalizer, stringResource(R.string.player_equalizer)) { close(); vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.Equalizer) },
+                    Act(Icons.Default.Timer, stringResource(R.string.player_sleep_title)) { close(); vm.sleepOpen = true },
+                    Act(Icons.Default.Speed, stringResource(R.string.player_speed)) { close(); vm.speedOpen = true },
+                ))
                 SectionLabel(stringResource(R.string.player_this_song))
             } else Spacer(Modifier.height(14.dp))
-            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionChip(Icons.Default.SkipNext, stringResource(R.string.player_play_next)) {
+            val nextNotice = stringResource(R.string.player_play_next_notice)
+            val queued = stringResource(R.string.player_added_to_queue)
+            val viewQueue = stringResource(R.string.player_view_queue)
+            ActionGrid(buildList {
+                add(Act(Icons.Default.SkipNext, stringResource(R.string.player_play_next)) {
                     vm.player.playNext(listOf(track)); close()
-                    Notice.show(Res.str(R.string.player_play_next_notice), Res.str(R.string.player_view_queue)) { vm.queueOpen = true }
-                }
-                ActionChip(Icons.AutoMirrored.Filled.QueueMusic, stringResource(R.string.player_add_to_queue)) {
+                    Notice.show(nextNotice, viewQueue) { vm.queueOpen = true }
+                })
+                add(Act(Icons.AutoMirrored.Filled.QueueMusic, stringResource(R.string.player_add_to_queue)) {
                     vm.player.enqueue(listOf(track)); close()
-                    Notice.show(Res.str(R.string.player_added_to_queue), Res.str(R.string.player_view_queue)) { vm.queueOpen = true }
-                }
-                ActionChip(Icons.AutoMirrored.Filled.PlaylistAdd, stringResource(R.string.player_to_playlist)) { vm.addTo = listOf(track); close() }
-                ActionChip(if (fav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, stringResource(if (fav) R.string.player_unfavorite_short else R.string.player_favorite)) {
+                    Notice.show(queued, viewQueue) { vm.queueOpen = true }
+                })
+                add(Act(Icons.AutoMirrored.Filled.PlaylistAdd, stringResource(R.string.player_to_playlist)) { vm.addTo = listOf(track); close() })
+                add(Act(if (fav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, stringResource(if (fav) R.string.player_unfavorite_short else R.string.player_favorite)) {
                     toggleFavorite(track)
-                }
-                if (track.album.isNotBlank()) ActionChip(Icons.Default.Album, stringResource(R.string.player_go_album)) { close(); vm.goToAlbum(track) }
-                if (track.artist.isNotBlank()) ActionChip(Icons.Default.Person, stringResource(R.string.player_go_artist)) { close(); vm.goToArtist(track) }
-                ActionChip(Icons.Default.Edit, stringResource(R.string.tags_edit)) { close(); vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.TagEditor(track.id)) }
+                })
+                if (track.album.isNotBlank()) add(Act(Icons.Default.Album, stringResource(R.string.player_go_album)) { close(); vm.goToAlbum(track) })
+                if (track.artist.isNotBlank()) add(Act(Icons.Default.Person, stringResource(R.string.player_go_artist)) { close(); vm.goToArtist(track) })
+                add(Act(Icons.Default.Edit, stringResource(R.string.tags_edit)) { close(); vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.TagEditor(track.id)) })
                 // Con BPM o tonalidad (de la etiqueta o del análisis): lo que suena bien detrás.
                 if (track.x("bpm").isNotBlank() || track.x("key").isNotBlank()) {
-                    ActionChip(Icons.Default.GraphicEq, stringResource(R.string.player_for_mixing)) { close(); vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.Compatible(track.id)) }
+                    add(Act(Icons.Default.GraphicEq, stringResource(R.string.player_for_mixing)) { close(); vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.Compatible(track.id)) })
                 }
                 if (s.playlistId != null && s.playlistIndex >= 0) {
-                    ActionChip(Icons.Default.Delete, stringResource(R.string.player_remove_from_playlist)) {
+                    val removed = stringResource(R.string.player_removed_from_playlist)
+                    val undo = stringResource(R.string.player_undo)
+                    add(Act(Icons.Default.Delete, stringResource(R.string.player_remove_from_playlist)) {
                         val pid: Long = s.playlistId; val at = s.playlistIndex
                         UserStore.removeFromPlaylist(pid, at); close()
-                        Notice.show(Res.str(R.string.player_removed_from_playlist), Res.str(R.string.player_undo)) { UserStore.insertIntoPlaylist(pid, at, track.id) }
-                    }
+                        Notice.show(removed, undo) { UserStore.insertIntoPlaylist(pid, at, track.id) }
+                    })
                 }
-            }
+            })
             val plays = user.plays[track.id] ?: 0
             if (plays > 0) Text(plural(R.plurals.player_played_times, plays), color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
             SectionLabel(stringResource(R.string.player_organize_by))
@@ -852,14 +858,30 @@ private fun StatusPill(icon: ImageVector, label: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ActionChip(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun ActionChip(icon: ImageVector, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Row(
-        Modifier.clip(RoundedCornerShape(12.dp)).background(Panel).clickable(onClick = onClick).heightIn(min = 44.dp).padding(horizontal = 12.dp, vertical = 8.dp),
+        modifier.clip(RoundedCornerShape(12.dp)).background(Panel).clickable(onClick = onClick).heightIn(min = 48.dp).padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, null, tint = Copper, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(8.dp))
-        Text(label, fontSize = 14.sp)
+        Icon(icon, null, tint = Muted, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(label, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** Una acción de menú: icono, nombre y qué hace. */
+private class Act(val icon: ImageVector, val label: String, val onClick: () -> Unit)
+
+/** Acciones en dos columnas del mismo ancho. */
+@Composable
+private fun ActionGrid(acts: List<Act>) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        acts.chunked(2).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { a -> ActionChip(a.icon, a.label, Modifier.weight(1f), a.onClick) }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
     }
 }
 

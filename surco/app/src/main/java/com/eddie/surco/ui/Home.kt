@@ -3,6 +3,11 @@ package com.eddie.surco.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -191,6 +196,10 @@ fun sortAlbums(list: List<Group>, sort: AlbumSort): List<Group> = when (sort) {
 
 private fun List<Track>.inAlbumOrder() = sortedWith(compareBy({ it.discNo }, { it.trackNo }, { it.title.lowercase() }))
 
+/** Reproducir sobre una portada: oscuro y translúcido, que no compita con la portada ni con los demás. */
+@Composable
+private fun coverPlayColors() = IconButtonDefaults.filledIconButtonColors(containerColor = Ink.copy(alpha = 0.72f), contentColor = Paper)
+
 /** Letra del nombre bajo la portada según su tamaño (a 8 por fila, pequeña pero ahí). */
 private fun cardTitleSize(tiny: Boolean, small: Boolean) = if (tiny) 10.sp else if (small) 12.sp else 14.sp
 private fun cardTitleLine(tiny: Boolean, small: Boolean) = if (tiny) 12.sp else if (small) 15.sp else 17.sp
@@ -210,7 +219,7 @@ private fun AlbumCard(vm: LibraryViewModel, g: Group, size: Dp = 148.dp, modifie
             if (!small) FilledIconButton(
                 onClick = { vm.player.play(g.tracks.inAlbumOrder(), 0) },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).size(48.dp),
-                colors = IconButtonDefaults.filledIconButtonColors(containerColor = Copper, contentColor = Ink),
+                colors = coverPlayColors(),
             ) { Icon(Icons.Default.PlayArrow, stringResource(R.string.library_play_item, g.bucket.label)) }
         }
         Text(g.bucket.label, fontSize = cardTitleSize(tiny, small), fontWeight = FontWeight.SemiBold, maxLines = if (small) 1 else 2,
@@ -378,28 +387,13 @@ fun LibraryScreen(vm: LibraryViewModel, tracks: List<Track>) {
     val folders = rememberOffMain(tracks, initial = emptyList()) { groupTracks(tracks, TagField.FOLDER).sortedBy { fold(it.bucket.label) } }
     val songsSorted = rememberOffMain(tracks, initial = emptyList()) { tracks.sortedBy { fold(it.title) } }
     Column(Modifier.fillMaxSize()) {
-        TabHeader(
-            stringResource(R.string.library_library),
-            "${songs(tracks.size)} · ${plural(R.plurals.library_albums, albums.size)} · ${plural(R.plurals.library_artists, artists.size)}",
-        )
-        SearchPill(vm)
         val prefs by SurcoSettings.state.collectAsState()
         // Cada apartado recuerda si se ve en carátulas o en lista.
         val grid = vm.libraryTab.name in prefs.libraryGrid
-        Row(Modifier.fillMaxWidth().padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Row(
-                Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(start = 16.dp, top = 4.dp, bottom = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                LibraryTab.entries.forEach { t ->
-                    // Sin recuento en el chip: con letra grande «Carpetas» quedaba fuera de pantalla.
-                    FilterChip(
-                        selected = vm.libraryTab == t, onClick = { vm.libraryTab = t },
-                        label = { Text(t.label) },
-                        colors = chipColors(), modifier = Modifier.height(ChipHeight),
-                    )
-                }
-            }
+        TabHeader(
+            stringResource(R.string.library_library),
+            "${songs(tracks.size)} · ${plural(R.plurals.library_albums, albums.size)} · ${plural(R.plurals.library_artists, artists.size)}",
+        ) {
             IconButton(onClick = {
                 val tab = vm.libraryTab.name
                 SurcoSettings.update { it.copy(libraryGrid = if (tab in it.libraryGrid) it.libraryGrid - tab else it.libraryGrid + tab) }
@@ -410,6 +404,29 @@ fun LibraryScreen(vm: LibraryViewModel, tracks: List<Track>) {
                 )
             }
         }
+        SearchPill(vm)
+        // Pestañas de texto a lo ancho, todas a la vista: los chips con desplazamiento cortaban
+        // «Carpetas» y se confundían con los de ordenar, que van debajo.
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+            LibraryTab.entries.forEach { t ->
+                val on = vm.libraryTab == t
+                Column(
+                    Modifier.weight(1f).heightIn(min = 48.dp).clip(RoundedCornerShape(8.dp))
+                        .selectable(selected = on, role = Role.Tab) { vm.libraryTab = t },
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+                ) {
+                    Text(
+                        t.label, color = if (on) Paper else Muted, fontSize = 14.sp,
+                        fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 2.dp),
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Box(Modifier.width(24.dp).height(2.dp).clip(RoundedCornerShape(1.dp)).background(if (on) Copper else Color.Transparent))
+                }
+            }
+        }
+        HorizontalDivider(color = Panel, modifier = Modifier.padding(horizontal = 16.dp))
+        Spacer(Modifier.height(8.dp))
         val playAll: LazyGridScope.() -> Unit = {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -502,7 +519,7 @@ private fun CoverCard(
             if (onPlay != null && !small) FilledIconButton(
                 onClick = onPlay,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).size(48.dp),
-                colors = IconButtonDefaults.filledIconButtonColors(containerColor = Copper, contentColor = Ink),
+                colors = coverPlayColors(),
             ) { Icon(Icons.Default.PlayArrow, stringResource(R.string.library_play_item, title)) }
         }
         Text(title, color = if (playing) Copper else Paper, fontSize = cardTitleSize(tiny, small), fontWeight = FontWeight.SemiBold,

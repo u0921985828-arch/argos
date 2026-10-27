@@ -61,7 +61,13 @@ val Muted = Color(0xFF8E939C)
 
 /** Un solo lenguaje de «seleccionado» para todos los chips: cobre con texto tinta. */
 @Composable
-fun chipColors() = FilterChipDefaults.filterChipColors(selectedContainerColor = Copper, selectedLabelColor = Ink)
+// Lo elegido con un velo del acento y la letra clara: con el chip relleno de color, cada fila de
+// opciones era una mancha y la pantalla no descansaba. El acento queda para la acción principal.
+@Composable
+fun chipColors() = FilterChipDefaults.filterChipColors(
+    selectedContainerColor = Copper.copy(alpha = 0.22f), selectedLabelColor = Paper,
+    selectedLeadingIconColor = Paper, labelColor = Muted,
+)
 /** Altura de chip: los de Material miden 32 dp; 40 es lo que se toca con el pulgar. */
 val ChipHeight = 40.dp
 

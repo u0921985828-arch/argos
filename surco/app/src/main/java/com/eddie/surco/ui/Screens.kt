@@ -128,7 +128,7 @@ private fun FieldCard(field: TagField, groups: List<Group>, modifier: Modifier, 
         modifier.clip(RoundedCornerShape(14.dp)).background(Panel).clickable(onClick = onClick).padding(14.dp),
     ) {
         Text(field.label, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 18.sp)
-        Text("${groups.size}", color = Copper, fontSize = 26.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+        Text("${groups.size}", color = Paper, fontSize = 26.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
         Text(top, color = Muted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 15.sp)
     }
 }
@@ -189,7 +189,7 @@ fun GroupsScreen(vm: LibraryViewModel, field: TagField, tracks: List<Track>) {
                         if (!showArt) {
                             Spacer(Modifier.height(5.dp))
                             Box(Modifier.fillMaxWidth().height(3.dp).clip(CircleShape).background(Panel2)) {
-                                Box(Modifier.fillMaxWidth(g.tracks.size / max.toFloat()).height(3.dp).background(Copper.copy(alpha = 0.7f)))
+                                Box(Modifier.fillMaxWidth(g.tracks.size / max.toFloat()).height(2.dp).background(Muted.copy(alpha = 0.35f)))
                             }
                         }
                     }
