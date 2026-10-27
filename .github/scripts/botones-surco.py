@@ -33,9 +33,11 @@ def log(s=""):
 
 
 def dump():
-    for i in range(10):
-        if i == 5:
-            sh("input", "keyevent", "KEYCODE_MEDIA_PAUSE")  # con la barra moviéndose, el volcado se cae
+    for i in range(15):
+        if i == 12:
+            # Último recurso: con la barra moviéndose el volcado del sistema se cae a veces. Pausar
+            # cambia lo que se mide, así que solo tras doce intentos.
+            sh("input", "keyevent", "KEYCODE_MEDIA_PAUSE")
         sh("rm", "-f", "/sdcard/b.xml")
         sh("uiautomator", "dump", "/sdcard/b.xml")
         x = subprocess.run(["adb", "exec-out", "cat", "/sdcard/b.xml"], capture_output=True).stdout.decode("utf-8", "ignore")
@@ -103,7 +105,8 @@ def texts(root):
 
 def at(root, marks):
     ts = texts(root)
-    sel = {n.get("text") for n in mine(root) if n.get("selected") == "true"}
+    # La pestaña elegida lleva «selected» en el contenedor y el nombre en el hijo.
+    sel = {label(n) for n in mine(root) if n.get("selected") == "true"}
     for m in marks:
         if m.startswith("!"):
             if any(m[1:] in t for t in ts):
