@@ -14,7 +14,8 @@ adb shell settings put system font_scale 1.0
 # Para que la prueba del widget pueda ponerlo como lo pone un lanzador.
 adb shell appwidget grantbind --package "$PKG" --user 0 || true
 adb logcat -c
-adb shell am instrument -w "$PKG.test/androidx.test.runner.AndroidJUnitRunner" > auto.txt 2>&1 || true
+# La de batería va aparte (bateria-surco.sh): necesita sus audios y tarda cinco minutos.
+adb shell am instrument -w -e notClass "$PKG.BatteryTest" "$PKG.test/androidx.test.runner.AndroidJUnitRunner" > auto.txt 2>&1 || true
 adb logcat -d > auto-logcat.txt || true
 grep -E "OK \(|FAILURES|Tests run" auto.txt || true
 grep -E "SurcoAuto" auto-logcat.txt | sed 's/^.*SurcoAuto: /  /' || true
