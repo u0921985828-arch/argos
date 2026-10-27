@@ -67,17 +67,19 @@ ms=$(arranque)
 nota "arranque en frío (biblioteca sin leer): ${ms:-?} ms"
 t0=$(date +%s)
 listo=""
-for _ in $(seq 1 200); do
+# Hasta que el escaneo dice que ha acabado (SurcoScan en el log): la pantalla puede enseñar ya las
+# 10.004 de MediaStore antes de que empiece a leer etiquetas.
+for _ in $(seq 1 300); do
     sleep 3
     [ -n "$(problemas)" ] && break
-    ui
-    if grep -qE "text=\"$total |text=\"${total:0:${#total}-3}[.,]${total: -3} " ui.xml && ! grep -qi 'Leyendo etiquetas' ui.xml; then listo=1; break; fi
+    if grep -q "SurcoScan" rendimiento-logcat.txt; then listo=1; break; fi
 done
 p=$(problemas); [ -n "$p" ] && { echo "$p"; fallo "Surco se cayó o se colgó leyendo $total canciones"; }
-nota "lectura de etiquetas de $total canciones: $(( $(date +%s) - t0 )) s"
-sleep 2; adb logcat -d > rendimiento-logcat.txt 2>/dev/null || true
+nota "lectura de etiquetas de $total canciones: $(( $(date +%s) - t0 )) s (con el arranque)"
 nota "  $(grep -m1 "SurcoScan" rendimiento-logcat.txt | sed 's/^.*SurcoScan: //')"
-[ -n "$listo" ] || { grep -o 'text="[^"]*"' ui.xml | head -20; fallo "Inicio no llegó a enseñar las $total canciones"; }
+[ -n "$listo" ] || fallo "el escaneo de $total canciones no acabó en 15 minutos"
+sleep 3; ui
+grep -qE "text=\"$total |text=\"${total:0:${#total}-3}[.,]${total: -3} " ui.xml || { grep -o 'text="[^"]*"' ui.xml | head -20; fallo "Inicio no enseña las $total canciones"; }
 
 # Segundo arranque: ya con la caché (lo normal cada día).
 adb shell am force-stop "$PKG"; sleep 2

@@ -154,8 +154,9 @@ class MiniHttp(private val bind: InetAddress? = null, private val maxClients: In
             send(out, method == "HEAD", src, headers["range"])
         } catch (_: IOException) {
             // El aparato colgó a mitad (lo hacen al sondear el archivo o al saltar): no es un error.
-        } catch (_: RuntimeException) {
-            // La fuente falló al abrirse (archivo borrado, sin permiso): la conexión se cierra sin más.
+        } catch (_: Exception) {
+            // La fuente falló (archivo borrado, sin permiso) o se está parando (hilo interrumpido):
+            // la conexión se cierra sin más y el servidor sigue.
         }
     }
 
@@ -213,14 +214,14 @@ class MiniHttp(private val bind: InetAddress? = null, private val maxClients: In
         /** Interpreta «Range» para un archivo de [length] bytes. Varios tramos o unidades raras: entero. */
         fun parseRange(header: String?, length: Long): ByteRange {
             if (header.isNullOrBlank() || length < 0) return ByteRange.Full
-            val h = header.trim()
+            val h = header.filterNot { it.isWhitespace() }
             if (!h.startsWith("bytes=", ignoreCase = true)) return ByteRange.Full
-            val spec = h.substring(6).trim()
+            val spec = h.substring(6)
             if (spec.contains(',')) return ByteRange.Full
             val dash = spec.indexOf('-')
             if (dash < 0) return ByteRange.Full
-            val a = spec.substring(0, dash).trim()
-            val b = spec.substring(dash + 1).trim()
+            val a = spec.substring(0, dash)
+            val b = spec.substring(dash + 1)
             if (a.isEmpty()) {
                 // «-n»: los últimos n bytes (las teles leen así las etiquetas del final).
                 val n = b.toLongOrNull() ?: return ByteRange.Full
@@ -228,7 +229,7 @@ class MiniHttp(private val bind: InetAddress? = null, private val maxClients: In
                 return ByteRange.Part(maxOf(0, length - n), length - 1)
             }
             val start = a.toLongOrNull() ?: return ByteRange.Full
-            val end = if (b.isEmpty()) length - 1 else b.toLongOrNull() ?: return ByteRange.Full
+            val end = if (b.isEmpty()) Long.MAX_VALUE else b.toLongOrNull() ?: return ByteRange.Full
             if (end < start) return ByteRange.Full
             if (start >= length) return ByteRange.Unsatisfiable
             return ByteRange.Part(start, minOf(end, length - 1))

@@ -381,4 +381,35 @@ echo "$e" | grep -qE 'state=(PLAYING|3)|\(3\)' || fallo "el acceso directo «Mez
 adb shell input keyevent KEYCODE_MEDIA_PAUSE; sleep 2
 cayo "con los accesos directos"
 
+# --- Editor de etiquetas: cambiar el título de «Prueba Tres» (FLAC) con el permiso del sistema
+# («Allow»), comprobarlo en MediaStore y dejarlo como estaba. ---
+mstitulo() { adb shell content query --uri content://media/external/audio/media --projection title 2>/dev/null | tr -d '\r'; }
+edita() {  # $1 = teclas para el título (texto a añadir o borrados); $2 = título esperado
+    ui; busca tres96 "$3" || return 1
+    tap "Más opciones" || fallo "no encuentro «Más opciones» en la búsqueda"
+    sleep 2
+    adb shell input swipe 540 1800 540 500 300; sleep 1; ui  # la hoja entera: el chip puede quedar abajo
+    tap "Editar etiquetas" || fallo "no hay «Editar etiquetas» en el menú de la canción"
+    sleep 2; ui
+    tapedit || fallo "no encuentro el campo del título en el editor"
+    sleep 1
+    adb shell input keyevent KEYCODE_MOVE_END
+    eval "$1"
+    sleep 1; adb shell input keyevent KEYCODE_BACK; sleep 1; ui  # cierra el teclado
+    tap "Guardar" || fallo "no encuentro «Guardar» en el editor"
+    ok=""
+    for _ in $(seq 1 10); do sleep 1; ui; if tap "Allow"; then ok=1; break; fi; grep -q 'text="Etiquetas guardadas"' ui.xml && { ok=1; break; }; done
+    [ -n "$ok" ] || fallo "no salió el permiso del sistema para escribir el archivo"
+    for _ in $(seq 1 15); do sleep 1; mstitulo | grep -q "title=$2$\|title=$2," && return 0; done
+    mstitulo | head -8
+    fallo "MediaStore no tiene el título «$2» tras guardar"
+}
+adb shell am start -n "$PKG/.MainActivity" >/dev/null; sleep 2
+edita 'adb shell input text "%sEditada"' "Prueba Tres Editada" "Prueba Tres"
+echo "editor de etiquetas: «Prueba Tres» → «Prueba Tres Editada» en el archivo y en MediaStore"
+adb shell input keyevent KEYCODE_BACK; sleep 1
+edita 'for _ in 1 2 3 4 5 6 7 8; do adb shell input keyevent KEYCODE_DEL; done' "Prueba Tres" "Prueba Tres Editada"
+echo "editor de etiquetas: vuelta a «Prueba Tres»"
+cayo "con el editor de etiquetas"
+
 echo "Surco 2.1: biblioteca, pestañas, seguir escuchando, etiquetas, favorita, cola, ecualizador, persistencia, FLAC y WAV en coma flotante y MP3 en 16 bits sin caerse"

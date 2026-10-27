@@ -152,9 +152,14 @@ private fun setValues(tag: Tag, changes: Map<TagKey, String>, lenient: Boolean =
         } catch (e: Exception) {
             if (lenient) continue else throw e
         }
-        // Si el formato no admite varios valores en ese campo, van juntos en uno.
-        runCatching { parts.drop(1).forEach { tag.addField(k.fieldKey, it) } }
-            .onFailure { tag.setField(k.fieldKey, parts.joinToString("; ")) }
+        if (parts.size < 2) continue
+        // Si el formato no admite varios valores en ese campo (WMA se queda con el último), van
+        // juntos en uno, como se leen.
+        val kept = runCatching {
+            parts.drop(1).forEach { tag.addField(k.fieldKey, it) }
+            tag.getAll(k.fieldKey).map { it.trim() }
+        }.getOrNull()
+        if (kept != parts) tag.setField(k.fieldKey, parts.joinToString("; "))
     }
 }
 
