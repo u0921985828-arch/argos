@@ -34,6 +34,8 @@ class PlayerConnection(ctx: Context) {
     var speed by mutableFloatStateOf(1f); private set
     /** Sentido del último paso de canción (1 siguiente o sola al acabar, -1 anterior): para la animación. */
     var step by mutableIntStateOf(1); private set
+    /** Si hay siguiente (con «repetir todo», siempre): sin ella, «Siguiente» se ve apagado y no engaña. */
+    var hasNext by mutableStateOf(false); private set
     /** Si la canción deja saltar. Mientras se prepara, sí (para que la barra no parpadee al empezar). */
     var seekable by mutableStateOf(true); private set
     /** La cola en el orden en que va a sonar (con aleatorio, el orden aleatorio). */
@@ -65,6 +67,7 @@ class PlayerConnection(ctx: Context) {
         shuffle = p.shuffleModeEnabled
         repeat = p.repeatMode
         speed = p.playbackParameters.speed
+        hasNext = p.hasNextMediaItem()
         seekable = p.isCurrentMediaItemSeekable || (p.duration == C.TIME_UNSET && p.playbackState != Player.STATE_READY)
         if (queueChanged) queue = buildQueue(p)
     }

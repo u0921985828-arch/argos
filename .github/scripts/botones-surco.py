@@ -33,7 +33,9 @@ def log(s=""):
 
 
 def dump():
-    for _ in range(5):
+    for i in range(10):
+        if i == 5:
+            sh("input", "keyevent", "KEYCODE_MEDIA_PAUSE")  # con la barra moviéndose, el volcado se cae
         sh("rm", "-f", "/sdcard/b.xml")
         sh("uiautomator", "dump", "/sdcard/b.xml")
         x = subprocess.run(["adb", "exec-out", "cat", "/sdcard/b.xml"], capture_output=True).stdout.decode("utf-8", "ignore")
@@ -42,7 +44,7 @@ def dump():
                 return ET.fromstring(x)
             except ET.ParseError:
                 pass
-        time.sleep(1)
+        time.sleep(0.5)
     return ET.fromstring("<hierarchy/>")
 
 
@@ -99,6 +101,21 @@ def texts(root):
     return {n.get("text") or n.get("content-desc") for n in mine(root)} - {"", None}
 
 
+def at(root, marks):
+    ts = texts(root)
+    sel = {n.get("text") for n in mine(root) if n.get("selected") == "true"}
+    for m in marks:
+        if m.startswith("!"):
+            if any(m[1:] in t for t in ts):
+                return False
+        elif m.startswith("sel:"):
+            if m[4:] not in sel:
+                return False
+        elif not any(m in t for t in ts):
+            return False
+    return True
+
+
 def foreground():
     out = sh("dumpsys", "activity", "activities")
     m = re.search(r"mResumedActivity.*? ([\w.]+)/", out) or re.search(r"topResumedActivity.*? ([\w.]+)/", out)
@@ -123,8 +140,9 @@ def crashed():
     c = subprocess.run(["adb", "logcat", "-d", "-b", "crash"], capture_output=True, text=True).stdout
     anr = "ANR in " + PKG in subprocess.run(["adb", "logcat", "-d", "-s", "ActivityManager"], capture_output=True, text=True).stdout
     subprocess.run(["adb", "logcat", "-b", "crash", "-c"]); subprocess.run(["adb", "logcat", "-c"])
-    bad = [l for l in c.splitlines() if PKG in l or "FATAL EXCEPTION" in l]
-    return ("\n".join(c.splitlines()[:25]) if bad else "") + ("ANR" if anr else "")
+    blocks = re.split(r"(?=FATAL EXCEPTION)", c)
+    ours = [b for b in blocks if "Process: " + PKG in b]
+    return ("\n".join(ours[0].splitlines()[:25]) if ours else "") + ("ANR" if anr else "")
 
 
 def start():
@@ -135,34 +153,35 @@ def start():
 
 # Pantallas: nombre, camino desde el arranque (textos a tocar) y un texto que la reconoce.
 SCREENS = [
-    ("Inicio", [], "Buscar en cualquier etiqueta"),
-    ("Biblioteca · Canciones", ["Biblioteca", "Canciones"], "Aleatorio"),
-    ("Biblioteca · Álbumes", ["Biblioteca", "Álbumes"], "A–Z"),
-    ("Biblioteca · Artistas", ["Biblioteca", "Artistas"], "Artistas"),
-    ("Biblioteca · Carpetas", ["Biblioteca", "Carpetas"], "Carpetas"),
-    ("Álbum", ["Biblioteca", "Álbumes", "Disco de Prueba"], "Ordenar"),
-    ("Menú de canción", ["Biblioteca", "Canciones", "@Más opciones"], "A la cola"),
-    ("Etiquetas", ["Etiquetas"], "PERSONAS"),
-    ("Grupo (Género)", ["Etiquetas", "Género"], "Más canciones"),
-    ("Listas", ["Listas"], "AUTOMÁTICAS"),
-    ("Favoritas", ["Listas", "Favoritas"], "Favoritas"),
-    ("Buscar", ["Buscar en cualquier etiqueta"], "Buscar en cualquier etiqueta"),
-    ("Ajustes", ["Ajustes"], "Tus escuchas"),
-    ("Ajustes · Sonido", ["Ajustes", "Sonido"], "Calidad de salida"),
-    ("Ecualizador", ["Ajustes", "Sonido", "Ecualizador y efectos"], "Usar el ecualizador"),
-    ("Ajustes · Reproducción", ["Ajustes", "Reproducción"], "Fundido entre canciones"),
-    ("Ajustes · Biblioteca", ["Ajustes", "Biblioteca"], "Biblioteca"),
-    ("Ajustes · Interfaz", ["Ajustes", "Interfaz"], "Color de acento"),
-    ("Ajustes · Tus escuchas", ["Ajustes", "Tus escuchas"], "Tus escuchas"),
-    ("Ajustes · Acerca de", ["Ajustes", "Acerca de Surco"], "Acerca de Surco"),
-    ("Sonando", ["#mini"], "SONANDO"),
-    ("Sonando · Más", ["#mini", "Más"], "ESTA CANCIÓN"),
-    ("Cola", ["#mini", "Cola"], "Vaciar"),
+    ("Inicio", [], ["Mezclar todo"]),
+    ("Biblioteca · Canciones", ["Biblioteca", "Canciones"], ["sel:Canciones", "Aleatorio"]),
+    ("Biblioteca · Álbumes", ["Biblioteca", "Álbumes"], ["sel:Álbumes", "Recientes"]),
+    ("Biblioteca · Artistas", ["Biblioteca", "Artistas"], ["sel:Artistas"]),
+    ("Biblioteca · Carpetas", ["Biblioteca", "Carpetas"], ["sel:Carpetas"]),
+    ("Álbum", ["Biblioteca", "Álbumes", "Disco de Prueba"], ["Ordenar", "Disco de Prueba"]),
+    ("Menú de canción", ["Biblioteca", "Canciones", "@Más opciones"], ["A la cola", "ORGANIZAR POR"]),
+    ("Etiquetas", ["Etiquetas"], ["PERSONAS"]),
+    ("Grupo (Género)", ["Etiquetas", "Género"], ["Más canciones"]),
+    ("Listas", ["Listas"], ["AUTOMÁTICAS"]),
+    ("Favoritas", ["Listas", "Favoritas"], ["Favoritas", "Aleatorio"]),
+    ("Buscar", ["Buscar en cualquier etiqueta"], ["Sin importar tildes"]),
+    ("Ajustes", ["Ajustes"], ["Tus escuchas", "Acerca de Surco"]),
+    ("Ajustes · Sonido", ["Ajustes", "Sonido"], ["Calidad de salida"]),
+    ("Ecualizador", ["Ajustes", "Sonido", "Ecualizador y efectos"], ["Usar el ecualizador"]),
+    ("Ajustes · Reproducción", ["Ajustes", "Reproducción"], ["Fundido entre canciones"]),
+    ("Ajustes · Biblioteca", ["Ajustes", "Biblioteca"], ["Volver a leer todas las etiquetas"]),
+    ("Ajustes · Interfaz", ["Ajustes", "Interfaz"], ["Color de acento"]),
+    ("Ajustes · Tus escuchas", ["Ajustes", "Tus escuchas"], ["Tus escuchas", "!Acerca de Surco"]),
+    ("Ajustes · Acerca de", ["Ajustes", "Acerca de Surco"], ["Surco solo usa internet"]),
+    ("Sonando", ["#mini"], ["SONANDO"]),
+    ("Sonando · Más", ["#mini", "Más"], ["ESTA CANCIÓN"]),
+    ("Cola", ["#mini", "Cola"], ["Vaciar"]),
 ]
 
 # Lo que se salta: la barra inferior y la flecha de volver (cambian de pantalla a propósito y
 # se prueban en el resto del recorrido) y los campos de texto.
-SKIP = {"Inicio", "Biblioteca", "Etiquetas", "Listas", "Atrás"}
+# El idioma también: en inglés el resto del recorrido no encontraría nada (se prueba aparte).
+SKIP = {"Inicio", "Biblioteca", "Etiquetas", "Listas", "Atrás", "El del móvil", "English", "Español"}
 
 
 def go(path, mark):
@@ -182,13 +201,13 @@ def go(path, mark):
         else:
             tap_text(step, root)
         time.sleep(2)
-    return mark in texts(dump())
+    return at(dump(), mark)
 
 
 def back_to(mark):
     for _ in range(3):
         root = dump()
-        if foreground() == PKG and mark in texts(root):
+        if foreground() == PKG and at(root, mark):
             return root
         sh("input", "keyevent", "KEYCODE_BACK"); time.sleep(1.5)
     return None
@@ -197,6 +216,7 @@ def back_to(mark):
 def main():
     crashes, dead, total = [], [], 0
     sh("settings", "put", "system", "font_scale", "1.0")
+    sh("cmd", "locale", "set-app-locales", PKG, "--locales", "es-ES")
     subprocess.run(["adb", "logcat", "-b", "crash", "-c"]); subprocess.run(["adb", "logcat", "-c"])
     for name, path, mark in SCREENS:
         if not go(path, mark):

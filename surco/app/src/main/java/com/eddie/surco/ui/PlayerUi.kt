@@ -333,7 +333,7 @@ fun MiniPlayer(vm: LibraryViewModel, track: Track) {
             IconButton(onClick = { vm.player.toggle() }) {
                 Icon(if (vm.player.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, stringResource(R.string.player_play_pause))
             }
-            IconButton(onClick = { vm.player.next() }) { Icon(Icons.Rounded.SkipNext, stringResource(R.string.player_next)) }
+            IconButton(onClick = { vm.player.next() }, enabled = vm.player.hasNext) { Icon(Icons.Rounded.SkipNext, stringResource(R.string.player_next)) }
         }
     }
 }
@@ -436,7 +436,7 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
                     onClick = { p.toggle() }, modifier = Modifier.size(72.dp),
                     colors = IconButtonDefaults.filledIconButtonColors(containerColor = Copper, contentColor = Ink),
                 ) { Icon(if (p.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, stringResource(R.string.player_play_pause), Modifier.size(40.dp)) }
-                IconButton(onClick = { p.next() }, Modifier.size(56.dp)) { Icon(Icons.Rounded.SkipNext, stringResource(R.string.player_next), Modifier.size(36.dp)) }
+                IconButton(onClick = { p.next() }, Modifier.size(56.dp), enabled = p.hasNext) { Icon(Icons.Rounded.SkipNext, stringResource(R.string.player_next), Modifier.size(36.dp)) }
                 IconButton(onClick = { p.cycleRepeat() }, Modifier.semantics {
                     stateDescription = repeatState
                 }) {
