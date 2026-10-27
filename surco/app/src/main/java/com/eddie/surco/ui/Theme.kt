@@ -36,6 +36,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.eddie.surco.R
+import com.eddie.surco.Res
 import com.eddie.surco.data.Track
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -163,7 +165,7 @@ fun fmtTime(ms: Long): String {
 
 fun fmtTotal(ms: Long): String {
     val min = ms / 60_000
-    return if (min >= 60) "${min / 60} h ${min % 60} min" else "$min min"
+    return if (min >= 60) Res.str(R.string.app_total_hm, min / 60, min % 60) else Res.str(R.string.app_total_m, min)
 }
 
-fun songs(n: Int) = if (n == 1) "1 canción" else "$n canciones"
+fun songs(n: Int): String = Res.plural(R.plurals.app_songs, n)

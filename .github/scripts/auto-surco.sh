@@ -9,6 +9,7 @@ set -euo pipefail
 PKG=com.eddie.surco
 adb install -r Surco-debug.apk >/dev/null
 adb install -r Surco-auto-test.apk >/dev/null
+adb shell cmd locale set-app-locales com.eddie.surco --locales es-ES  # las pruebas buscan los textos en español
 adb shell settings put system font_scale 1.0
 # Para que la prueba del widget pueda ponerlo como lo pone un lanzador.
 adb shell appwidget grantbind --package "$PKG" --user 0 || true

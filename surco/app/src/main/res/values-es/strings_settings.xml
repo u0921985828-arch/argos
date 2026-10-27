@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Ajustes (ui/SettingsScreens.kt, audio/SurcoSettings.kt). Español: el texto de siempre. -->
+    <string name="settings_title">Ajustes</string>
+    <string name="settings_subtitle">Todo lo que no está a la vista</string>
+    <string name="settings_sound_title">Sonido</string>
+    <string name="settings_sound_sub">Ecualizador, ReplayGain y calidad de salida</string>
+    <string name="settings_playback_title">Reproducción</string>
+    <string name="settings_playback_sub">Fundidos, velocidad, temporizador y silencios</string>
+    <string name="settings_library_title">Biblioteca</string>
+    <string name="settings_library_sub">Carpetas, letras de internet y audios cortos</string>
+    <string name="settings_look_title">Interfaz</string>
+    <string name="settings_look_sub">Color, Inicio, detalles técnicos y pantalla</string>
+    <string name="settings_stats_title">Tus escuchas</string>
+    <string name="settings_stats_sub">Lo que más suena, en cifras</string>
+    <string name="settings_about_title">Acerca de Surco</string>
+    <string name="settings_about_sub">Privacidad y versión</string>
+
+    <!-- Sonido -->
+    <string name="settings_eq">Ecualizador y efectos</string>
+    <string name="settings_eq_on">%1$s · tono, balance, crossfeed, limitador</string>
+    <string name="settings_eq_off">Apagado</string>
+    <string name="settings_rg_title">Normalizar volumen (ReplayGain)</string>
+    <string name="settings_rg_none">Ninguna canción trae la etiqueta REPLAYGAIN (se añade con foobar2000 o MusicBrainz Picard).</string>
+    <plurals name="settings_rg_some">
+        <item quantity="one">%1$d de %2$d canciones la traen; con ella todo suena %3$d dB más bajo para no saturar.</item>
+        <item quantity="other">%1$d de %2$d canciones la traen; con ella todo suena %3$d dB más bajo para no saturar.</item>
+    </plurals>
+    <string name="settings_rg_off">Apagado</string>
+    <string name="settings_rg_track">Por pista</string>
+    <string name="settings_rg_album">Por álbum</string>
+    <string name="settings_output_title">Calidad de salida</string>
+    <string name="settings_output_help">Sin pérdida (FLAC, ALAC, WAV) en coma flotante, sin recortar a 16 bits; con pérdida (MP3, AAC…) en 16 bits, bit a bit en neutro.</string>
+
+    <!-- Preajustes del ecualizador (el nombre guardado no cambia; esto es lo que se enseña) -->
+    <string name="settings_preset_flat">Plano</string>
+    <string name="settings_preset_bass">Graves</string>
+    <string name="settings_preset_bass_treble">Graves y agudos</string>
+    <string name="settings_preset_treble">Agudos</string>
+    <string name="settings_preset_vocal">Voz</string>
+    <string name="settings_preset_rock">Rock</string>
+    <string name="settings_preset_pop">Pop</string>
+    <string name="settings_preset_jazz">Jazz</string>
+    <string name="settings_preset_classical">Clásica</string>
+    <string name="settings_preset_electronic">Electrónica</string>
+    <string name="settings_preset_acoustic">Acústica</string>
+    <string name="settings_preset_night">Nocturno</string>
+    <string name="settings_preset_custom">Personalizado</string>
+
+    <!-- Reproducción -->
+    <string name="settings_crossfade">Fundido entre canciones</string>
+    <string name="settings_crossfade_help">Baja al final de una y sube al empezar la siguiente.</string>
+    <string name="settings_none">No</string>
+    <string name="settings_seconds">%1$d s</string>
+    <string name="settings_keep_albums">Respetar los discos sin pausas</string>
+    <string name="settings_keep_albums_help">Dentro del mismo disco no se funde: los directos y los discos conceptuales siguen de un tirón.</string>
+    <string name="settings_fade">Fundido al pausar y reanudar</string>
+    <string name="settings_fade_help">Sin golpes de volumen al pulsar pausa.</string>
+    <string name="settings_skip_silence">Saltar silencios</string>
+    <string name="settings_skip_silence_help">Recorta los silencios largos dentro de las pistas.</string>
+    <string name="settings_speed">Velocidad</string>
+    <string name="settings_speed_kept">%1$.2f× · tono mantenido</string>
+    <string name="settings_speed_free">%1$.2f× · tono libre</string>
+    <string name="settings_sleep">Temporizador de apagado</string>
+    <string name="settings_sleep_help">Pausa a los minutos que elijas o al acabar la canción</string>
+
+    <!-- Biblioteca -->
+    <string name="settings_short">Ocultar audios cortos</string>
+    <string name="settings_short_help">Notas de voz, tonos y avisos fuera de la biblioteca.</string>
+    <string name="settings_shorter_s">&lt; %1$d s</string>
+    <string name="settings_shorter_min">&lt; %1$d min</string>
+    <string name="settings_rescan">Volver a leer todas las etiquetas</string>
+    <string name="settings_rescan_help">Útil si has editado etiquetas con otro programa</string>
+    <string name="settings_analyze">Analizar BPM y tonalidad</string>
+    <plurals name="settings_analyzing">
+        <item quantity="one">Analizando: %1$d de %2$d canciones (unos segundos cada una, sin internet).</item>
+        <item quantity="other">Analizando: %1$d de %2$d canciones (unos segundos cada una, sin internet).</item>
+    </plurals>
+    <string name="settings_analyze_help">Para las canciones que no los traen en las etiquetas. Hechas: %1$d.</string>
+    <string name="settings_lrclib">Letras de internet (LRCLIB)</string>
+    <string name="settings_lrclib_help">Si una canción no trae letra, se busca en lrclib.net (muchas, sincronizadas). Solo sale artista, título, álbum y duración.</string>
+    <string name="settings_folders">Carpetas</string>
+    <string name="settings_folders_help">Las que se apagan no salen en la biblioteca ni en la búsqueda. No se borra nada.</string>
+
+    <!-- Interfaz -->
+    <string name="settings_accent">Color de acento</string>
+    <string name="settings_accent_help">«Del disco» lo saca de la portada que suena, siempre legible.</string>
+    <string name="settings_accent_fixed">Color fijo</string>
+    <string name="settings_accent_art">Del disco</string>
+    <string name="settings_accent_copper">Cobre</string>
+    <string name="settings_accent_blue">Azul</string>
+    <string name="settings_accent_green">Verde</string>
+    <string name="settings_accent_pink">Rosa</string>
+    <string name="settings_accent_violet">Violeta</string>
+    <string name="settings_accent_amber">Ámbar</string>
+    <string name="settings_now_playing_section">«Sonando»</string>
+    <string name="settings_tech">Detalles técnicos</string>
+    <string name="settings_tech_help">Formato, bits, frecuencia y cómo sale el audio, debajo del título.</string>
+    <string name="settings_screen_on">Pantalla encendida</string>
+    <string name="settings_screen_on_help">Mientras «Sonando» está abierta (para la letra, por ejemplo).</string>
+    <string name="settings_home_section">Inicio</string>
+    <string name="settings_home_recent">Escuchado hace poco</string>
+    <string name="settings_home_added">Añadido hace poco</string>
+    <string name="settings_home_top">Lo que más suena</string>
+    <string name="settings_home_explore">Explorar por etiquetas</string>
+
+    <!-- Tus escuchas -->
+    <plurals name="settings_stats_plays">
+        <item quantity="one">escucha</item>
+        <item quantity="other">escuchas</item>
+    </plurals>
+    <string name="settings_stats_hours">%1$d h</string>
+    <string name="settings_stats_minutes">%1$d min</string>
+    <string name="settings_stats_of_music">de música</string>
+    <plurals name="settings_stats_songs">
+        <item quantity="one">canción</item>
+        <item quantity="other">canciones</item>
+    </plurals>
+    <string name="settings_stats_empty">Todavía no hay escuchas: una canción cuenta al pasar de la mitad (o de 4 minutos).</string>
+    <string name="settings_stats_artists">Artistas</string>
+    <string name="settings_stats_songs_section">Canciones</string>
+
+    <!-- Acerca de -->
+    <string name="settings_privacy">Privacidad</string>
+    <string name="settings_privacy_online">Surco solo usa internet para buscar letras en lrclib.net (artista, título, álbum y duración). Las escuchas, favoritas, listas y ajustes se guardan solo en este móvil.</string>
+    <string name="settings_privacy_offline">Surco no usa internet. Las escuchas, favoritas, listas y ajustes se guardan solo en este móvil.</string>
+    <string name="settings_version">Versión</string>
+    <string name="settings_formats">Formatos</string>
+    <string name="settings_formats_help">MP3, AAC, FLAC, ALAC, Opus, Vorbis y WAV (también en coma flotante). Letras de la etiqueta LYRICS o de un .lrc al lado.</string>
+</resources>

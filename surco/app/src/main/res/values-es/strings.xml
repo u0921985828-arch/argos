@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Surco</string>
+    <string name="widget_desc">Lo que suena, con sus mandos</string>
+    <string name="widget_empty">Toca para elegir música</string>
+    <string name="w_play_pause">Reproducir o pausar</string>
+    <string name="w_prev">Anterior</string>
+    <string name="w_next">Siguiente</string>
+    <string name="w_fav">Favorita</string>
+    <string name="w_play">Reproducir</string>
+    <string name="w_pause">Pausar</string>
+    <string name="w_unfav">Quitar de favoritas</string>
+    <string name="w_unknown">Desconocido</string>
+    <string name="canal_musica">Música</string>
+    <string name="n_fav">Marcar favorita</string>
+    <string name="n_unfav">Quitar de favoritas</string>
+    <string name="n_shuffle_on">Desactivar aleatorio</string>
+    <string name="n_shuffle_off">Activar aleatorio</string>
+</resources>

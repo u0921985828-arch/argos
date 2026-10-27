@@ -88,6 +88,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -102,6 +103,8 @@ import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.media3.common.Player
 import com.eddie.surco.LibraryViewModel
+import com.eddie.surco.R
+import com.eddie.surco.Res
 import com.eddie.surco.SongSheetState
 import com.eddie.surco.audio.AudioOutput
 import com.eddie.surco.audio.SurcoSettings
@@ -111,6 +114,7 @@ import com.eddie.surco.data.Track
 import com.eddie.surco.data.UserStore
 import com.eddie.surco.data.buckets
 import com.eddie.surco.data.describe
+import com.eddie.surco.data.isPlaceholder
 import com.eddie.surco.player.SleepTimer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -158,19 +162,19 @@ fun outputLine(track: Track? = null): String? {
     val bits = track?.x("bits")?.takeIf { it.isNotBlank() }
     val fileBits = bits?.take(2)?.trim()?.toIntOrNull() ?: 0
     // Si el decodificador del móvil no da float, lo dice en vez de presumir de 24 bits.
-    if (!i.float && fileBits > 16) return "Salida: ${i.source} · $khz · el decodificador de este móvil entrega 16 bits"
+    if (!i.float && fileBits > 16) return stringResource(R.string.player_output_decoder16, i.source, khz)
     val src = if (track != null && bits != null && track.format.isNotBlank()) "$bits (${track.format})" else i.source
     val changes = listOfNotNull(
-        if (!prefs.dsp.neutral) (if (i.float) "con efectos" else "con efectos y dither") else null,
+        if (!prefs.dsp.neutral) stringResource(if (i.float) R.string.player_output_effects else R.string.player_output_effects_dither) else null,
         if (prefs.replayGain != com.eddie.surco.audio.ReplayGainMode.OFF) "ReplayGain" else null,
         if (prefs.speed != 1f) "%.2f×".format(Locale("es"), prefs.speed) else null,
     )
     val tail = when {
         changes.isNotEmpty() -> changes.joinToString(", ")
-        i.float -> "sin recortar a 16 bits"
-        else -> "bit a bit hasta el sistema"
+        i.float -> stringResource(R.string.player_output_untruncated)
+        else -> stringResource(R.string.player_output_bitperfect)
     }
-    return if (i.float) "Salida: $src → coma flotante · $khz · $tail" else "Salida: $src · $khz · $tail"
+    return stringResource(if (i.float) R.string.player_output_float else R.string.player_output_plain, src, khz, tail)
 }
 
 // ======================= MINI REPRODUCTOR =======================
@@ -178,6 +182,8 @@ fun outputLine(track: Track? = null): String? {
 fun MiniPlayer(vm: LibraryViewModel, track: Track) {
     val (pos, dur) = rememberPosition(vm)
     val fav = UserStore.state.collectAsState().value.favorites.contains(track.id)
+    val favState = stringResource(if (fav) R.string.player_fav_state_on else R.string.player_fav_state_off)
+    val unknown = stringResource(R.string.player_unknown_artist)
     Column(Modifier.fillMaxWidth().background(Panel)) {
         Box(Modifier.fillMaxWidth().height(2.dp).background(Panel2)) {
             Box(Modifier.fillMaxWidth(if (dur > 0) (pos / dur.toFloat()).coerceIn(0f, 1f) else 0f).height(2.dp).background(Copper))
@@ -199,15 +205,15 @@ fun MiniPlayer(vm: LibraryViewModel, track: Track) {
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(track.title, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
-                Text(track.artist.ifBlank { "Desconocido" }, color = Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(track.artist.ifBlank { unknown }, color = Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            IconButton(onClick = { toggleFavorite(track) }, Modifier.semantics { stateDescription = if (fav) "Marcada" else "Sin marcar" }) {
-                Icon(if (fav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, "Favorita", tint = if (fav) Copper else Muted)
+            IconButton(onClick = { toggleFavorite(track) }, Modifier.semantics { stateDescription = favState }) {
+                Icon(if (fav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, stringResource(R.string.player_favorite), tint = if (fav) Copper else Muted)
             }
             IconButton(onClick = { vm.player.toggle() }) {
-                Icon(if (vm.player.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "Reproducir o pausar")
+                Icon(if (vm.player.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, stringResource(R.string.player_play_pause))
             }
-            IconButton(onClick = { vm.player.next() }) { Icon(Icons.Default.SkipNext, "Siguiente") }
+            IconButton(onClick = { vm.player.next() }) { Icon(Icons.Default.SkipNext, stringResource(R.string.player_next)) }
         }
     }
 }
@@ -239,9 +245,9 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
 
     val header: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { vm.nowPlayingOpen = false }) { Icon(Icons.Default.KeyboardArrowDown, "Cerrar", Modifier.size(30.dp)) }
-            Text("SONANDO", color = Paper.copy(alpha = 0.7f), fontSize = 12.sp, letterSpacing = 1.6.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-            IconButton(onClick = { vm.sheet = SongSheetState(track, fromPlayer = true) }) { Icon(Icons.Default.MoreVert, "Más") }
+            IconButton(onClick = { vm.nowPlayingOpen = false }) { Icon(Icons.Default.KeyboardArrowDown, stringResource(R.string.player_close), Modifier.size(30.dp)) }
+            Text(stringResource(R.string.player_now_playing_header), color = Paper.copy(alpha = 0.7f), fontSize = 12.sp, letterSpacing = 1.6.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+            IconButton(onClick = { vm.sheet = SongSheetState(track, fromPlayer = true) }) { Icon(Icons.Default.MoreVert, stringResource(R.string.player_more)) }
         }
     }
     // La portada (o la letra) a [size]: lo decide el hueco que deja la pantalla, no un tamaño fijo.
@@ -276,7 +282,7 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
                     )
                 }
                 IconButton(onClick = { toggleFavorite(track) }) {
-                    Icon(if (fav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, if (fav) "Quitar de favoritas" else "Favorita",
+                    Icon(if (fav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, stringResource(if (fav) R.string.player_unfavorite else R.string.player_favorite),
                         tint = if (fav) Copper else Muted, modifier = Modifier.size(28.dp))
                 }
             }
@@ -300,21 +306,25 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
                 Text("−" + fmtTime((dur - pos).coerceAtLeast(0)), color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
             }
             Spacer(Modifier.height(6.dp))
+            val shuffleState = stringResource(if (p.shuffle) R.string.player_state_on else R.string.player_state_off)
+            val repeatState = stringResource(
+                when (p.repeat) { Player.REPEAT_MODE_ONE -> R.string.player_repeat_one; Player.REPEAT_MODE_ALL -> R.string.player_repeat_all; else -> R.string.player_state_off },
+            )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { p.toggleShuffle() }, Modifier.semantics { stateDescription = if (p.shuffle) "Activado" else "Desactivado" }) {
-                    Icon(Icons.Default.Shuffle, "Aleatorio", tint = if (p.shuffle) Copper else Muted)
+                IconButton(onClick = { p.toggleShuffle() }, Modifier.semantics { stateDescription = shuffleState }) {
+                    Icon(Icons.Default.Shuffle, stringResource(R.string.player_shuffle), tint = if (p.shuffle) Copper else Muted)
                 }
-                IconButton(onClick = { p.prev() }, Modifier.size(56.dp)) { Icon(Icons.Default.SkipPrevious, "Anterior", Modifier.size(36.dp)) }
+                IconButton(onClick = { p.prev() }, Modifier.size(56.dp)) { Icon(Icons.Default.SkipPrevious, stringResource(R.string.player_previous), Modifier.size(36.dp)) }
                 FilledIconButton(
                     onClick = { p.toggle() }, modifier = Modifier.size(72.dp),
                     colors = IconButtonDefaults.filledIconButtonColors(containerColor = Copper, contentColor = Ink),
-                ) { Icon(if (p.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "Reproducir o pausar", Modifier.size(40.dp)) }
-                IconButton(onClick = { p.next() }, Modifier.size(56.dp)) { Icon(Icons.Default.SkipNext, "Siguiente", Modifier.size(36.dp)) }
+                ) { Icon(if (p.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, stringResource(R.string.player_play_pause), Modifier.size(40.dp)) }
+                IconButton(onClick = { p.next() }, Modifier.size(56.dp)) { Icon(Icons.Default.SkipNext, stringResource(R.string.player_next), Modifier.size(36.dp)) }
                 IconButton(onClick = { p.cycleRepeat() }, Modifier.semantics {
-                    stateDescription = when (p.repeat) { Player.REPEAT_MODE_ONE -> "Una"; Player.REPEAT_MODE_ALL -> "Todas"; else -> "Desactivado" }
+                    stateDescription = repeatState
                 }) {
                     Icon(
-                        if (p.repeat == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat, "Repetir",
+                        if (p.repeat == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat, stringResource(R.string.player_repeat),
                         tint = if (p.repeat == Player.REPEAT_MODE_OFF) Muted else Copper,
                     )
                 }
@@ -322,13 +332,14 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
             Spacer(Modifier.height(10.dp))
             // Solo lo de cada día: letra y cola. Temporizador, velocidad, ecualizador y etiquetas, en «⋮».
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                ToolButton(Icons.Default.FormatQuote, "Letra", showLyrics) { showLyrics = !showLyrics }
-                ToolButton(Icons.AutoMirrored.Filled.QueueMusic, "Cola", false) { vm.queueOpen = true }
+                ToolButton(Icons.Default.FormatQuote, stringResource(R.string.player_lyrics), showLyrics) { showLyrics = !showLyrics }
+                ToolButton(Icons.AutoMirrored.Filled.QueueMusic, stringResource(R.string.player_queue), false) { vm.queueOpen = true }
             }
             // Lo que está activo y cambia cómo suena, a la vista y a un toque de quitarlo.
+            val stopsAtEnd = stringResource(R.string.player_sleep_pill_end)
             val active = buildList {
-                if (sleepTrack) add(Icons.Default.Timer to "Para al acabar")
-                else sleepEnd?.let { add(Icons.Default.Timer to "Para en ${sleepRemaining(it)}") }
+                if (sleepTrack) add(Icons.Default.Timer to stopsAtEnd)
+                else sleepEnd?.let { add(Icons.Default.Timer to stringResource(R.string.player_sleep_pill_in, sleepRemaining(it))) }
                 if (prefs.speed != 1f) add(Icons.Default.Speed to "%.2f×".format(Locale("es"), prefs.speed).replace(",00", ""))
             }
             if (active.isNotEmpty()) {
@@ -345,8 +356,9 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
     // no, llegaban a Inicio, que está debajo, y podían poner otra canción sin que se viera. Y un
     // nodo de accesibilidad que tapa la pantalla entera: sin él, TalkBack leía (y el volcado de
     // uiautomator traía) lo de Inicio que asomaba por esos huecos.
+    val pane = stringResource(R.string.player_now_playing)
     BoxWithConstraints(
-        Modifier.fillMaxSize().background(bg).pointerInput(Unit) {}.semantics { paneTitle = "Sonando" }
+        Modifier.fillMaxSize().background(bg).pointerInput(Unit) {}.semantics { paneTitle = pane }
             .statusBarsPadding().navigationBarsPadding(),
     ) {
         val w = maxWidth
@@ -413,9 +425,8 @@ fun LyricsPanel(vm: LibraryViewModel, track: Track, pos: Long, modifier: Modifie
         val l = lyrics
         if (l == null) {
             Text(
-                if (loaded) "Esta canción no tiene letra.\n\nSurco lee la etiqueta LYRICS del archivo (también en LRC sincronizado) y un .lrc con el mismo nombre" +
-                    (if (online) "; en lrclib.net tampoco está." else ".\n\nTambién puede buscarla en internet: Ajustes → Biblioteca → Letras de internet.")
-                else "Buscando la letra…",
+                if (loaded) stringResource(if (online) R.string.player_lyrics_none_online else R.string.player_lyrics_none_offline)
+                else stringResource(R.string.player_lyrics_searching),
                 color = Muted, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(24.dp),
             )
         } else if (l.synced) {
@@ -445,7 +456,7 @@ fun LyricsPanel(vm: LibraryViewModel, track: Track, pos: Long, modifier: Modifie
 private fun toggleFavorite(track: Track) {
     val was = UserStore.isFavorite(track.id)
     UserStore.toggleFavorite(track.id)
-    Notice.show(if (was) "Quitada de favoritas" else "Añadida a favoritas", "Deshacer") { UserStore.setFavorite(track.id, was) }
+    Notice.show(Res.str(if (was) R.string.player_fav_removed else R.string.player_fav_added), Res.str(R.string.player_undo)) { UserStore.setFavorite(track.id, was) }
 }
 
 // ======================= COLA =======================
@@ -461,14 +472,14 @@ fun QueueSheet(vm: LibraryViewModel, byId: Map<Long, Track>) {
     ) { Box { Column {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Cola", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.player_queue), fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Text("${songs(q.size)} · ${fmtTotal(q.sumOf { byId[it.trackId]?.durationMs ?: 0L })}", color = Muted, fontSize = 12.sp)
             }
-            TextButton(onClick = { saving = true }, enabled = q.isNotEmpty()) { Text("Guardar") }
-            TextButton(onClick = { p.clearUpcoming() }, enabled = q.size > 1) { Text("Vaciar") }
+            TextButton(onClick = { saving = true }, enabled = q.isNotEmpty()) { Text(stringResource(R.string.player_queue_save)) }
+            TextButton(onClick = { p.clearUpcoming() }, enabled = q.size > 1) { Text(stringResource(R.string.player_queue_clear)) }
         }
         if (p.shuffle) {
-            Text("En aleatorio la cola sale en el orden en que va a sonar. Para moverlas, quita el aleatorio.",
+            Text(stringResource(R.string.player_queue_shuffle_note),
                 color = Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
         }
         val state = rememberLazyListState()
@@ -484,13 +495,15 @@ fun QueueSheet(vm: LibraryViewModel, byId: Map<Long, Track>) {
                 val t = byId[e.trackId]
                 val dragging = dragFrom == pos
                 val current = e.index == p.currentIndex
+                val moveUp = stringResource(R.string.player_queue_move_up)
+                val moveDown = stringResource(R.string.player_queue_move_down)
                 Row(
                     Modifier.fillMaxWidth().height(60.dp).zIndex(if (dragging) 1f else 0f)
                         .semantics {
                             // Con TalkBack no se puede arrastrar: subir y bajar como acciones.
                             if (!p.shuffle) customActions = listOfNotNull(
-                                if (pos > 0) CustomAccessibilityAction("Subir") { p.move(e.index, q[pos - 1].index); true } else null,
-                                if (pos < q.lastIndex) CustomAccessibilityAction("Bajar") { p.move(e.index, q[pos + 1].index); true } else null,
+                                if (pos > 0) CustomAccessibilityAction(moveUp) { p.move(e.index, q[pos - 1].index); true } else null,
+                                if (pos < q.lastIndex) CustomAccessibilityAction(moveDown) { p.move(e.index, q[pos + 1].index); true } else null,
                             )
                         }
                         .graphicsLayer { translationY = if (dragging) dragDy else 0f }
@@ -501,7 +514,7 @@ fun QueueSheet(vm: LibraryViewModel, byId: Map<Long, Track>) {
                 ) {
                     if (!p.shuffle) {
                         Icon(
-                            Icons.Default.DragHandle, "Mover", tint = Muted,
+                            Icons.Default.DragHandle, stringResource(R.string.player_queue_drag), tint = Muted,
                             modifier = Modifier.size(40.dp).padding(8.dp).pointerInput(e.index) {
                                 detectVerticalDragGestures(
                                     onDragStart = { dragFrom = pos; dragDy = 0f },
@@ -529,9 +542,9 @@ fun QueueSheet(vm: LibraryViewModel, byId: Map<Long, Track>) {
                     if (!current) IconButton(onClick = {
                         p.removeAt(e.index)
                         // En aleatorio no volvería a su sitio del orden: se avisa sin «Deshacer».
-                        if (p.shuffle || t == null) Notice.show("Quitada de la cola")
-                        else Notice.show("Quitada de la cola", "Deshacer") { p.insertAt(e.index, t) }
-                    }) { Icon(Icons.Default.Close, "Quitar de la cola", tint = Muted) }
+                        if (p.shuffle || t == null) Notice.show(Res.str(R.string.player_queue_removed))
+                        else Notice.show(Res.str(R.string.player_queue_removed), Res.str(R.string.player_undo)) { p.insertAt(e.index, t) }
+                    }) { Icon(Icons.Default.Close, stringResource(R.string.player_queue_remove), tint = Muted) }
                 }
             }
         }
@@ -539,10 +552,10 @@ fun QueueSheet(vm: LibraryViewModel, byId: Map<Long, Track>) {
     // Dentro de la hoja: si no, «Deshacer» quedaría debajo de ella, sin poder tocarse.
     NoticeHost()
     } }
-    if (saving) NameDialog("Guardar la cola como lista", onDismiss = { saving = false }) { name ->
+    if (saving) NameDialog(stringResource(R.string.player_queue_save_title), onDismiss = { saving = false }) { name ->
         val id = UserStore.createPlaylist(name, p.queue.map { it.trackId })
         saving = false
-        Notice.show("Cola guardada como «$name»", "Ver") { vm.queueOpen = false; vm.openPlaylist(id) }
+        Notice.show(Res.str(R.string.player_queue_saved, name), Res.str(R.string.player_view)) { vm.queueOpen = false; vm.openPlaylist(id) }
     }
 }
 
@@ -553,21 +566,21 @@ fun SleepDialog(vm: LibraryViewModel) {
     val atEnd by SleepTimer.endOfTrack.collectAsState()
     val on = end != null || atEnd
     SurcoSheet(
-        "Temporizador", onDismiss = { vm.sleepOpen = false },
+        stringResource(R.string.player_sleep_title), onDismiss = { vm.sleepOpen = false },
         subtitle = when {
-            atEnd -> "Se pausa al acabar esta canción."
-            end != null -> "Se pausa en ${sleepRemaining(end!!)} (baja el volumen los últimos 10 s)."
-            else -> "La música se para sola: elige cuándo."
+            atEnd -> stringResource(R.string.player_sleep_sub_track)
+            end != null -> stringResource(R.string.player_sleep_sub_in, sleepRemaining(end!!))
+            else -> stringResource(R.string.player_sleep_sub_off)
         },
         // Con uno en marcha, el botón lo quita; si no, solo hay que elegir.
-        dismiss = if (on) "Quitar" else null,
-        onDismissButton = { SleepTimer.cancel(); vm.sleepOpen = false; Notice.show("Temporizador quitado") },
+        dismiss = if (on) stringResource(R.string.player_sleep_cancel) else null,
+        onDismissButton = { SleepTimer.cancel(); vm.sleepOpen = false; Notice.show(Res.str(R.string.player_sleep_cancelled)) },
     ) {
         Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
             listOf(5, 15, 30, 45, 60, 90).forEach { m ->
-                OptionRow("$m minutos") { SleepTimer.start(m); vm.sleepOpen = false; Notice.show("Se pausa en $m minutos") }
+                OptionRow(plural(R.plurals.player_minutes, m)) { SleepTimer.start(m); vm.sleepOpen = false; Notice.show(Res.plural(R.plurals.player_sleep_in_minutes, m)) }
             }
-            OptionRow("Al acabar la canción") { SleepTimer.atEndOfTrack(); vm.sleepOpen = false; Notice.show("Se pausa al acabar la canción") }
+            OptionRow(stringResource(R.string.player_sleep_end_of_track)) { SleepTimer.atEndOfTrack(); vm.sleepOpen = false; Notice.show(Res.str(R.string.player_sleep_at_end_notice)) }
         }
     }
 }
@@ -575,11 +588,11 @@ fun SleepDialog(vm: LibraryViewModel) {
 @Composable
 fun SpeedDialog(vm: LibraryViewModel) {
     val prefs by SurcoSettings.state.collectAsState()
-    SurcoSheet("Velocidad", onDismiss = { vm.speedOpen = false }, dismiss = null, confirm = "Hecho", onConfirm = { vm.speedOpen = false }) {
-        LabeledSlider("Velocidad", prefs.speed, 0.5f..2f, "%.2f×".format(Locale("es"), prefs.speed), steps = 29,
+    SurcoSheet(stringResource(R.string.player_speed), onDismiss = { vm.speedOpen = false }, dismiss = null, confirm = stringResource(R.string.player_done), onConfirm = { vm.speedOpen = false }) {
+        LabeledSlider(stringResource(R.string.player_speed), prefs.speed, 0.5f..2f, "%.2f×".format(Locale("es"), prefs.speed), steps = 29,
             onChange = { v -> SurcoSettings.update { it.copy(speed = (v * 20).roundToInt() / 20f) } },
             onReset = { SurcoSettings.update { it.copy(speed = 1f) } })
-        SwitchRow("Mantener el tono", "Si no, sube y baja como un disco al cambiar las revoluciones.", prefs.keepPitch) { k ->
+        SwitchRow(stringResource(R.string.player_keep_pitch), stringResource(R.string.player_keep_pitch_sub), prefs.keepPitch) { k ->
             SurcoSettings.update { it.copy(keepPitch = k) }
         }
     }
@@ -590,22 +603,22 @@ fun SpeedDialog(vm: LibraryViewModel) {
 fun AddToPlaylistDialog(vm: LibraryViewModel, tracks: List<Track>) {
     val user by UserStore.state.collectAsState()
     var naming by remember { mutableStateOf(false) }
-    SurcoSheet(if (tracks.size == 1) "Añadir a una lista" else "Añadir ${songs(tracks.size)} a una lista", onDismiss = { vm.addTo = null },
+    SurcoSheet(if (tracks.size == 1) stringResource(R.string.player_add_to_playlist) else stringResource(R.string.player_add_songs_to_playlist, songs(tracks.size)), onDismiss = { vm.addTo = null },
         subtitle = if (tracks.size == 1) tracks[0].title else null) {
         Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-            OptionRow("+ Lista nueva…") { naming = true }
+            OptionRow(stringResource(R.string.player_new_playlist_option)) { naming = true }
             user.playlists.forEach { pl ->
                 OptionRow(pl.name, songs(pl.trackIds.size)) {
                     UserStore.addToPlaylist(pl.id, tracks.map { it.id }); vm.addTo = null
-                    Notice.show("Añadida a «${pl.name}»", "Ver") { vm.openPlaylist(pl.id) }
+                    Notice.show(Res.str(R.string.player_added_to, pl.name), Res.str(R.string.player_view)) { vm.openPlaylist(pl.id) }
                 }
             }
         }
     }
-    if (naming) NameDialog("Lista nueva", confirm = "Crear", onDismiss = { naming = false }) { name ->
+    if (naming) NameDialog(stringResource(R.string.player_new_playlist), confirm = stringResource(R.string.player_create), onDismiss = { naming = false }) { name ->
         val id = UserStore.createPlaylist(name, tracks.map { it.id })
         naming = false; vm.addTo = null
-        Notice.show("Lista «$name» creada", "Ver") { vm.openPlaylist(id) }
+        Notice.show(Res.str(R.string.player_playlist_created, name), Res.str(R.string.player_view)) { vm.openPlaylist(id) }
     }
 }
 
@@ -615,7 +628,7 @@ fun AddToPlaylistDialog(vm: LibraryViewModel, tracks: List<Track>) {
 fun TagChips(vm: LibraryViewModel, track: Track, exceptGroup: String? = null) {
     val chips = remember(track, exceptGroup) {
         TagField.entries.filter { it.group != exceptGroup }
-            .flatMap { f -> f.buckets(track).filter { it.label != "Desconocido" && it.label != "Sin año" }.map { f to it } }
+            .flatMap { f -> f.buckets(track).filter { !it.isPlaceholder }.map { f to it } }
     }
     // 40 dp de alto y 8 dp de hueco: así los objetivos de toque (48 dp) de dos filas no se pisan.
     FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -656,44 +669,44 @@ fun SongSheet(vm: LibraryViewModel, s: SongSheetState) {
             if (s.fromPlayer) {
                 Spacer(Modifier.height(14.dp))
                 FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ActionChip(Icons.Default.Equalizer, "Ecualizador") { close(); vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.Equalizer) }
-                    ActionChip(Icons.Default.Timer, "Temporizador") { close(); vm.sleepOpen = true }
-                    ActionChip(Icons.Default.Speed, "Velocidad") { close(); vm.speedOpen = true }
+                    ActionChip(Icons.Default.Equalizer, stringResource(R.string.player_equalizer)) { close(); vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.Equalizer) }
+                    ActionChip(Icons.Default.Timer, stringResource(R.string.player_sleep_title)) { close(); vm.sleepOpen = true }
+                    ActionChip(Icons.Default.Speed, stringResource(R.string.player_speed)) { close(); vm.speedOpen = true }
                 }
-                SectionLabel("Esta canción")
+                SectionLabel(stringResource(R.string.player_this_song))
             } else Spacer(Modifier.height(14.dp))
             FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionChip(Icons.Default.SkipNext, "A continuación") {
+                ActionChip(Icons.Default.SkipNext, stringResource(R.string.player_play_next)) {
                     vm.player.playNext(listOf(track)); close()
-                    Notice.show("Suena a continuación", "Ver cola") { vm.queueOpen = true }
+                    Notice.show(Res.str(R.string.player_play_next_notice), Res.str(R.string.player_view_queue)) { vm.queueOpen = true }
                 }
-                ActionChip(Icons.AutoMirrored.Filled.QueueMusic, "A la cola") {
+                ActionChip(Icons.AutoMirrored.Filled.QueueMusic, stringResource(R.string.player_add_to_queue)) {
                     vm.player.enqueue(listOf(track)); close()
-                    Notice.show("Añadida a la cola", "Ver cola") { vm.queueOpen = true }
+                    Notice.show(Res.str(R.string.player_added_to_queue), Res.str(R.string.player_view_queue)) { vm.queueOpen = true }
                 }
-                ActionChip(Icons.AutoMirrored.Filled.PlaylistAdd, "A una lista") { vm.addTo = listOf(track); close() }
-                ActionChip(if (fav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, if (fav) "Quitar favorita" else "Favorita") {
+                ActionChip(Icons.AutoMirrored.Filled.PlaylistAdd, stringResource(R.string.player_to_playlist)) { vm.addTo = listOf(track); close() }
+                ActionChip(if (fav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, stringResource(if (fav) R.string.player_unfavorite_short else R.string.player_favorite)) {
                     toggleFavorite(track)
                 }
-                if (track.album.isNotBlank()) ActionChip(Icons.Default.Album, "Ir al álbum") { close(); vm.goToAlbum(track) }
-                if (track.artist.isNotBlank()) ActionChip(Icons.Default.Person, "Ir al artista") { close(); vm.goToArtist(track) }
+                if (track.album.isNotBlank()) ActionChip(Icons.Default.Album, stringResource(R.string.player_go_album)) { close(); vm.goToAlbum(track) }
+                if (track.artist.isNotBlank()) ActionChip(Icons.Default.Person, stringResource(R.string.player_go_artist)) { close(); vm.goToArtist(track) }
                 // Con BPM o tonalidad (de la etiqueta o del análisis): lo que suena bien detrás.
                 if (track.x("bpm").isNotBlank() || track.x("key").isNotBlank()) {
-                    ActionChip(Icons.Default.GraphicEq, "Para mezclar") { close(); vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.Compatible(track.id)) }
+                    ActionChip(Icons.Default.GraphicEq, stringResource(R.string.player_for_mixing)) { close(); vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.Compatible(track.id)) }
                 }
                 if (s.playlistId != null && s.playlistIndex >= 0) {
-                    ActionChip(Icons.Default.Delete, "Quitar de la lista") {
+                    ActionChip(Icons.Default.Delete, stringResource(R.string.player_remove_from_playlist)) {
                         val pid: Long = s.playlistId; val at = s.playlistIndex
                         UserStore.removeFromPlaylist(pid, at); close()
-                        Notice.show("Quitada de la lista", "Deshacer") { UserStore.insertIntoPlaylist(pid, at, track.id) }
+                        Notice.show(Res.str(R.string.player_removed_from_playlist), Res.str(R.string.player_undo)) { UserStore.insertIntoPlaylist(pid, at, track.id) }
                     }
                 }
             }
             val plays = user.plays[track.id] ?: 0
-            if (plays > 0) Text("Escuchada ${if (plays == 1) "1 vez" else "$plays veces"}", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
-            SectionLabel("Organizar por")
+            if (plays > 0) Text(plural(R.plurals.player_played_times, plays), color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
+            SectionLabel(stringResource(R.string.player_organize_by))
             TagChips(vm, track)
-            SectionLabel("Más datos")
+            SectionLabel(stringResource(R.string.player_more_info))
             describe(track).forEach { (k, v) ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                     Text(k, color = Muted, fontSize = 13.sp, modifier = Modifier.width(120.dp))
@@ -741,14 +754,13 @@ fun PermissionScreen(blocked: Boolean, onAsk: () -> Unit) {
             Icon(Icons.Default.LibraryMusic, null, tint = Ink, modifier = Modifier.size(36.dp))
         }
         Spacer(Modifier.height(24.dp))
-        Text("Surco necesita acceso a tu música", fontSize = 20.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Text(stringResource(R.string.player_perm_title), fontSize = 20.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
         Spacer(Modifier.height(8.dp))
         Text(
-            if (blocked) "Android ya no vuelve a preguntar. Abre los ajustes de Surco → Permisos → Música y audio → Permitir."
-            else "Lee las etiquetas de tus archivos de audio para organizarlos. Nada sale del móvil.",
+            stringResource(if (blocked) R.string.player_perm_blocked else R.string.player_perm_ask),
             color = Muted, textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(24.dp))
-        androidx.compose.material3.Button(onClick = onAsk) { Text(if (blocked) "Abrir ajustes" else "Dar permiso") }
+        androidx.compose.material3.Button(onClick = onAsk) { Text(stringResource(if (blocked) R.string.player_perm_open_settings else R.string.player_perm_grant)) }
     }
 }

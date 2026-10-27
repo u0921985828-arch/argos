@@ -14,6 +14,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
+        android:name=".SurcoApp"
+        android:enableOnBackInvokedCallback="true"
+        tools:targetApi="33"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"

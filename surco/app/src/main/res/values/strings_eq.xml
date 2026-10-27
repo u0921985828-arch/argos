@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ecualizador (inglés, por defecto). Los nombres de preajuste guardados no salen de aquí. -->
+<resources>
+    <string name="eq_title">Equalizer</string>
+    <string name="eq_off">Off</string>
+    <string name="eq_crossfeed_light">Light</string>
+    <string name="eq_crossfeed_medium">Medium</string>
+    <string name="eq_crossfeed_strong">Strong</string>
+    <string name="eq_save_chip">+ Save</string>
+    <string name="eq_delete_preset_button">Delete preset “%1$s”</string>
+    <string name="eq_band">%1$s Hz band</string>
+    <string name="eq_auto_preamp">Auto preamp</string>
+    <string name="eq_auto_preamp_desc">Lowers the volume by as much as the bands and tone raise it: it never clips and the limiter has nothing to do.</string>
+    <string name="eq_preamp_value">Preamp %1$s</string>
+    <string name="eq_preamp">Preamp</string>
+    <string name="eq_peak_limited">The curve rises %1$s: the limiter holds it, with some compression.</string>
+    <string name="eq_peak_clips">The curve rises %1$s: it may clip.</string>
+    <string name="eq_adjust">Adjust</string>
+    <string name="eq_tone">Tone</string>
+    <string name="eq_bass">Bass</string>
+    <string name="eq_treble">Treble</string>
+    <string name="eq_stereo">Stereo</string>
+    <string name="eq_balance">Balance</string>
+    <string name="eq_balance_left">L %1$d %%</string>
+    <string name="eq_balance_right">R %1$d %%</string>
+    <string name="eq_balance_center">Center</string>
+    <string name="eq_crossfeed">Headphone crossfeed</string>
+    <string name="eq_crossfeed_desc">Blends a little of each channel into the other, like speakers do: less tiring with widely separated recordings.</string>
+    <string name="eq_mono">Mono</string>
+    <string name="eq_mono_desc">Sums both channels: for a single earbud or one speaker.</string>
+    <string name="eq_limiter">Limiter</string>
+    <string name="eq_limiter_desc">Only acts if the curve goes above 0 dB (with manual preamp). Mono and balance never trigger it.</string>
+    <string name="eq_reset_all">Reset all</string>
+    <string name="eq_save_preset">Save preset</string>
+    <string name="eq_own_suffix">%1$s (custom)</string>
+    <string name="eq_preset_saved">Preset “%1$s” saved</string>
+    <string name="eq_delete_title">Delete “%1$s”?</string>
+    <string name="eq_delete_text">Only the preset is deleted: the current sound stays the same.</string>
+    <string name="eq_delete_confirm">Delete preset</string>
+</resources>

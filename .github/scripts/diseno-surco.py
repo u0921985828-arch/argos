@@ -7,6 +7,7 @@ Para cada pantalla (NN-nombre.png + NN-nombre.xml):
     de 24 dp de alto o más, que equivale a unos 18 sp);
   - SALE: un nodo de Surco que se sale de la pantalla por los lados;
   - SOLAPE: dos cosas tocables que se pisan sin estar una dentro de la otra;
+  - SIN NOMBRE: algo tocable sin texto ni descripción para TalkBack;
   - FONDO: en «Sonando» (y su letra) los bordes no son de un solo color (degradado o transparencia).
 Escribe informe.txt en la carpeta y sale con 1 si hay algún fallo y se pasa --estricto.
 Uso: diseno-surco.py CARPETA [--estricto]
@@ -98,6 +99,10 @@ for xmlf in sorted(glob.glob(os.path.join(carpeta, "*.xml"))):
                     cortado = b[0] <= c[0] or b[1] <= c[1] or b[2] >= c[2] or b[3] >= c[3]
                 m = padre.get(m)
             if not n.get("class", "").endswith("EditText") and not cortado: toc.append((b, etiqueta))
+            # TalkBack lee el nombre de lo que se toca: sin texto ni descripción en todo su árbol,
+            # dice «botón» o «interruptor, activado» y nada más (le pasaba al del ecualizador).
+            if not etiqueta and not cortado and w >= 10 and h >= 10:
+                pant.append(f"  SIN NOMBRE {n.get('class', '').split('.')[-1]} {w:.0f}×{h:.0f} dp en {b}")
             # Lo de menos de 10 dp es una pieza de un deslizador (pulgar, pista), no un botón.
             # Compose amplía solo el área de toque de lo pequeño hasta 48 dp (si no hay otro
             # tocable más cerca), así que de 40 a 47 dp se avisa sin contar como fallo.

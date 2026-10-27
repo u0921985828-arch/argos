@@ -46,6 +46,9 @@ android {
         informational += setOf("GradleDependency", "OldTargetApi")
     }
     buildFeatures { compose = true }
+    // Idioma por app (Android 13+: Ajustes del sistema → Apps → Surco → Idioma, y el selector de
+    // Ajustes → Interfaz): la lista de idiomas sale de las carpetas values-*; values/ es inglés.
+    androidResources { generateLocaleConfig = true }
     packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
 }
 

@@ -98,6 +98,9 @@ done
 echo "MediaStore ve $n canciones"
 
 adb install -r "$APK"
+# La app habla inglés por defecto y español con el móvil en español: las pruebas, en español
+# (idioma por app, Android 13+). El inglés lo recorre idioma-surco.sh.
+adb shell cmd locale set-app-locales "$PKG" --locales es-ES
 adb shell pm grant "$PKG" android.permission.READ_MEDIA_AUDIO
 adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS || true
 adb logcat -c

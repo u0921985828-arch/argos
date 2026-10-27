@@ -4,38 +4,59 @@ import java.text.DateFormatSymbols
 import java.util.Calendar
 import java.util.Locale
 
-/** Cada etiqueta por la que se puede organizar la biblioteca. */
-enum class TagField(val label: String, val group: String) {
-    ARTIST("Artista", "Personas"),
-    ALBUM_ARTIST("Artista del álbum", "Personas"),
-    COMPOSER("Compositor", "Personas"),
-    LYRICIST("Letrista", "Personas"),
-    PRODUCER("Productor", "Personas"),
-    REMIXER("Remezclador", "Personas"),
-    CONDUCTOR("Director", "Personas"),
-    ALBUM("Álbum", "Obra"),
-    GENRE("Género", "Obra"),
-    MOOD("Estado de ánimo", "Obra"),
-    GROUPING("Agrupación", "Obra"),
-    LABEL("Sello", "Obra"),
-    MEDIA("Soporte original", "Obra"),
-    LANGUAGE("Idioma", "Obra"),
-    COUNTRY("País", "Obra"),
-    YEAR("Año", "Tiempo"),
-    DECADE("Década", "Tiempo"),
-    ORIGINAL_YEAR("Año original", "Tiempo"),
-    DURATION("Duración", "Tiempo"),
-    BPM("BPM", "Ritmo y tono"),
-    KEY("Tonalidad", "Ritmo y tono"),
-    ADDED("Fecha de añadido", "Tiempo"),
-    FORMAT("Formato", "Archivo"),
-    QUALITY("Calidad", "Archivo"),
-    BITRATE("Bitrate", "Archivo"),
-    SAMPLE_RATE("Frecuencia de muestreo", "Archivo"),
-    BIT_DEPTH("Profundidad de bits", "Archivo"),
-    CHANNELS("Canales", "Archivo"),
-    ENCODER("Codificador", "Archivo"),
-    FOLDER("Carpeta", "Archivo"),
+/**
+ * Cada etiqueta por la que se puede organizar la biblioteca. [label] y [group] son lo que se ve,
+ * en el idioma de la app ([Texts]); el identificador que se guarda es [name].
+ */
+enum class TagField(private val labelKey: String, private val labelEs: String, private val groupKey: String) {
+    ARTIST("data_field_artist", "Artista", G_PEOPLE),
+    ALBUM_ARTIST("data_field_album_artist", "Artista del álbum", G_PEOPLE),
+    COMPOSER("data_field_composer", "Compositor", G_PEOPLE),
+    LYRICIST("data_field_lyricist", "Letrista", G_PEOPLE),
+    PRODUCER("data_field_producer", "Productor", G_PEOPLE),
+    REMIXER("data_field_remixer", "Remezclador", G_PEOPLE),
+    CONDUCTOR("data_field_conductor", "Director", G_PEOPLE),
+    ALBUM("data_field_album", "Álbum", G_WORK),
+    GENRE("data_field_genre", "Género", G_WORK),
+    MOOD("data_field_mood", "Estado de ánimo", G_WORK),
+    GROUPING("data_field_grouping", "Agrupación", G_WORK),
+    LABEL("data_field_label", "Sello", G_WORK),
+    MEDIA("data_field_media", "Soporte original", G_WORK),
+    LANGUAGE("data_field_language", "Idioma", G_WORK),
+    COUNTRY("data_field_country", "País", G_WORK),
+    YEAR("data_field_year", "Año", G_TIME),
+    DECADE("data_field_decade", "Década", G_TIME),
+    ORIGINAL_YEAR("data_field_original_year", "Año original", G_TIME),
+    DURATION("data_field_duration", "Duración", G_TIME),
+    BPM("data_field_bpm", "BPM", G_RHYTHM),
+    KEY("data_field_key", "Tonalidad", G_RHYTHM),
+    ADDED("data_field_added", "Fecha de añadido", G_TIME),
+    FORMAT("data_field_format", "Formato", G_FILE),
+    QUALITY("data_field_quality", "Calidad", G_FILE),
+    BITRATE("data_field_bitrate", "Bitrate", G_FILE),
+    SAMPLE_RATE("data_field_sample_rate", "Frecuencia de muestreo", G_FILE),
+    BIT_DEPTH("data_field_bit_depth", "Profundidad de bits", G_FILE),
+    CHANNELS("data_field_channels", "Canales", G_FILE),
+    ENCODER("data_field_encoder", "Codificador", G_FILE),
+    FOLDER("data_field_folder", "Carpeta", G_FILE),
+    ;
+
+    val label: String get() = Texts.t(labelKey, labelEs)
+    val group: String get() = Texts.t(groupKey, groupEs(groupKey))
+}
+
+private const val G_PEOPLE = "data_group_people"
+private const val G_WORK = "data_group_work"
+private const val G_TIME = "data_group_time"
+private const val G_RHYTHM = "data_group_rhythm"
+private const val G_FILE = "data_group_file"
+
+private fun groupEs(key: String): String = when (key) {
+    G_PEOPLE -> "Personas"
+    G_WORK -> "Obra"
+    G_TIME -> "Tiempo"
+    G_RHYTHM -> "Ritmo y tono"
+    else -> "Archivo"
 }
 
 /** key = identificador único del grupo, order = posición en listas numéricas. */

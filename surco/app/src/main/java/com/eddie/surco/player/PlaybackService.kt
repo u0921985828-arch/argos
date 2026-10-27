@@ -270,7 +270,7 @@ class PlaybackService : MediaLibraryService() {
                         putInt(CarLibrary.CONTENT_STYLE_PLAYABLE, CarLibrary.STYLE_LIST)
                     }
                     val root = MediaItem.Builder().setMediaId(BrowseIds.ROOT).setMediaMetadata(
-                        MediaMetadata.Builder().setTitle("Surco").setIsBrowsable(true).setIsPlayable(false)
+                        MediaMetadata.Builder().setTitle(getString(R.string.app_name)).setIsBrowsable(true).setIsPlayable(false)
                             .setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_MIXED).build(),
                     ).build()
                     return Futures.immediateFuture(LibraryResult.ofItem(root, LibraryParams.Builder().setExtras(extras).build()))
@@ -395,8 +395,8 @@ class PlaybackService : MediaLibraryService() {
         val md = exo.mediaMetadata
         SurcoWidget.publish(this, WidgetState(
             trackId = item?.mediaId?.toLongOrNull(),
-            title = md.title?.toString() ?: item?.mediaMetadata?.title?.toString() ?: "Surco",
-            artist = (md.artist ?: item?.mediaMetadata?.artist)?.toString()?.ifBlank { null } ?: "Desconocido",
+            title = md.title?.toString() ?: item?.mediaMetadata?.title?.toString() ?: getString(R.string.app_name),
+            artist = (md.artist ?: item?.mediaMetadata?.artist)?.toString()?.ifBlank { null } ?: getString(R.string.w_unknown),
             // Lo que va a pasar, no el instante: sin parpadeo entre pausa y reproducir al cargar.
             playing = exo.playWhenReady && exo.playbackState != Player.STATE_ENDED && exo.playbackState != Player.STATE_IDLE,
         ))
@@ -483,15 +483,15 @@ class PlaybackService : MediaLibraryService() {
      * error y el botón de reproducir lo repite. Como mucho 10 seguidas, para no dar vueltas.
      */
     private fun skipBroken(error: PlaybackException) {
-        val title = exo.currentMediaItem?.mediaMetadata?.title ?: "la canción"
+        val title = exo.currentMediaItem?.mediaMetadata?.title ?: getString(R.string.app_err_the_song)
         // Solo los fallos del archivo (no se encuentra, no se puede leer o descodificar) quitan la
         // canción; uno de la salida de audio no es culpa suya: se para y se avisa.
         val fileProblem = error.errorCode in 2000..4999
         if (!fileProblem) {
-            Notice.fromService(this, "Error de salida de audio (${error.errorCodeName}). Pulsa reproducir para reintentar.", long = true)
+            Notice.fromService(this, getString(R.string.app_err_output, error.errorCodeName), long = true)
             return
         }
-        Notice.fromService(this, "No se pudo reproducir «$title»: se quita de la cola.")
+        Notice.fromService(this, getString(R.string.app_err_play, title))
         if (exo.mediaItemCount == 0) return
         exo.removeMediaItem(exo.currentMediaItemIndex)
         if (exo.mediaItemCount > 0 && ++errorStreak < 10) { exo.prepare(); exo.play() }

@@ -1,5 +1,6 @@
 package com.eddie.surco.audio
 
+import com.eddie.surco.data.Texts
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -30,7 +31,7 @@ object Pcm {
         PCM_16, PCM_16_BE -> "16 bits"
         PCM_24, PCM_24_BE -> "24 bits"
         PCM_32, PCM_32_BE -> "32 bits"
-        FLOAT -> "coma flotante 32 bits"
+        FLOAT -> Texts.t("app_pcm_float", "coma flotante 32 bits")
         else -> "PCM $enc"
     }
 

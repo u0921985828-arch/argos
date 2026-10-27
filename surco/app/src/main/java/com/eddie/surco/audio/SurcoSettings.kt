@@ -1,6 +1,9 @@
 package com.eddie.surco.audio
 
 import android.content.Context
+import androidx.annotation.StringRes
+import com.eddie.surco.R
+import com.eddie.surco.Res
 import com.eddie.surco.data.Disk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -15,8 +18,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-/** ReplayGain: apagado, por pista o por álbum. */
-enum class ReplayGainMode(val label: String) { OFF("Apagado"), TRACK("Por pista"), ALBUM("Por álbum") }
+/** ReplayGain: apagado, por pista o por álbum. Se guarda por [name]; [labelRes] es lo que se enseña. */
+enum class ReplayGainMode(@StringRes val labelRes: Int) {
+    OFF(R.string.settings_rg_off), TRACK(R.string.settings_rg_track), ALBUM(R.string.settings_rg_album)
+}
 
 /** Todo lo que se ajusta en Surco. Inmutable: se cambia con [SurcoSettings.update]. */
 data class Prefs(
@@ -61,6 +66,48 @@ val ACCENTS = linkedMapOf(
     "Cobre" to 0xE08A4B, "Azul" to 0x5FA8E8, "Verde" to 0x5DBB7E, "Rosa" to 0xE8789F, "Violeta" to 0xA98BEB, "Ámbar" to 0xE2B13C,
 )
 const val ACCENT_FROM_ART = "Del disco"
+
+/**
+ * Nombre visible de un acento. Los nombres de [ACCENTS] y [ACCENT_FROM_ART] son identificadores
+ * guardados en ajustes.json: no cambian con el idioma; lo que se enseña sale de los recursos.
+ */
+@StringRes
+fun accentLabelRes(id: String): Int? = when (id) {
+    "Cobre" -> R.string.settings_accent_copper
+    "Azul" -> R.string.settings_accent_blue
+    "Verde" -> R.string.settings_accent_green
+    "Rosa" -> R.string.settings_accent_pink
+    "Violeta" -> R.string.settings_accent_violet
+    "Ámbar" -> R.string.settings_accent_amber
+    ACCENT_FROM_ART -> R.string.settings_accent_art
+    else -> null
+}
+
+/**
+ * Nombre visible de un preajuste del ecualizador. Los de fábrica ([BUILTIN_PRESETS]) y
+ * «Personalizado» se guardan con su nombre en español (identificador); los del usuario se
+ * enseñan tal cual.
+ */
+@StringRes
+fun presetLabelRes(name: String): Int? = when (name) {
+    "Plano" -> R.string.settings_preset_flat
+    "Graves" -> R.string.settings_preset_bass
+    "Graves y agudos" -> R.string.settings_preset_bass_treble
+    "Agudos" -> R.string.settings_preset_treble
+    "Voz" -> R.string.settings_preset_vocal
+    "Rock" -> R.string.settings_preset_rock
+    "Pop" -> R.string.settings_preset_pop
+    "Jazz" -> R.string.settings_preset_jazz
+    "Clásica" -> R.string.settings_preset_classical
+    "Electrónica" -> R.string.settings_preset_electronic
+    "Acústica" -> R.string.settings_preset_acoustic
+    "Nocturno" -> R.string.settings_preset_night
+    "Personalizado" -> R.string.settings_preset_custom
+    else -> null
+}
+
+/** [presetLabelRes] fuera de Compose; un preajuste del usuario devuelve su propio nombre. */
+fun presetLabel(name: String): String = presetLabelRes(name)?.let { Res.str(it) } ?: name
 
 /**
  * Ajustes compartidos entre la interfaz y el servicio (mismo proceso). El procesador de

@@ -72,6 +72,9 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.eddie.surco.R
+import com.eddie.surco.Res
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -151,7 +154,7 @@ fun LabeledSlider(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(title, fontSize = 15.sp, modifier = Modifier.weight(1f))
             // Volver a 0 con un icono y solo cuando hace falta: un «0» junto al valor se leía como dos cifras.
-            if (onReset != null && value != 0f) IconButton(onClick = onReset) { Icon(Icons.Default.Refresh, "Poner a 0", tint = Muted) }
+            if (onReset != null && value != 0f) IconButton(onClick = onReset) { Icon(Icons.Default.Refresh, stringResource(R.string.app_reset_zero), tint = Muted) }
             Text(valueText, color = Copper, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
         }
         SurcoSlider(value = value, onChange = onChange, range = range, steps = steps, fill = range.start != -range.endInclusive)
@@ -197,7 +200,7 @@ fun SurcoSheet(
     confirmEnabled: Boolean = true,
     danger: Boolean = false,
     onConfirm: () -> Unit = {},
-    dismiss: String? = "Cancelar",
+    dismiss: String? = stringResource(R.string.app_cancel),
     onDismissButton: () -> Unit = onDismiss,
     content: @Composable ColumnScope.() -> Unit = {},
 ) {
@@ -233,14 +236,14 @@ fun SurcoSheet(
 
 /** Hoja para escribir un nombre (lista nueva, preajuste…): el teclado sale solo y «Hecho» guarda. */
 @Composable
-fun NameDialog(title: String, initial: String = "", confirm: String = "Guardar", onDismiss: () -> Unit, onOk: (String) -> Unit) {
+fun NameDialog(title: String, initial: String = "", confirm: String = stringResource(R.string.app_save), onDismiss: () -> Unit, onOk: (String) -> Unit) {
     var text by remember { mutableStateOf(TextFieldValue(initial, TextRange(initial.length))) }
     val focus = remember { FocusRequester() }
     val ok = text.text.isNotBlank()
     SurcoSheet(title, onDismiss, confirm = confirm, confirmEnabled = ok, onConfirm = { if (ok) onOk(text.text.trim()) }) {
         OutlinedTextField(
             value = text, onValueChange = { text = it }, singleLine = true,
-            placeholder = { Text("Nombre", color = Muted) },
+            placeholder = { Text(stringResource(R.string.app_name_hint), color = Muted) },
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { if (ok) onOk(text.text.trim()) }),
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Copper, cursorColor = Copper),
@@ -274,4 +277,5 @@ fun OptionRow(title: String, subtitle: String? = null, onClick: () -> Unit) {
     }
 }
 
-fun dbText(v: Float): String = (if (v > 0) "+" else "") + "%.1f dB".format(v).replace('.', ',')
+// La coma o el punto decimal, los del idioma de la app (en español, «+1,5 dB» como siempre).
+fun dbText(v: Float): String = (if (v > 0) "+" else "") + String.format(Res.app.resources.configuration.locales[0], "%.1f dB", v)

@@ -1,6 +1,7 @@
 package com.eddie.surco
 
 import android.app.Application
+import androidx.annotation.StringRes
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -48,13 +49,25 @@ sealed interface Screen {
 }
 
 /** Pestañas de la barra inferior, en el orden de uso: lo de cada día primero. */
-enum class Tab(val label: String, val root: Screen) {
-    HOME("Inicio", Screen.Home), LIBRARY("Biblioteca", Screen.Library), TAGS("Etiquetas", Screen.Tags), LISTS("Listas", Screen.Playlists),
+enum class Tab(@StringRes private val labelRes: Int, val root: Screen) {
+    HOME(R.string.app_tab_home, Screen.Home), LIBRARY(R.string.app_tab_library, Screen.Library),
+    TAGS(R.string.app_tab_tags, Screen.Tags), LISTS(R.string.app_tab_lists, Screen.Playlists);
+
+    /** El nombre en el idioma de la app (se lee al pintar: cambia con el idioma). */
+    val label: String get() = Res.str(labelRes)
 }
 
-enum class AlbumSort(val label: String) { TITLE("A–Z"), ARTIST("Artista"), YEAR("Año"), ADDED("Recientes") }
+enum class AlbumSort(@StringRes private val labelRes: Int) {
+    TITLE(R.string.app_sort_title), ARTIST(R.string.app_sort_artist), YEAR(R.string.app_sort_year), ADDED(R.string.app_sort_added);
 
-enum class LibraryTab(val label: String) { SONGS("Canciones"), ALBUMS("Álbumes"), ARTISTS("Artistas"), FOLDERS("Carpetas") }
+    val label: String get() = Res.str(labelRes)
+}
+
+enum class LibraryTab(@StringRes private val labelRes: Int) {
+    SONGS(R.string.app_lib_songs), ALBUMS(R.string.app_lib_albums), ARTISTS(R.string.app_lib_artists), FOLDERS(R.string.app_lib_folders);
+
+    val label: String get() = Res.str(labelRes)
+}
 
 /** Menú de una canción; si viene de una lista, dónde está en ella (para poder quitarla). */
 data class SongSheetState(val track: Track, val playlistId: Long? = null, val playlistIndex: Int = -1, val fromPlayer: Boolean = false)

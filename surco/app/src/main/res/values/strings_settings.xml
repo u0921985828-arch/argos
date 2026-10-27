@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Ajustes (ui/SettingsScreens.kt, audio/SurcoSettings.kt). Inglés: idioma por defecto. -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_subtitle">Everything that isn\'t on screen</string>
+    <string name="settings_sound_title">Sound</string>
+    <string name="settings_sound_sub">Equalizer, ReplayGain and output quality</string>
+    <string name="settings_playback_title">Playback</string>
+    <string name="settings_playback_sub">Fades, speed, sleep timer and silences</string>
+    <string name="settings_library_title">Library</string>
+    <string name="settings_library_sub">Folders, online lyrics and short audio</string>
+    <string name="settings_look_title">Appearance</string>
+    <string name="settings_look_sub">Color, Home, technical details and screen</string>
+    <string name="settings_stats_title">Your listening</string>
+    <string name="settings_stats_sub">What you play most, in numbers</string>
+    <string name="settings_about_title">About Surco</string>
+    <string name="settings_about_sub">Privacy and version</string>
+
+    <!-- Sonido -->
+    <string name="settings_eq">Equalizer and effects</string>
+    <string name="settings_eq_on">%1$s · tone, balance, crossfeed, limiter</string>
+    <string name="settings_eq_off">Off</string>
+    <string name="settings_rg_title">Normalize volume (ReplayGain)</string>
+    <string name="settings_rg_none">No song has the REPLAYGAIN tag (add it with foobar2000 or MusicBrainz Picard).</string>
+    <plurals name="settings_rg_some">
+        <item quantity="one">%1$d of %2$d song has it; with it everything plays %3$d dB quieter to avoid clipping.</item>
+        <item quantity="other">%1$d of %2$d songs have it; with it everything plays %3$d dB quieter to avoid clipping.</item>
+    </plurals>
+    <string name="settings_rg_off">Off</string>
+    <string name="settings_rg_track">Per track</string>
+    <string name="settings_rg_album">Per album</string>
+    <string name="settings_output_title">Output quality</string>
+    <string name="settings_output_help">Lossless (FLAC, ALAC, WAV) in floating point, never cut to 16 bits; lossy (MP3, AAC…) in 16 bits, bit-exact when flat.</string>
+
+    <!-- Preajustes del ecualizador (el nombre guardado no cambia; esto es lo que se enseña) -->
+    <string name="settings_preset_flat">Flat</string>
+    <string name="settings_preset_bass">Bass</string>
+    <string name="settings_preset_bass_treble">Bass and treble</string>
+    <string name="settings_preset_treble">Treble</string>
+    <string name="settings_preset_vocal">Vocal</string>
+    <string name="settings_preset_rock">Rock</string>
+    <string name="settings_preset_pop">Pop</string>
+    <string name="settings_preset_jazz">Jazz</string>
+    <string name="settings_preset_classical">Classical</string>
+    <string name="settings_preset_electronic">Electronic</string>
+    <string name="settings_preset_acoustic">Acoustic</string>
+    <string name="settings_preset_night">Late night</string>
+    <string name="settings_preset_custom">Custom</string>
+
+    <!-- Reproducción -->
+    <string name="settings_crossfade">Crossfade</string>
+    <string name="settings_crossfade_help">Fades out the end of one song and fades in the next.</string>
+    <string name="settings_none">Off</string>
+    <string name="settings_seconds">%1$d s</string>
+    <string name="settings_keep_albums">Keep gapless albums intact</string>
+    <string name="settings_keep_albums_help">No crossfade within the same album: live and concept albums play straight through.</string>
+    <string name="settings_fade">Fade on pause and resume</string>
+    <string name="settings_fade_help">No volume jumps when you press pause.</string>
+    <string name="settings_skip_silence">Skip silence</string>
+    <string name="settings_skip_silence_help">Trims long silences inside tracks.</string>
+    <string name="settings_speed">Speed</string>
+    <string name="settings_speed_kept">%1$.2f× · pitch kept</string>
+    <string name="settings_speed_free">%1$.2f× · pitch free</string>
+    <string name="settings_sleep">Sleep timer</string>
+    <string name="settings_sleep_help">Pauses after the minutes you choose or when the song ends</string>
+
+    <!-- Biblioteca -->
+    <string name="settings_short">Hide short audio</string>
+    <string name="settings_short_help">Keeps voice notes, ringtones and alerts out of the library.</string>
+    <string name="settings_shorter_s">&lt; %1$d s</string>
+    <string name="settings_shorter_min">&lt; %1$d min</string>
+    <string name="settings_rescan">Re-read all tags</string>
+    <string name="settings_rescan_help">Useful if you\'ve edited tags in another app</string>
+    <string name="settings_analyze">Analyze BPM and key</string>
+    <plurals name="settings_analyzing">
+        <item quantity="one">Analyzing: %1$d of %2$d song (a few seconds each, offline).</item>
+        <item quantity="other">Analyzing: %1$d of %2$d songs (a few seconds each, offline).</item>
+    </plurals>
+    <string name="settings_analyze_help">For songs that don\'t have them in their tags. Done: %1$d.</string>
+    <string name="settings_lrclib">Online lyrics (LRCLIB)</string>
+    <string name="settings_lrclib_help">If a song has no lyrics, they\'re looked up on lrclib.net (many are synced). Only artist, title, album and duration are sent.</string>
+    <string name="settings_folders">Folders</string>
+    <string name="settings_folders_help">Folders turned off don\'t show up in the library or in search. Nothing is deleted.</string>
+
+    <!-- Interfaz -->
+    <string name="settings_accent">Accent color</string>
+    <string name="settings_accent_help">“From artwork” takes it from the cover that\'s playing, always readable.</string>
+    <string name="settings_accent_fixed">Fixed color</string>
+    <string name="settings_accent_art">From artwork</string>
+    <string name="settings_accent_copper">Copper</string>
+    <string name="settings_accent_blue">Blue</string>
+    <string name="settings_accent_green">Green</string>
+    <string name="settings_accent_pink">Pink</string>
+    <string name="settings_accent_violet">Violet</string>
+    <string name="settings_accent_amber">Amber</string>
+    <string name="settings_now_playing_section">Now playing</string>
+    <string name="settings_tech">Technical details</string>
+    <string name="settings_tech_help">Format, bits, sample rate and how the audio is output, under the title.</string>
+    <string name="settings_screen_on">Keep screen on</string>
+    <string name="settings_screen_on_help">While Now playing is open (handy for lyrics).</string>
+    <string name="settings_home_section">Home</string>
+    <string name="settings_home_recent">Recently played</string>
+    <string name="settings_home_added">Recently added</string>
+    <string name="settings_home_top">Most played</string>
+    <string name="settings_home_explore">Explore by tags</string>
+
+    <!-- Tus escuchas -->
+    <plurals name="settings_stats_plays">
+        <item quantity="one">play</item>
+        <item quantity="other">plays</item>
+    </plurals>
+    <string name="settings_stats_hours">%1$d h</string>
+    <string name="settings_stats_minutes">%1$d min</string>
+    <string name="settings_stats_of_music">of music</string>
+    <plurals name="settings_stats_songs">
+        <item quantity="one">song</item>
+        <item quantity="other">songs</item>
+    </plurals>
+    <string name="settings_stats_empty">No plays yet: a song counts once it passes the halfway point (or 4 minutes).</string>
+    <string name="settings_stats_artists">Artists</string>
+    <string name="settings_stats_songs_section">Songs</string>
+
+    <!-- Acerca de -->
+    <string name="settings_privacy">Privacy</string>
+    <string name="settings_privacy_online">Surco only goes online to look up lyrics on lrclib.net (artist, title, album and duration). Plays, favorites, playlists and settings stay on this phone.</string>
+    <string name="settings_privacy_offline">Surco doesn\'t use the internet. Plays, favorites, playlists and settings stay on this phone.</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_formats">Formats</string>
+    <string name="settings_formats_help">MP3, AAC, FLAC, ALAC, Opus, Vorbis and WAV (floating point too). Lyrics from the LYRICS tag or from a .lrc file next to the song.</string>
+</resources>

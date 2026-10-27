@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ecualizador (español). Los nombres de preajuste guardados no salen de aquí. -->
+<resources>
+    <string name="eq_title">Ecualizador</string>
+    <string name="eq_off">Apagado</string>
+    <string name="eq_crossfeed_light">Suave</string>
+    <string name="eq_crossfeed_medium">Medio</string>
+    <string name="eq_crossfeed_strong">Fuerte</string>
+    <string name="eq_save_chip">+ Guardar</string>
+    <string name="eq_delete_preset_button">Borrar el preajuste «%1$s»</string>
+    <string name="eq_band">Banda de %1$sHz</string>
+    <string name="eq_auto_preamp">Preamplificación automática</string>
+    <string name="eq_auto_preamp_desc">Baja el volumen lo que suben las bandas y el tono: nunca satura y el limitador no tiene que actuar.</string>
+    <string name="eq_preamp_value">Preamplificación %1$s</string>
+    <string name="eq_preamp">Preamplificación</string>
+    <string name="eq_peak_limited">La curva sube %1$s: el limitador lo contiene, con algo de compresión.</string>
+    <string name="eq_peak_clips">La curva sube %1$s: puede saturar.</string>
+    <string name="eq_adjust">Ajustar</string>
+    <string name="eq_tone">Tono</string>
+    <string name="eq_bass">Graves</string>
+    <string name="eq_treble">Agudos</string>
+    <string name="eq_stereo">Estéreo</string>
+    <string name="eq_balance">Balance</string>
+    <string name="eq_balance_left">I %1$d %%</string>
+    <string name="eq_balance_right">D %1$d %%</string>
+    <string name="eq_balance_center">Centro</string>
+    <string name="eq_crossfeed">Crossfeed para auriculares</string>
+    <string name="eq_crossfeed_desc">Mezcla un poco de cada canal en el otro, como unos altavoces: cansa menos con grabaciones muy separadas.</string>
+    <string name="eq_mono">Mono</string>
+    <string name="eq_mono_desc">Suma los dos canales: para un solo auricular o un altavoz.</string>
+    <string name="eq_limiter">Limitador</string>
+    <string name="eq_limiter_desc">Solo actúa si la curva pasa de 0 dB (con la preamplificación manual). Mono y balance no lo activan.</string>
+    <string name="eq_reset_all">Restablecer todo</string>
+    <string name="eq_save_preset">Guardar preajuste</string>
+    <string name="eq_own_suffix">%1$s (propio)</string>
+    <string name="eq_preset_saved">Preajuste «%1$s» guardado</string>
+    <string name="eq_delete_title">¿Borrar «%1$s»?</string>
+    <string name="eq_delete_text">Solo se borra el preajuste: el sonido de ahora no cambia.</string>
+    <string name="eq_delete_confirm">Borrar preajuste</string>
+</resources>
