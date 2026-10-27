@@ -36,7 +36,7 @@ sealed interface BackupJson {
 
 /** null si no es JSON (o sobra algo detrás, o anida demasiado). */
 fun parseBackupJson(text: String): BackupJson? =
-    runCatching { BackupJsonReader(text.removePrefix("﻿")).document() }.getOrNull()
+    runCatching { BackupJsonReader(text.removePrefix("\uFEFF")).document() }.getOrNull()
 
 fun writeBackupJson(j: BackupJson): String = StringBuilder().also { writeJsonTo(j, it) }.toString()
 

@@ -1,5 +1,6 @@
 package com.eddie.surco.player
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Intent
@@ -37,6 +38,8 @@ class PlayTile : TileService() {
         }, ContextCompat.getMainExecutor(this))
     }
 
+    // En Android 13 y antes no hay otra forma de abrir la app desde el mosaico.
+    @SuppressLint("StartActivityAndCollapseDeprecated")
     private fun openApp() {
         val i = Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (Build.VERSION.SDK_INT >= 34) {

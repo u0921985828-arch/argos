@@ -396,7 +396,7 @@ object Upnp {
      * Sin DTD: una descripción no la necesita y así no se leen entidades externas.
      */
     private fun parseXml(xml: String): Document? {
-        val clean = xml.trim().removePrefix("﻿").trim()
+        val clean = xml.trim().removePrefix("\uFEFF").trim()
         if (clean.isEmpty()) return null
         return try {
             val f = DocumentBuilderFactory.newInstance()

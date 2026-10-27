@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
+import com.eddie.surco.data.gridColumns
 import org.json.JSONObject
 import java.io.File
 
@@ -57,7 +58,7 @@ data class Prefs(
     val homeAdded: Boolean = true,
     val homeTop: Boolean = true,
     val homeExplore: Boolean = true,
-    /** Portadas por fila en Biblioteca → Álbumes (2–5, se cambia pellizcando la cuadrícula). */
+    /** Portadas por fila en las carátulas de Biblioteca (2, 3, 5 u 8: se cambia pellizcando). */
     val albumColumns: Int = 2,
     /** Apartados de Biblioteca que se ven en carátulas (los demás, en lista): nombres de LibraryTab. */
     val libraryGrid: Set<String> = setOf("ALBUMS"),
@@ -74,8 +75,6 @@ val ACCENTS = linkedMapOf(
     "Cobre" to 0xE08A4B, "Azul" to 0x5FA8E8, "Verde" to 0x5DBB7E, "Rosa" to 0xE8789F, "Violeta" to 0xA98BEB, "Ámbar" to 0xE2B13C,
 )
 const val ACCENT_FROM_ART = "Del disco"
-/** Portadas por fila que admite la cuadrícula de álbumes. */
-val ALBUM_COLUMNS = 2..5
 /** Material You (Android 12+): el color del fondo de pantalla, el mismo que usa el sistema. */
 const val ACCENT_SYSTEM = "Sistema"
 
@@ -228,7 +227,7 @@ object SurcoSettings {
             usbBitPerfect = o.optBoolean("usbBitPerfect", false),
             homeRecent = o.optBoolean("homeRecent", true), homeAdded = o.optBoolean("homeAdded", true),
             homeTop = o.optBoolean("homeTop", true), homeExplore = o.optBoolean("homeExplore", true),
-            albumColumns = o.optInt("albumColumns", 2).coerceIn(ALBUM_COLUMNS),
+            albumColumns = gridColumns(o.optInt("albumColumns", 2)),
             libraryGrid = o.optJSONArray("libraryGrid")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() } ?: setOf("ALBUMS"),
             onlineLyrics = o.optBoolean("onlineLyrics", false),
             analyze = o.optBoolean("analyze", true),

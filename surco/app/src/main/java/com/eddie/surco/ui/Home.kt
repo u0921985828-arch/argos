@@ -74,7 +74,9 @@ import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.LazyGridScope
 import kotlin.math.roundToInt
-import com.eddie.surco.audio.ALBUM_COLUMNS
+import com.eddie.surco.data.gridColumns
+import com.eddie.surco.data.gridSpacing
+import com.eddie.surco.data.gridStep
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -193,8 +195,11 @@ private fun AlbumCard(vm: LibraryViewModel, g: Group, size: Dp = 148.dp, modifie
     // Pequeña (4–5 por fila): sin botón de reproducir encima (taparía la portada; se toca la
     // portada y se reproduce desde el álbum), esquinas y letra en proporción.
     val small = size < 110.dp
-    val corner = if (small) 8.dp else 12.dp
-    Column(modifier.width(size).clip(RoundedCornerShape(corner)).clickable { vm.openTag(TagField.ALBUM, g.bucket.key, g.bucket.label) }) {
+    // Diminuta (8 por fila): solo la portada, un muro de discos; el nombre, para TalkBack.
+    val tiny = size < 64.dp
+    val corner = if (tiny) 4.dp else if (small) 8.dp else 12.dp
+    Column(modifier.width(size).clip(RoundedCornerShape(corner)).clickable { vm.openTag(TagField.ALBUM, g.bucket.key, g.bucket.label) }
+        .then(if (tiny) Modifier.semantics(mergeDescendants = true) { contentDescription = g.bucket.label } else Modifier)) {
         Box {
             Art(g.tracks.first(), size, corner = corner, modifier = Modifier.size(size))
             if (!small) FilledIconButton(
@@ -203,10 +208,10 @@ private fun AlbumCard(vm: LibraryViewModel, g: Group, size: Dp = 148.dp, modifie
                 colors = IconButtonDefaults.filledIconButtonColors(containerColor = Copper, contentColor = Ink),
             ) { Icon(Icons.Default.PlayArrow, stringResource(R.string.library_play_item, g.bucket.label)) }
         }
-        Text(g.bucket.label, fontSize = if (small) 12.sp else 14.sp, fontWeight = FontWeight.SemiBold, maxLines = if (small) 1 else 2,
+        if (!tiny) Text(g.bucket.label, fontSize = if (small) 12.sp else 14.sp, fontWeight = FontWeight.SemiBold, maxLines = if (small) 1 else 2,
             overflow = TextOverflow.Ellipsis, lineHeight = if (small) 15.sp else 17.sp,
             modifier = Modifier.padding(top = if (small) 4.dp else 6.dp, start = 2.dp, end = 2.dp))
-        Text(albumArtist(g), color = Muted, fontSize = if (small) 11.sp else 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        if (!tiny) Text(albumArtist(g), color = Muted, fontSize = if (small) 11.sp else 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 2.dp))
     }
 }
@@ -475,10 +480,12 @@ private fun CoverCard(
     onOpen: () -> Unit, onLong: (() -> Unit)?, onPlay: (() -> Unit)? = null, modifier: Modifier = Modifier,
 ) {
     val small = size < 110.dp
-    val corner = if (round) size / 2 else if (small) 8.dp else 12.dp
+    val tiny = size < 64.dp
+    val corner = if (round) size / 2 else if (tiny) 4.dp else if (small) 8.dp else 12.dp
     Column(
         modifier.width(size).clip(RoundedCornerShape(if (round) 12.dp else corner))
-            .combinedClickable(onClick = onOpen, onLongClick = onLong),
+            .combinedClickable(onClick = onOpen, onLongClick = onLong)
+            .then(if (tiny) Modifier.semantics(mergeDescendants = true) { contentDescription = title } else Modifier),
         horizontalAlignment = if (round) Alignment.CenterHorizontally else Alignment.Start,
     ) {
         Box {
@@ -489,28 +496,28 @@ private fun CoverCard(
                 colors = IconButtonDefaults.filledIconButtonColors(containerColor = Copper, contentColor = Ink),
             ) { Icon(Icons.Default.PlayArrow, stringResource(R.string.library_play_item, title)) }
         }
-        Text(title, color = if (playing) Copper else Paper, fontSize = if (small) 12.sp else 14.sp, fontWeight = FontWeight.SemiBold,
+        if (!tiny) Text(title, color = if (playing) Copper else Paper, fontSize = if (small) 12.sp else 14.sp, fontWeight = FontWeight.SemiBold,
             maxLines = if (small) 1 else 2, overflow = TextOverflow.Ellipsis, lineHeight = if (small) 15.sp else 17.sp,
             textAlign = if (round) TextAlign.Center else TextAlign.Start,
             modifier = Modifier.padding(top = if (small) 4.dp else 6.dp, start = 2.dp, end = 2.dp))
-        Text(subtitle, color = Muted, fontSize = if (small) 11.sp else 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        if (!tiny) Text(subtitle, color = Muted, fontSize = if (small) 11.sp else 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 2.dp))
     }
 }
 
 /**
  * Cuadrícula que se pellizca: abrir los dedos agranda las portadas (menos por fila), cerrarlos las
- * achica, de 2 a 5 por fila. Los huecos y el margen crecen y menguan con la portada, así la
+ * achica: 2, 3, 5 u 8 por fila, como la sucesión de Fibonacci. Los huecos y el margen crecen y menguan con la portada, así la
  * cuadrícula se ve igual de ordenada a cualquier tamaño. Un dedo sigue desplazando; con TalkBack,
  * «Portadas más grandes / más pequeñas» en las acciones.
  */
 @Composable
 private fun ZoomableGrid(content: @Composable (cols: Int, cell: Dp, gap: Dp, pad: Dp) -> Unit) {
     val prefs by SurcoSettings.state.collectAsState()
-    val cols = prefs.albumColumns.coerceIn(ALBUM_COLUMNS)
+    val cols = gridColumns(prefs.albumColumns)
     val haptic = LocalHapticFeedback.current
     fun set(n: Int) {
-        val c = n.coerceIn(ALBUM_COLUMNS)
+        val c = gridColumns(n)
         if (c != SurcoSettings.state.value.albumColumns) {
             SurcoSettings.update { it.copy(albumColumns = c) }
             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -530,8 +537,8 @@ private fun ZoomableGrid(content: @Composable (cols: Int, cell: Dp, gap: Dp, pad
                         if (ev.changes.count { it.pressed } >= 2) {
                             zoom *= ev.calculateZoom()
                             val now = SurcoSettings.state.value.albumColumns
-                            if (zoom > 1.25f) { set(now - 1); zoom = 1f }
-                            else if (zoom < 0.8f) { set(now + 1); zoom = 1f }
+                            if (zoom > 1.25f) { set(gridStep(now, more = false)); zoom = 1f }
+                            else if (zoom < 0.8f) { set(gridStep(now, more = true)); zoom = 1f }
                             ev.changes.forEach { it.consume() }
                         }
                     } while (ev.changes.any { it.pressed })
@@ -539,16 +546,17 @@ private fun ZoomableGrid(content: @Composable (cols: Int, cell: Dp, gap: Dp, pad
             }
             .semantics {
                 customActions = listOf(
-                    CustomAccessibilityAction(bigger) { set(SurcoSettings.state.value.albumColumns - 1); true },
-                    CustomAccessibilityAction(smaller) { set(SurcoSettings.state.value.albumColumns + 1); true },
+                    CustomAccessibilityAction(bigger) { set(gridStep(SurcoSettings.state.value.albumColumns, more = false)); true },
+                    CustomAccessibilityAction(smaller) { set(gridStep(SurcoSettings.state.value.albumColumns, more = true)); true },
                 )
             },
     ) {
-        // El ajuste (2–5) es para el ancho de un móvil en vertical; en horizontal o en tableta caben
-        // más por fila en proporción y la portada mide lo mismo. Hueco y margen en proporción a la
-        // portada: 12 y 16 dp con 2 por fila, 6 y 10 con 5.
-        val gap = (16 - 2 * cols).dp
-        val pad = (20 - 2 * cols).dp
+        // El ajuste (2, 3, 5 u 8, como Fibonacci) es para el ancho de un móvil en vertical; en
+        // horizontal o en tableta caben más por fila en proporción y la portada mide lo mismo.
+        // Hueco y margen en proporción a la portada (gridSpacing).
+        val (g, m) = gridSpacing(cols)
+        val gap = g.dp
+        val pad = m.dp
         val n = (cols * (maxWidth / 400.dp)).roundToInt().coerceAtLeast(cols)
         val cell = (maxWidth - pad * 2 - gap * (n - 1)) / n
         content(n, cell, gap, pad)

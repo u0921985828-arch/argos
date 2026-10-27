@@ -162,3 +162,20 @@ fun listenStats(plays: Map<Long, Int>, top: Int = 5, info: (Long) -> Pair<String
         topSongs = alive.sortedWith(compareByDescending<Pair<Long, Int>> { it.second }.thenBy { it.first }).take(top),
     )
 }
+
+// ---------- Cuadrícula de carátulas ----------
+
+/** Portadas por fila que admite la cuadrícula al pellizcarla: la sucesión de Fibonacci, 2-3-5-8. */
+val GRID_COLUMNS = listOf(2, 3, 5, 8)
+
+/** El paso de la sucesión más cercano a [n] (un valor guardado fuera de la sucesión se recoloca). */
+fun gridColumns(n: Int): Int = GRID_COLUMNS.minBy { kotlin.math.abs(it - n) }
+
+/** El paso siguiente ([more]: más portadas, más pequeñas) o el anterior, sin salirse. */
+fun gridStep(n: Int, more: Boolean): Int {
+    val i = GRID_COLUMNS.indexOf(gridColumns(n)) + if (more) 1 else -1
+    return GRID_COLUMNS[i.coerceIn(0, GRID_COLUMNS.lastIndex)]
+}
+
+/** Hueco entre portadas y margen (dp) en proporción a la portada: 12/16 con 2 por fila … 4/8 con 8. */
+fun gridSpacing(cols: Int): Pair<Int, Int> = when (gridColumns(cols)) { 2 -> 12 to 16; 3 -> 10 to 14; 5 -> 6 to 10; else -> 4 to 8 }

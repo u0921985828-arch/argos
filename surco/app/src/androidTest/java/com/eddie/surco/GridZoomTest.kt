@@ -14,7 +14,7 @@ import java.io.File
 
 /**
  * La cuadrícula de álbumes con dos dedos de verdad: cerrar los dedos pone más portadas por fila
- * (hasta 5) y abrirlos, menos (hasta 2). Deja una captura de cada extremo para revisarla (rama
+ * (2, 3, 5 y 8, como Fibonacci) y abrirlos, menos (hasta 2). Deja una captura de cada extremo para revisarla (rama
  * `capturas-surco`). Con la app en español (auto-surco.sh) y la biblioteca de la prueba de humo.
  */
 @RunWith(AndroidJUnit4::class)
@@ -32,7 +32,7 @@ class GridZoomTest {
     }
 
     /** La tarjeta del álbum de prueba (se busca cada vez: cambia de tamaño con cada pellizco). */
-    private fun album() = dev.findObject(By.text("Disco de Prueba")).let { it.parent ?: it }.also { dev.waitForIdle() }
+    private fun album() = (dev.findObject(By.text("Disco de Prueba")) ?: dev.findObject(By.desc("Disco de Prueba"))).let { it.parent ?: it }.also { dev.waitForIdle() }
 
     private fun shot(name: String) {
         val dir = File(ctx.getExternalFilesDir(null), "rejilla").apply { mkdirs() }
@@ -54,19 +54,21 @@ class GridZoomTest {
         assertTrue("no sale el álbum de prueba", dev.wait(Until.hasObject(By.text("Disco de Prueba")), 5_000))
         shot("rejilla_2.png")
 
-        // Cerrar los dedos: más portadas por fila, hasta 5 (y no más). Sobre la portada del álbum
+        // Cerrar los dedos: más portadas por fila, hasta 8 (y no más). Sobre la portada del álbum
         // (con la biblioteca de la prueba la cuadrícula no se desplaza: no es «scrollable»).
         album().pinchClose(0.8f)
         waitCols("más de 2") { it > 2 }
         repeat(3) { album().pinchClose(0.8f) }
-        waitCols("5") { it == 5 }
-        assertTrue("el álbum desapareció a 5 por fila", dev.wait(Until.hasObject(By.text("Disco de Prueba")), 3_000))
-        shot("rejilla_5.png")
+        repeat(2) { album().pinchClose(0.8f) }
+        waitCols("8") { it == 8 }
+        // A 8 por fila solo queda la portada: el nombre sigue ahí para TalkBack.
+        assertTrue("el álbum desapareció a 8 por fila", dev.wait(Until.hasObject(By.desc("Disco de Prueba")), 3_000))
+        shot("rejilla_8.png")
 
         // Abrirlos: menos portadas, hasta 2 (y no menos).
         album().pinchOpen(0.8f)
-        waitCols("menos de 5") { it < 5 }
-        repeat(3) { album().pinchOpen(0.8f) }
+        waitCols("menos de 8") { it < 8 }
+        repeat(4) { album().pinchOpen(0.8f) }
         waitCols("2") { it == 2 }
         dev.pressHome()
     }
