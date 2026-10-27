@@ -35,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -50,11 +51,13 @@ import com.eddie.surco.audio.CROSSFEED_LEVELS
 import com.eddie.surco.audio.DspParams
 import com.eddie.surco.audio.EQ_FREQS
 import com.eddie.surco.audio.EQ_MAX_DB
+import com.eddie.surco.audio.OutputRoute
 import com.eddie.surco.audio.SurcoSettings
 import com.eddie.surco.audio.peakGainDb
 import com.eddie.surco.audio.presetLabel
 import com.eddie.surco.audio.presetLabelRes
 import com.eddie.surco.audio.responseDb
+import com.eddie.surco.audio.routeName
 import kotlin.math.floor
 import kotlin.math.log10
 import kotlin.math.pow
@@ -88,6 +91,13 @@ fun EqualizerScreen(vm: LibraryViewModel) {
             )
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
+            // Con un ecualizador por salida, para cuál es lo que se toca.
+            val route by OutputRoute.state.collectAsState()
+            val ctx = LocalContext.current
+            route?.takeIf { prefs.perOutputEq }?.let { r ->
+                Text(stringResource(R.string.eq_for, routeName(ctx, r)), color = Muted, fontSize = 13.sp,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+            }
             ResponseCurve(d, Modifier.fillMaxWidth().height(150.dp).padding(horizontal = 16.dp, vertical = 8.dp))
 
             LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

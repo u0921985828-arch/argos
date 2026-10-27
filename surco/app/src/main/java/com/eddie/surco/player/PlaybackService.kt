@@ -60,6 +60,10 @@ import com.eddie.surco.audio.SurcoAudioRenderer
 import com.eddie.surco.audio.SurcoAudioSink
 import com.eddie.surco.audio.SurcoSettings
 import com.eddie.surco.audio.OutputRoute
+import com.eddie.surco.audio.SoundProfile
+import com.eddie.surco.audio.outputKey
+import com.eddie.surco.audio.routeName
+import com.eddie.surco.audio.switchOutput
 import com.eddie.surco.data.LibraryScanner
 import com.eddie.surco.data.SavedQueue
 import com.eddie.surco.data.UserStore
@@ -71,6 +75,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlin.math.min
 import kotlin.math.pow
@@ -374,6 +380,11 @@ class PlaybackService : MediaLibraryService() {
 
         // Por dónde sale el sonido y, con un DAC USB, su mezclador (bit-perfect o sin remuestrear).
         OutputRoute.start(this)
+        // Ecualizador de cada salida: al conectar unos cascos se pone el suyo (y se guarda el de la anterior).
+        scope.launch {
+            OutputRoute.state.filterNotNull().map { it to outputKey(it.kind.name, it.name) }
+                .distinctUntilChangedBy { it.second }.collect { (route, key) -> followOutput(route, key) }
+        }
         // Ajustes que viven en el reproductor
         scope.launch {
             SurcoSettings.state.collect { p ->
@@ -411,6 +422,18 @@ class PlaybackService : MediaLibraryService() {
                 .setSessionCommand(CMD_SHUFFLE)
                 .build(),
         ))
+    }
+
+    private fun followOutput(route: OutputRoute.Route, key: String) {
+        val p = SurcoSettings.state.value
+        if (!p.perOutputEq || p.outputKey == key) {
+            if (p.outputKey != key) SurcoSettings.update { it.copy(outputKey = key) }
+            return
+        }
+        val (profiles, next) = switchOutput(p.outputProfiles, SoundProfile(p.dsp, p.preset), p.outputKey, key)
+        SurcoSettings.update { it.copy(outputProfiles = profiles, outputKey = key, dsp = next.dsp, preset = next.preset) }
+        // Solo se avisa si cambia lo que suena: la primera vez de unos cascos sigue igual.
+        if (next.dsp != p.dsp) Notice.fromService(this, getString(R.string.eq_for_output, routeName(this, route)))
     }
 
     /** El mezclador del DAC USB para la canción que suena (lo aplica OutputRoute si hay DAC y Android 14+). */

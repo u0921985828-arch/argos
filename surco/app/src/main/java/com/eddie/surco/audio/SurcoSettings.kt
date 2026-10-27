@@ -53,6 +53,12 @@ data class Prefs(
     val keepScreenOn: Boolean = false,
     /** DAC USB en Android 14+: mezclador bit-perfect (o sin remuestrear) a la frecuencia de cada canción. */
     val usbBitPerfect: Boolean = false,
+    /** Un ecualizador para cada salida (altavoz, cable, cada Bluetooth, cada USB): se pone solo al conectarla. */
+    val perOutputEq: Boolean = true,
+    /** Lo guardado de cada salida (clave de [outputKey]). */
+    val outputProfiles: Map<String, SoundProfile> = emptyMap(),
+    /** La salida de la que es lo que suena ahora. */
+    val outputKey: String? = null,
     /** Secciones de Inicio. */
     val homeRecent: Boolean = true,
     val homeAdded: Boolean = true,
@@ -178,11 +184,12 @@ object SurcoSettings {
 
     // ----- JSON -----
     private fun toJson(p: Prefs) = JSONObject().apply {
-        val d = p.dsp
-        put("eqOn", d.eqOn); put("bands", JSONArray(d.bands.map { it.toDouble() })); put("preamp", d.preampDb.toDouble())
-        put("bass", d.bassDb.toDouble()); put("treble", d.trebleDb.toDouble()); put("balance", d.balance.toDouble())
-        put("mono", d.mono); put("crossfeed", d.crossfeed); put("limiter", d.limiter)
+        putDsp(this, p.dsp)
         put("preset", p.preset)
+        put("perOutputEq", p.perOutputEq); p.outputKey?.let { put("outputKey", it) }
+        put("outputs", JSONObject().apply {
+            p.outputProfiles.forEach { (k, v) -> put(k, JSONObject().apply { putDsp(this, v.dsp); put("preset", v.preset) }) }
+        })
         put("custom", JSONObject().apply { p.customPresets.forEach { (k, v) -> put(k, JSONArray(v.map { it.toDouble() })) } })
         put("replayGain", p.replayGain.name); put("skipSilence", p.skipSilence)
         put("speed", p.speed.toDouble()); put("keepPitch", p.keepPitch); put("fade", p.fade)
@@ -197,20 +204,36 @@ object SurcoSettings {
 
     private fun floats(a: JSONArray?): List<Float>? = a?.let { arr -> List(arr.length()) { arr.optDouble(it, 0.0).toFloat() } }
 
+    // El sonido va igual en lo de ahora y en lo guardado de cada salida.
+    private fun putDsp(o: JSONObject, d: DspParams) = o.apply {
+        put("eqOn", d.eqOn); put("bands", JSONArray(d.bands.map { it.toDouble() })); put("preamp", d.preampDb.toDouble())
+        put("bass", d.bassDb.toDouble()); put("treble", d.trebleDb.toDouble()); put("balance", d.balance.toDouble())
+        put("mono", d.mono); put("crossfeed", d.crossfeed); put("limiter", d.limiter)
+    }
+
+    private fun dspOf(o: JSONObject) = DspParams(
+        eqOn = o.optBoolean("eqOn", true),
+        bands = floats(o.optJSONArray("bands"))?.takeIf { it.size == EQ_FREQS.size } ?: DspParams().bands,
+        preampDb = o.optDouble("preamp", 0.0).toFloat(), bassDb = o.optDouble("bass", 0.0).toFloat(),
+        trebleDb = o.optDouble("treble", 0.0).toFloat(), balance = o.optDouble("balance", 0.0).toFloat(),
+        mono = o.optBoolean("mono"), crossfeed = o.optInt("crossfeed").coerceIn(0, CROSSFEED_LEVELS.lastIndex),
+        limiter = o.optBoolean("limiter", true),
+    )
+
     private fun fromJson(o: JSONObject): Prefs {
         val def = Prefs()
-        val bands = floats(o.optJSONArray("bands"))?.takeIf { it.size == EQ_FREQS.size } ?: def.dsp.bands
         val custom = LinkedHashMap<String, List<Float>>()
         o.optJSONObject("custom")?.let { c -> c.keys().forEach { k -> floats(c.optJSONArray(k))?.takeIf { it.size == EQ_FREQS.size }?.let { custom[k] = it } } }
         return Prefs(
-            dsp = DspParams(
-                eqOn = o.optBoolean("eqOn", true), bands = bands,
-                preampDb = o.optDouble("preamp", 0.0).toFloat(), bassDb = o.optDouble("bass", 0.0).toFloat(),
-                trebleDb = o.optDouble("treble", 0.0).toFloat(), balance = o.optDouble("balance", 0.0).toFloat(),
-                mono = o.optBoolean("mono"), crossfeed = o.optInt("crossfeed").coerceIn(0, CROSSFEED_LEVELS.lastIndex),
-                limiter = o.optBoolean("limiter", true),
-            ),
+            dsp = dspOf(o),
             preset = o.optString("preset", def.preset),
+            perOutputEq = o.optBoolean("perOutputEq", true),
+            outputProfiles = o.optJSONObject("outputs")?.let { outs ->
+                outs.keys().asSequence().mapNotNull { k ->
+                    outs.optJSONObject(k)?.let { v -> k to SoundProfile(dspOf(v), v.optString("preset", def.preset)) }
+                }.toMap()
+            } ?: emptyMap(),
+            outputKey = o.optString("outputKey").takeIf { it.isNotEmpty() },
             customPresets = custom,
             replayGain = runCatching { ReplayGainMode.valueOf(o.optString("replayGain")) }.getOrDefault(ReplayGainMode.OFF),
             skipSilence = o.optBoolean("skipSilence"),

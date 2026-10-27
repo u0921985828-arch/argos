@@ -138,4 +138,6 @@
     <string name="settings_usb_help">Con un DAC USB, Android suena cada canción a su frecuencia y sin tocarla (con el ecualizador, ReplayGain y la velocidad quitados). El volumen pasa a ser el del DAC.</string>
     <string name="settings_usb_old">Necesita Android 14 o posterior.</string>
     <string name="settings_privacy_lb">ListenBrainz está activado: cada escucha (artista, título, álbum y duración) se envía a listenbrainz.org con tu token.</string>
+    <string name="settings_eq_per_output">Un ecualizador para cada salida</string>
+    <string name="settings_eq_per_output_help">El altavoz, los auriculares de cable y cada aparato Bluetooth o USB guardan su curva, y vuelve sola al conectarlos.</string>
 </resources>

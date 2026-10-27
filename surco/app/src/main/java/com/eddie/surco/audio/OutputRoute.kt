@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.annotation.RequiresApi
+import com.eddie.surco.R
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -131,4 +132,13 @@ object OutputRoute {
     /** La codificación que entrega Surco para un archivo: coma flotante para FLAC/ALAC y lo de más de 16 bits. */
     fun encodingFor(format: String, bits: Int): Int =
         if (bits > 16 || format.equals("FLAC", true) || format.equals("ALAC", true)) AudioFormat.ENCODING_PCM_FLOAT else AudioFormat.ENCODING_PCM_16BIT
+}
+
+/** Nombre visible de una salida («Auriculares de cable», «Bluetooth · WH-1000XM5»…). */
+fun routeName(ctx: Context, r: OutputRoute.Route): String = when (r.kind) {
+    OutputRoute.Kind.SPEAKER -> ctx.getString(R.string.player_route_speaker)
+    OutputRoute.Kind.WIRED -> ctx.getString(R.string.player_route_wired)
+    OutputRoute.Kind.BLUETOOTH -> ctx.getString(R.string.player_route_bt, r.name)
+    OutputRoute.Kind.USB -> ctx.getString(R.string.player_route_usb, r.name)
+    OutputRoute.Kind.OTHER -> r.name
 }

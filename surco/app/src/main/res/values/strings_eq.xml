@@ -38,4 +38,6 @@
     <string name="eq_delete_title">Delete “%1$s”?</string>
     <string name="eq_delete_text">Only the preset is deleted: the current sound stays the same.</string>
     <string name="eq_delete_confirm">Delete preset</string>
+    <string name="eq_for">For: %1$s</string>
+    <string name="eq_for_output">Equalizer for %1$s</string>
 </resources>

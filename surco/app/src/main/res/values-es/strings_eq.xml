@@ -38,4 +38,6 @@
     <string name="eq_delete_title">¿Borrar «%1$s»?</string>
     <string name="eq_delete_text">Solo se borra el preajuste: el sonido de ahora no cambia.</string>
     <string name="eq_delete_confirm">Borrar preajuste</string>
+    <string name="eq_for">Para: %1$s</string>
+    <string name="eq_for_output">Ecualizador de %1$s</string>
 </resources>
