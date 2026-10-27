@@ -81,8 +81,8 @@ class GridZoomTest {
         repeat(3) { pinch(close = true) }
         repeat(2) { pinch(close = true) }
         waitCols("8") { it == 8 }
-        // A 8 por fila solo queda la portada: el nombre sigue ahí para TalkBack.
-        assertTrue("el álbum desapareció a 8 por fila", dev.wait(Until.hasObject(By.desc("Disco de Prueba")), 3_000))
+        // A 8 por fila el nombre sigue debajo de la portada (un disco sin portada no se sabría cuál es).
+        assertTrue("a 8 por fila no se ve el nombre del álbum", dev.wait(Until.hasObject(By.text("Disco de Prueba")), 3_000))
         shot("rejilla_8.png")
 
         // Abrirlos: menos portadas, hasta 2 (y no menos).

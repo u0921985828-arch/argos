@@ -191,16 +191,20 @@ fun sortAlbums(list: List<Group>, sort: AlbumSort): List<Group> = when (sort) {
 
 private fun List<Track>.inAlbumOrder() = sortedWith(compareBy({ it.discNo }, { it.trackNo }, { it.title.lowercase() }))
 
+/** Letra del nombre bajo la portada según su tamaño (a 8 por fila, pequeña pero ahí). */
+private fun cardTitleSize(tiny: Boolean, small: Boolean) = if (tiny) 10.sp else if (small) 12.sp else 14.sp
+private fun cardTitleLine(tiny: Boolean, small: Boolean) = if (tiny) 12.sp else if (small) 15.sp else 17.sp
+
 @Composable
 private fun AlbumCard(vm: LibraryViewModel, g: Group, size: Dp = 148.dp, modifier: Modifier = Modifier) {
     // Pequeña (4–5 por fila): sin botón de reproducir encima (taparía la portada; se toca la
     // portada y se reproduce desde el álbum), esquinas y letra en proporción.
     val small = size < 110.dp
-    // Diminuta (8 por fila): solo la portada, un muro de discos; el nombre, para TalkBack.
+    // Diminuta (8 por fila): el nombre en una línea pequeña y sin artista. Sin el nombre, un disco
+    // sin portada era solo una letra de color y no se sabía cuál era.
     val tiny = size < 64.dp
     val corner = if (tiny) 4.dp else if (small) 8.dp else 12.dp
-    Column(modifier.width(size).clip(RoundedCornerShape(corner)).clickable { vm.openTag(TagField.ALBUM, g.bucket.key, g.bucket.label) }
-        .then(if (tiny) Modifier.semantics(mergeDescendants = true) { contentDescription = g.bucket.label } else Modifier)) {
+    Column(modifier.width(size).clip(RoundedCornerShape(corner)).clickable { vm.openTag(TagField.ALBUM, g.bucket.key, g.bucket.label) }) {
         Box {
             Art(g.tracks.first(), size, corner = corner, modifier = Modifier.size(size))
             if (!small) FilledIconButton(
@@ -209,9 +213,9 @@ private fun AlbumCard(vm: LibraryViewModel, g: Group, size: Dp = 148.dp, modifie
                 colors = IconButtonDefaults.filledIconButtonColors(containerColor = Copper, contentColor = Ink),
             ) { Icon(Icons.Default.PlayArrow, stringResource(R.string.library_play_item, g.bucket.label)) }
         }
-        if (!tiny) Text(g.bucket.label, fontSize = if (small) 12.sp else 14.sp, fontWeight = FontWeight.SemiBold, maxLines = if (small) 1 else 2,
-            overflow = TextOverflow.Ellipsis, lineHeight = if (small) 15.sp else 17.sp,
-            modifier = Modifier.padding(top = if (small) 4.dp else 6.dp, start = 2.dp, end = 2.dp))
+        Text(g.bucket.label, fontSize = cardTitleSize(tiny, small), fontWeight = FontWeight.SemiBold, maxLines = if (small) 1 else 2,
+            overflow = TextOverflow.Ellipsis, lineHeight = cardTitleLine(tiny, small),
+            modifier = Modifier.padding(top = if (tiny) 2.dp else if (small) 4.dp else 6.dp, start = if (tiny) 1.dp else 2.dp, end = if (tiny) 1.dp else 2.dp))
         if (!tiny) Text(albumArtist(g), color = Muted, fontSize = if (small) 11.sp else 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 2.dp))
     }
@@ -490,8 +494,7 @@ private fun CoverCard(
     val corner = if (round) size / 2 else if (tiny) 4.dp else if (small) 8.dp else 12.dp
     Column(
         modifier.width(size).clip(RoundedCornerShape(if (round) 12.dp else corner))
-            .combinedClickable(onClick = onOpen, onLongClick = onLong)
-            .then(if (tiny) Modifier.semantics(mergeDescendants = true) { contentDescription = title } else Modifier),
+            .combinedClickable(onClick = onOpen, onLongClick = onLong),
         horizontalAlignment = if (round) Alignment.CenterHorizontally else Alignment.Start,
     ) {
         Box {
@@ -502,10 +505,10 @@ private fun CoverCard(
                 colors = IconButtonDefaults.filledIconButtonColors(containerColor = Copper, contentColor = Ink),
             ) { Icon(Icons.Default.PlayArrow, stringResource(R.string.library_play_item, title)) }
         }
-        if (!tiny) Text(title, color = if (playing) Copper else Paper, fontSize = if (small) 12.sp else 14.sp, fontWeight = FontWeight.SemiBold,
-            maxLines = if (small) 1 else 2, overflow = TextOverflow.Ellipsis, lineHeight = if (small) 15.sp else 17.sp,
+        Text(title, color = if (playing) Copper else Paper, fontSize = cardTitleSize(tiny, small), fontWeight = FontWeight.SemiBold,
+            maxLines = if (small) 1 else 2, overflow = TextOverflow.Ellipsis, lineHeight = cardTitleLine(tiny, small),
             textAlign = if (round) TextAlign.Center else TextAlign.Start,
-            modifier = Modifier.padding(top = if (small) 4.dp else 6.dp, start = 2.dp, end = 2.dp))
+            modifier = Modifier.padding(top = if (tiny) 2.dp else if (small) 4.dp else 6.dp, start = if (tiny) 1.dp else 2.dp, end = if (tiny) 1.dp else 2.dp))
         if (!tiny) Text(subtitle, color = Muted, fontSize = if (small) 11.sp else 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 2.dp))
     }
