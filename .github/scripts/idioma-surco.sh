@@ -7,6 +7,7 @@ set -uo pipefail
 OUT=${1:-capturas-en}
 PKG=com.eddie.surco
 mkdir -p "$OUT"
+adb shell wm density | tail -1 | grep -oE '[0-9]+$' > "$OUT/densidad.txt"  # para diseno-surco.py
 n=0
 
 ui() {
