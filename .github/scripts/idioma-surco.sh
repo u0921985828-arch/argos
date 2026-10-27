@@ -91,14 +91,19 @@ ES = ["Inicio", "Biblioteca", "Etiquetas", "Listas", "Ajustes", "Canciones", "Á
       "Carpetas", "Buscar", "Reproducir", "Aleatorio", "Siguiente", "Anterior", "Favorita", "Cola",
       "Letra", "Sonando", "SONANDO", "Cerrar", "Más", "canciones", "canción", "Mezclar", "Buenas",
       "Buenos", "Sonido", "Reproducción", "Interfaz", "Acerca", "Temporizador", "Velocidad", "Lista",
-      "Añadir", "Quitar", "Desconocido", "Género", "Década", "Tonalidad", "Estado de ánimo", "Ordenar"]
-DATOS = re.compile(r"Prueba|Banda|Disco de Prueba|surco|sellonorte|zorzal", re.I)
+      "Añadir", "Quitar", "Desconocido", "Género", "Década", "Tonalidad", "Estado de ánimo", "Ordenar",
+      "Seguir", "Explorar", "Añadido", "Escuchado", "escuchas", "Detalles", "Ecualizador", "Pausar",
+      "Repetir", "Volver", "Guardar", "Cancelar", "Borrar", "Nombre", "Buscar", "Sin", "Todas", "Todo"]
+# Los datos de la prueba (títulos, artistas, álbum, carpeta, sello) se quitan antes de mirar: solo
+# esas cadenas exactas, para que «Acerca de Surco» u otra frase de la app no se cuele.
+DATOS = re.compile(r"Prueba (Uno|Dos|Tres|Cuatro)|Banda Surco|Otra Banda|Tercera Banda|Cuarta Banda|Disco de Prueba|\bsurco\b|sellonorte|zorzal|tres96|cuatro192")
 malos = set()
 for xf in sorted(glob.glob(sys.argv[1] + "/*.xml")):
     for n in ET.parse(xf).getroot().iter("node"):
         if n.get("package") != "com.eddie.surco": continue
         for t in (n.get("text") or "", n.get("content-desc") or ""):
-            if not t or DATOS.search(t): continue
+            t = DATOS.sub("", t)
+            if not t.strip(): continue
             for w in ES:
                 if re.search(r"(^|[^\wÁÉÍÓÚáéíóúñÑ])" + re.escape(w) + r"($|[^\wÁÉÍÓÚáéíóúñÑ])", t):
                     malos.add(f"{xf.split('/')[-1]}: «{t}» ({w})")

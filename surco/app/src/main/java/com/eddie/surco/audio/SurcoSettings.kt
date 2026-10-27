@@ -1,5 +1,6 @@
 package com.eddie.surco.audio
 
+import android.os.Build
 import android.content.Context
 import androidx.annotation.StringRes
 import com.eddie.surco.R
@@ -202,7 +203,7 @@ object SurcoSettings {
             autoPreamp = o.optBoolean("autoPreamp", true),
             crossfadeSec = o.optInt("crossfade", 0).coerceIn(0, 12),
             crossfadeKeepAlbums = o.optBoolean("crossfadeKeepAlbums", true),
-            accent = o.optString("accent", def.accent).takeIf { it in ACCENTS || it == ACCENT_FROM_ART || it == ACCENT_SYSTEM } ?: def.accent,
+            accent = o.optString("accent", def.accent).takeIf { it in ACCENTS || it == ACCENT_FROM_ART || (it == ACCENT_SYSTEM && Build.VERSION.SDK_INT >= 31) } ?: def.accent,
             techDetails = o.optBoolean("techDetails", false),
             keepScreenOn = o.optBoolean("keepScreenOn", false),
             homeRecent = o.optBoolean("homeRecent", true), homeAdded = o.optBoolean("homeAdded", true),

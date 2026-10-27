@@ -7,7 +7,6 @@ import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import com.eddie.surco.audio.SurcoSettings
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -32,6 +31,9 @@ class GridZoomTest {
         throw AssertionError("la cuadrícula no llegó a $what (está en ${cols()} por fila)")
     }
 
+    /** La tarjeta del álbum de prueba (se busca cada vez: cambia de tamaño con cada pellizco). */
+    private fun album() = dev.findObject(By.text("Disco de Prueba")).let { it.parent ?: it }.also { dev.waitForIdle() }
+
     private fun shot(name: String) {
         val dir = File(ctx.getExternalFilesDir(null), "widget").apply { mkdirs() }
         dev.waitForIdle()
@@ -48,22 +50,21 @@ class GridZoomTest {
         assertTrue("no está la pestaña Álbumes", dev.wait(Until.hasObject(By.text("Álbumes")), 5_000))
         dev.findObject(By.text("Álbumes")).click()
         assertTrue("no sale el álbum de prueba", dev.wait(Until.hasObject(By.text("Disco de Prueba")), 5_000))
-        val grid = dev.findObject(By.scrollable(true))
-        assertNotNull("no encuentro la cuadrícula", grid)
         shot("rejilla_2.png")
 
-        // Cerrar los dedos: más portadas por fila, hasta 5 (y no más).
-        grid.pinchClose(0.8f)
+        // Cerrar los dedos: más portadas por fila, hasta 5 (y no más). Sobre la portada del álbum
+        // (con la biblioteca de la prueba la cuadrícula no se desplaza: no es «scrollable»).
+        album().pinchClose(0.8f)
         waitCols("más de 2") { it > 2 }
-        repeat(3) { dev.findObject(By.scrollable(true)).pinchClose(0.8f) }
+        repeat(3) { album().pinchClose(0.8f) }
         waitCols("5") { it == 5 }
         assertTrue("el álbum desapareció a 5 por fila", dev.wait(Until.hasObject(By.text("Disco de Prueba")), 3_000))
         shot("rejilla_5.png")
 
         // Abrirlos: menos portadas, hasta 2 (y no menos).
-        dev.findObject(By.scrollable(true)).pinchOpen(0.8f)
+        album().pinchOpen(0.8f)
         waitCols("menos de 5") { it < 5 }
-        repeat(3) { dev.findObject(By.scrollable(true)).pinchOpen(0.8f) }
+        repeat(3) { album().pinchOpen(0.8f) }
         waitCols("2") { it == 2 }
         dev.pressHome()
     }

@@ -67,6 +67,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.roundToInt
 import com.eddie.surco.audio.ALBUM_COLUMNS
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -454,11 +455,14 @@ private fun ZoomableGrid(content: @Composable (cols: Int, cell: Dp, gap: Dp, pad
                 )
             },
     ) {
-        // Hueco y margen en proporción a la portada: 12 y 16 dp con 2 por fila, 6 y 10 con 5.
+        // El ajuste (2–5) es para el ancho de un móvil en vertical; en horizontal o en tableta caben
+        // más por fila en proporción y la portada mide lo mismo. Hueco y margen en proporción a la
+        // portada: 12 y 16 dp con 2 por fila, 6 y 10 con 5.
         val gap = (16 - 2 * cols).dp
         val pad = (20 - 2 * cols).dp
-        val cell = (maxWidth - pad * 2 - gap * (cols - 1)) / cols
-        content(cols, cell, gap, pad)
+        val n = (cols * (maxWidth / 400.dp)).roundToInt().coerceAtLeast(cols)
+        val cell = (maxWidth - pad * 2 - gap * (n - 1)) / n
+        content(n, cell, gap, pad)
     }
 }
 

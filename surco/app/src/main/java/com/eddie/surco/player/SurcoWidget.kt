@@ -26,6 +26,7 @@ import com.eddie.surco.MainActivity
 import com.eddie.surco.R
 import com.eddie.surco.audio.ACCENTS
 import com.eddie.surco.audio.ACCENT_FROM_ART
+import com.eddie.surco.audio.ACCENT_SYSTEM
 import com.eddie.surco.audio.SurcoSettings
 import com.eddie.surco.data.LibraryScanner
 import com.eddie.surco.data.UserStore
@@ -118,7 +119,7 @@ class SurcoWidget : AppWidgetProvider() {
             val key = s.trackId?.let { it * 31 + SurcoSettings.state.value.accent.hashCode() }
             val (_, cover, accent) = art?.takeIf { it.first == key } ?: s.trackId.let { id ->
                 val b = id?.let { loadArt(ctx, it) }
-                Triple(key, b, accentFor(b)).also { art = it }
+                Triple(key, b, accentFor(ctx, b)).also { art = it }
             }
             val fav = s.trackId != null && run { UserStore.init(ctx); s.trackId in UserStore.state.value.favorites }
             val small = views(ctx, R.layout.widget_small, s, cover, accent, fav)
@@ -205,9 +206,12 @@ class SurcoWidget : AppWidgetProvider() {
         }.getOrNull()
 
         /** El acento de Ajustes; «Del disco», de la portada (legible sobre el fondo del widget). */
-        private fun accentFor(art: Bitmap?): Int {
+        private fun accentFor(ctx: Context, art: Bitmap?): Int {
             val name = SurcoSettings.state.value.accent
-            val rgb = ACCENTS[name] ?: if (name == ACCENT_FROM_ART && art != null) {
+            val rgb = ACCENTS[name] ?: if (name == ACCENT_SYSTEM && Build.VERSION.SDK_INT >= 31) {
+                // Material You: el acento del sistema, como en la app.
+                legibleAccent(ctx.getColor(android.R.color.system_accent1_200) and 0xFFFFFF, 0x20242C)
+            } else if (name == ACCENT_FROM_ART && art != null) {
                 val c = Palette.from(art).generate().getDominantColor(0xE08A4B)
                 legibleAccent(c and 0xFFFFFF, 0x20242C)
             } else ACCENTS.getValue("Cobre")
