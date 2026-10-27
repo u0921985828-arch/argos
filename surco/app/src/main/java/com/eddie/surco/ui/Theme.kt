@@ -37,6 +37,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eddie.surco.R
+import androidx.compose.material3.Typography
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import com.eddie.surco.Res
 import com.eddie.surco.data.Track
 import kotlinx.coroutines.Dispatchers
@@ -59,10 +63,11 @@ val Teal = Color(0xFF6FB3A8)
 val Paper = Color(0xFFECE7E1)
 val Muted = Color(0xFF8E939C)
 
-/** Un solo lenguaje de «seleccionado» para todos los chips: cobre con texto tinta. */
-@Composable
-// Lo elegido con un velo del acento y la letra clara: con el chip relleno de color, cada fila de
-// opciones era una mancha y la pantalla no descansaba. El acento queda para la acción principal.
+/**
+ * Un solo lenguaje de «seleccionado» para todos los chips: un velo del acento y la letra clara.
+ * Con el chip relleno de color cada fila de opciones era una mancha y la pantalla no descansaba;
+ * el acento queda para la acción principal.
+ */
 @Composable
 fun chipColors() = FilterChipDefaults.filterChipColors(
     selectedContainerColor = Copper.copy(alpha = 0.22f), selectedLabelColor = Paper,
@@ -78,8 +83,31 @@ private val Scheme = darkColorScheme(
     surfaceContainerHigh = Panel2, surfaceContainerLow = Panel, outline = Color(0xFF2E333C),
 )
 
+/**
+ * Manrope (SIL OFL, en res/font; licencia en assets/licencias): redondeada y tranquila, con cifras
+ * tabulares para los tiempos. Cuatro pesos fijos sacados de la variable (400, 500, 600 y 700):
+ * los pesos más gruesos caen en el 700, así nada grita.
+ */
+val Manrope = FontFamily(
+    Font(R.font.manrope_regular, FontWeight.Normal),
+    Font(R.font.manrope_medium, FontWeight.Medium),
+    Font(R.font.manrope_semibold, FontWeight.SemiBold),
+    Font(R.font.manrope_bold, FontWeight.Bold),
+)
+
+private val SurcoType = Typography().let { t ->
+    fun TextStyle.m() = copy(fontFamily = Manrope)
+    t.copy(
+        displayLarge = t.displayLarge.m(), displayMedium = t.displayMedium.m(), displaySmall = t.displaySmall.m(),
+        headlineLarge = t.headlineLarge.m(), headlineMedium = t.headlineMedium.m(), headlineSmall = t.headlineSmall.m(),
+        titleLarge = t.titleLarge.m(), titleMedium = t.titleMedium.m(), titleSmall = t.titleSmall.m(),
+        bodyLarge = t.bodyLarge.m(), bodyMedium = t.bodyMedium.m(), bodySmall = t.bodySmall.m(),
+        labelLarge = t.labelLarge.m(), labelMedium = t.labelMedium.m(), labelSmall = t.labelSmall.m(),
+    )
+}
+
 @Composable
-fun SurcoTheme(content: @Composable () -> Unit) = MaterialTheme(colorScheme = Scheme.copy(primary = Copper)) {
+fun SurcoTheme(content: @Composable () -> Unit) = MaterialTheme(colorScheme = Scheme.copy(primary = Copper), typography = SurcoType) {
     // Fuera del Scaffold (la pantalla «Sonando» y la de permiso) el color de contenido por defecto
     // es NEGRO: el título salía ilegible sobre el fondo oscuro. Medido en el recorrido de diseño.
     CompositionLocalProvider(LocalContentColor provides Paper, content = content)

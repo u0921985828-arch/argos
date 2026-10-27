@@ -13,13 +13,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cast
-import androidx.compose.material.icons.filled.CastConnected
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material.icons.filled.Radio
-import androidx.compose.material.icons.filled.Speaker
-import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.rounded.Cast
+import androidx.compose.material.icons.rounded.CastConnected
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.PhoneAndroid
+import androidx.compose.material.icons.rounded.Radio
+import androidx.compose.material.icons.rounded.Speaker
+import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -65,7 +65,7 @@ fun CastButton(modifier: Modifier = Modifier) {
     val remote = active != Output.Phone
     IconButton(onClick = { open = true }, modifier.semantics { stateDescription = where }) {
         Icon(
-            if (remote) Icons.Default.CastConnected else Icons.Default.Cast,
+            if (remote) Icons.Rounded.CastConnected else Icons.Rounded.Cast,
             stringResource(R.string.cast_button),
             tint = if (remote || connecting != null) Copper else Paper,
         )
@@ -94,20 +94,20 @@ fun CastSheet(onDismiss: () -> Unit) {
     SurcoSheet(stringResource(R.string.cast_title), onDismiss = onDismiss, subtitle = stringResource(R.string.cast_subtitle),
         dismiss = stringResource(R.string.cast_close)) {
         Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState())) {
-            DeviceRow(Icons.Default.PhoneAndroid, stringResource(R.string.cast_this_phone), null, selected = active == Output.Phone && connecting == null) {
+            DeviceRow(Icons.Rounded.PhoneAndroid, stringResource(R.string.cast_this_phone), null, selected = active == Output.Phone && connecting == null) {
                 Outputs.choose(Output.Phone); onDismiss()
             }
             casts.forEach { c ->
                 val on = (active as? Output.Cast)?.name == c.name || connecting == c.name
-                DeviceRow(Icons.Default.Cast, c.name, c.description.ifBlank { stringResource(R.string.cast_kind_chromecast) }, selected = on) {
+                DeviceRow(Icons.Rounded.Cast, c.name, c.description.ifBlank { stringResource(R.string.cast_kind_chromecast) }, selected = on) {
                     Outputs.choose(Output.Cast(c.id, c.name)); onDismiss()
                 }
             }
             renderers.forEach { d ->
                 val icon = when (d.kind) {
-                    RendererKind.TV -> Icons.Default.Tv
-                    RendererKind.RECEIVER -> Icons.Default.Radio
-                    RendererKind.SPEAKER -> Icons.Default.Speaker
+                    RendererKind.TV -> Icons.Rounded.Tv
+                    RendererKind.RECEIVER -> Icons.Rounded.Radio
+                    RendererKind.SPEAKER -> Icons.Rounded.Speaker
                 }
                 val sub = listOf(d.manufacturer, d.model).filter { it.isNotBlank() }.distinct().joinToString(" · ").ifBlank { stringResource(R.string.cast_kind_dlna) }
                 DeviceRow(icon, d.name, sub, selected = (active as? Output.Renderer)?.device?.udn == d.udn) {
@@ -142,6 +142,6 @@ private fun DeviceRow(icon: ImageVector, name: String, subtitle: String?, select
             Text(name, color = if (selected) Copper else Paper, fontSize = 15.sp, maxLines = 2)
             if (subtitle != null) Text(subtitle, color = Muted, fontSize = 12.sp, lineHeight = 15.sp, maxLines = 1)
         }
-        if (selected) Icon(Icons.Default.Check, null, tint = Copper)
+        if (selected) Icon(Icons.Rounded.Check, null, tint = Copper)
     }
 }

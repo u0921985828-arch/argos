@@ -39,7 +39,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -131,7 +130,7 @@ fun EqualizerScreen(vm: LibraryViewModel) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             d.bands[i].let { if (it == 0f) "0" else (if (it > 0) "+" else "") + it.toString().removeSuffix(".0") },
-                            color = if (d.bands[i] == 0f) Muted else Copper, fontSize = 10.sp, fontFamily = FontFamily.Monospace,
+                            color = if (d.bands[i] == 0f) Muted else Copper, fontSize = 10.sp, fontFeatureSettings = "tnum",
                         )
                         VerticalSlider(
                             value = d.bands[i], min = -EQ_MAX_DB, max = EQ_MAX_DB, label = stringResource(R.string.eq_band, freqLabel(f)),

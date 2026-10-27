@@ -4,11 +4,11 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.material.icons.filled.Equalizer
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.rounded.Equalizer
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -38,13 +38,13 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Clear
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -70,7 +70,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -128,7 +127,7 @@ private fun FieldCard(field: TagField, groups: List<Group>, modifier: Modifier, 
         modifier.clip(RoundedCornerShape(14.dp)).background(Panel).clickable(onClick = onClick).padding(14.dp),
     ) {
         Text(field.label, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 18.sp)
-        Text("${groups.size}", color = Paper, fontSize = 26.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+        Text("${groups.size}", color = Paper, fontSize = 26.sp, fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")
         Text(top, color = Muted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 15.sp)
     }
 }
@@ -193,7 +192,7 @@ fun GroupsScreen(vm: LibraryViewModel, field: TagField, tracks: List<Track>) {
                             }
                         }
                     }
-                    IconButton(onClick = { vm.player.play(g.tracks.sortedForAlbum(), 0) }) { Icon(Icons.Default.PlayArrow, stringResource(R.string.library_play), tint = Muted) }
+                    IconButton(onClick = { vm.player.play(g.tracks.sortedForAlbum(), 0) }) { Icon(Icons.Rounded.PlayArrow, stringResource(R.string.library_play), tint = Muted) }
                 }
             }
         }
@@ -308,7 +307,7 @@ fun SongListScreen(
     Column(Modifier.fillMaxSize()) {
         TopBar(title, subtitle, onBack = { vm.pop() }) {
             Box {
-                IconButton(onClick = { sortMenu = true }) { Icon(Icons.AutoMirrored.Filled.Sort, stringResource(R.string.library_sort)) }
+                IconButton(onClick = { sortMenu = true }) { Icon(Icons.AutoMirrored.Rounded.Sort, stringResource(R.string.library_sort)) }
                 DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
                     SongSort.entries.filter { custom || it != SongSort.CUSTOM }.forEach { o ->
                         DropdownMenuItem(
@@ -319,7 +318,7 @@ fun SongListScreen(
                 }
             }
             Box {
-                IconButton(onClick = { moreMenu = true }) { Icon(Icons.Default.MoreVert, stringResource(R.string.library_more)) }
+                IconButton(onClick = { moreMenu = true }) { Icon(Icons.Rounded.MoreVert, stringResource(R.string.library_more)) }
                 DropdownMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
                     DropdownMenuItem(text = { Text(stringResource(R.string.library_all_to_queue)) }, onClick = {
                         moreMenu = false; vm.player.enqueue(tracksSorted)
@@ -346,12 +345,12 @@ fun SongListScreen(
                         Spacer(Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = { vm.player.play(tracksSorted, 0) }, enabled = list.isNotEmpty(), contentPadding = PaddingValues(horizontal = 14.dp)) {
-                                Icon(Icons.Default.PlayArrow, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text(stringResource(R.string.library_play))
+                                Icon(Icons.Rounded.PlayArrow, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text(stringResource(R.string.library_play))
                             }
                             OutlinedButton(onClick = { vm.player.play(tracksSorted, 0, shuffled = true) }, enabled = list.isNotEmpty(),
                                 contentPadding = PaddingValues(horizontal = 12.dp),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Copper)) {
-                                Icon(Icons.Default.Shuffle, stringResource(R.string.library_shuffle), Modifier.size(18.dp))
+                                Icon(Icons.Rounded.Shuffle, stringResource(R.string.library_shuffle), Modifier.size(18.dp))
                             }
                         }
                     }
@@ -383,7 +382,7 @@ fun SongRow(t: Track, number: Int?, playing: Boolean, onClick: () -> Unit, onLon
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (number != null) {
-            Text("$number", color = if (playing) Copper else Muted, fontFamily = FontFamily.Monospace, fontSize = 13.sp,
+            Text("$number", color = if (playing) Copper else Muted, fontFeatureSettings = "tnum", fontSize = 13.sp,
                 modifier = Modifier.width(30.dp))
         } else {
             Art(t, 46.dp, modifier = Modifier.size(46.dp)); Spacer(Modifier.width(12.dp))
@@ -395,16 +394,16 @@ fun SongRow(t: Track, number: Int?, playing: Boolean, onClick: () -> Unit, onLon
                 color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.width(8.dp))
-        Text(fmtTime(t.durationMs), color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+        Text(fmtTime(t.durationMs), color = Muted, fontSize = 12.sp, fontFeatureSettings = "tnum")
         // El menú (a continuación, a la cola, a una lista…) también a la vista, no solo con pulsación larga.
-        IconButton(onClick = onLong) { Icon(Icons.Default.MoreVert, moreOptions, tint = Muted) }
+        IconButton(onClick = onLong) { Icon(Icons.Rounded.MoreVert, moreOptions, tint = Muted) }
     }
 }
 
 @Composable
 fun TopBar(title: String, subtitle: String, onBack: (() -> Unit)?, actions: @Composable RowScope.() -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.library_back)) }
+        if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.library_back)) }
         else Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
             Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)

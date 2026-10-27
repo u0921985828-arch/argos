@@ -24,14 +24,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Equalizer
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Equalizer
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -52,7 +52,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -78,12 +77,12 @@ import com.eddie.surco.player.RG_HEADROOM_DB
 
 /** Las páginas de Ajustes: lo que no está a la vista en la app vive aquí, ordenado. */
 enum class SettingsPage(@StringRes val title: Int, @StringRes val subtitle: Int, val icon: ImageVector) {
-    SOUND(R.string.settings_sound_title, R.string.settings_sound_sub, Icons.Default.Equalizer),
-    PLAYBACK(R.string.settings_playback_title, R.string.settings_playback_sub, Icons.Default.PlayCircle),
-    LIBRARY(R.string.settings_library_title, R.string.settings_library_sub, Icons.Default.LibraryMusic),
-    LOOK(R.string.settings_look_title, R.string.settings_look_sub, Icons.Default.Palette),
-    STATS(R.string.settings_stats_title, R.string.settings_stats_sub, Icons.Default.BarChart),
-    ABOUT(R.string.settings_about_title, R.string.settings_about_sub, Icons.Default.Info),
+    SOUND(R.string.settings_sound_title, R.string.settings_sound_sub, Icons.Rounded.Equalizer),
+    PLAYBACK(R.string.settings_playback_title, R.string.settings_playback_sub, Icons.Rounded.PlayCircle),
+    LIBRARY(R.string.settings_library_title, R.string.settings_library_sub, Icons.Rounded.LibraryMusic),
+    LOOK(R.string.settings_look_title, R.string.settings_look_sub, Icons.Rounded.Palette),
+    STATS(R.string.settings_stats_title, R.string.settings_stats_sub, Icons.Rounded.BarChart),
+    ABOUT(R.string.settings_about_title, R.string.settings_about_sub, Icons.Rounded.Info),
 }
 
 const val SURCO_VERSION = "Surco 2.7"
@@ -106,7 +105,7 @@ fun SettingsScreen(vm: LibraryViewModel) {
                         Text(stringResource(p.title), fontSize = 16.sp, fontWeight = FontWeight.Medium)
                         Text(stringResource(p.subtitle), color = Muted, fontSize = 13.sp, lineHeight = 16.sp)
                     }
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Muted)
+                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Muted)
                 }
             }
         }
@@ -318,7 +317,7 @@ private fun Swatch(name: String, color: Color, selected: Boolean, onClick: () ->
                 .clickable(role = Role.RadioButton, onClick = onClick)
                 .semantics { contentDescription = name; this.selected = selected },
             contentAlignment = Alignment.Center,
-        ) { if (selected) Icon(Icons.Default.Check, null, tint = Ink) }
+        ) { if (selected) Icon(Icons.Rounded.Check, null, tint = Ink) }
         Text(name, fontSize = 11.sp, color = if (selected) Paper else Muted, modifier = Modifier.padding(top = 4.dp))
     }
 }
@@ -358,7 +357,7 @@ private fun StatsPage(vm: LibraryViewModel) {
 @Composable
 private fun Big(value: String, label: String, modifier: Modifier) {
     Column(modifier.clip(RoundedCornerShape(14.dp)).background(Panel).padding(vertical = 14.dp, horizontal = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, color = Copper, fontSize = 24.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, maxLines = 1)
+        Text(value, color = Copper, fontSize = 24.sp, fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum", maxLines = 1)
         Text(label, color = Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -369,9 +368,9 @@ private fun RankRow(rank: Int, title: String, value: String, onClick: () -> Unit
         Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 48.dp).padding(horizontal = 20.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("$rank", color = Muted, fontFamily = FontFamily.Monospace, fontSize = 13.sp, modifier = Modifier.width(28.dp))
+        Text("$rank", color = Muted, fontFeatureSettings = "tnum", fontSize = 13.sp, modifier = Modifier.width(28.dp))
         Text(title, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        Text(value, color = Copper, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+        Text(value, color = Copper, fontFeatureSettings = "tnum", fontSize = 13.sp)
     }
 }
 

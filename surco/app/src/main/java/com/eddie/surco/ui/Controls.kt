@@ -46,11 +46,11 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.ui.unit.DpSize
@@ -67,7 +67,6 @@ import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -155,8 +154,8 @@ fun LabeledSlider(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(title, fontSize = 15.sp, modifier = Modifier.weight(1f))
             // Volver a 0 con un icono y solo cuando hace falta: un «0» junto al valor se leía como dos cifras.
-            if (onReset != null && value != 0f) IconButton(onClick = onReset) { Icon(Icons.Default.Refresh, stringResource(R.string.app_reset_zero), tint = Muted) }
-            Text(valueText, color = Copper, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+            if (onReset != null && value != 0f) IconButton(onClick = onReset) { Icon(Icons.Rounded.Refresh, stringResource(R.string.app_reset_zero), tint = Muted) }
+            Text(valueText, color = Copper, fontFeatureSettings = "tnum", fontSize = 13.sp)
         }
         SurcoSlider(value = value, onChange = onChange, range = range, steps = steps, fill = range.start != -range.endInclusive)
     }
@@ -274,7 +273,7 @@ fun OptionRow(title: String, subtitle: String? = null, onClick: () -> Unit) {
             if (subtitle != null) Text(subtitle, color = Muted, fontSize = 12.sp, lineHeight = 15.sp)
         }
         // La flecha dice que abre algo: sin ella se confundía con los textos fijos de Ajustes.
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Muted)
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Muted)
     }
 }
 

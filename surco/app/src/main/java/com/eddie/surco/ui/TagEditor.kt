@@ -47,7 +47,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -180,7 +179,7 @@ fun TagEditorScreen(vm: LibraryViewModel, id: Long, byId: Map<Long, Track>) {
                 Art(track, 72.dp, modifier = Modifier.size(72.dp))
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
-                    if (track.format.isNotBlank()) Text(track.format, color = Teal, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    if (track.format.isNotBlank()) Text(track.format, color = Teal, fontSize = 12.sp, fontFeatureSettings = "tnum")
                     Text(track.path, color = Muted, fontSize = 12.sp, lineHeight = 16.sp)
                 }
             }

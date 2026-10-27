@@ -19,14 +19,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.AddCircle
-import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.PlayCircleOutline
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.AddCircle
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.PlayCircleOutline
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,11 +58,11 @@ import com.eddie.surco.data.UserStore
 import com.eddie.surco.player.RG_HEADROOM_DB
 
 private fun SmartList.icon(): ImageVector = when (this) {
-    SmartList.FAVORITES -> Icons.Default.Favorite
-    SmartList.MOST_PLAYED -> Icons.Default.Star
-    SmartList.RECENT -> Icons.Default.History
-    SmartList.ADDED -> Icons.Default.AddCircle
-    SmartList.NEVER -> Icons.Default.PlayCircleOutline
+    SmartList.FAVORITES -> Icons.Rounded.Favorite
+    SmartList.MOST_PLAYED -> Icons.Rounded.Star
+    SmartList.RECENT -> Icons.Rounded.History
+    SmartList.ADDED -> Icons.Rounded.AddCircle
+    SmartList.NEVER -> Icons.Rounded.PlayCircleOutline
 }
 
 // ======================= LISTAS =======================
@@ -77,7 +77,7 @@ fun PlaylistsScreen(vm: LibraryViewModel, tracks: List<Track>) {
             stringResource(R.string.library_lists_title),
             if (user.playlists.isEmpty()) stringResource(R.string.library_lists_subtitle) else plural(R.plurals.library_own_lists, user.playlists.size),
         ) {
-            IconButton(onClick = { creating = true }) { Icon(Icons.Default.Add, stringResource(R.string.library_new_playlist), tint = Paper) }
+            IconButton(onClick = { creating = true }) { Icon(Icons.Rounded.Add, stringResource(R.string.library_new_playlist), tint = Paper) }
         }
         LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
             item { SectionLabel(stringResource(R.string.library_smart_section)) }
@@ -91,11 +91,11 @@ fun PlaylistsScreen(vm: LibraryViewModel, tracks: List<Track>) {
                     color = Muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
             }
             items(user.playlists, key = { it.id }) { pl ->
-                ListRow(Icons.AutoMirrored.Filled.QueueMusic, pl.name, songs(pl.trackIds.size)) { vm.push(Screen.PlaylistView(pl.id)) }
+                ListRow(Icons.AutoMirrored.Rounded.QueueMusic, pl.name, songs(pl.trackIds.size)) { vm.push(Screen.PlaylistView(pl.id)) }
             }
             // Para quien llega de otro reproductor o de un PC: sus listas M3U/M3U8, casadas con esta biblioteca.
             item {
-                ListRow(Icons.Default.FolderOpen, stringResource(R.string.m3u_import), stringResource(R.string.m3u_import_hint), onClick = importM3u)
+                ListRow(Icons.Rounded.FolderOpen, stringResource(R.string.m3u_import), stringResource(R.string.m3u_import_hint), onClick = importM3u)
             }
         }
     }

@@ -41,30 +41,30 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Album
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.DragHandle
-import androidx.compose.material.icons.filled.Equalizer
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.FormatQuote
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
-import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.RepeatOne
-import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.DragHandle
+import androidx.compose.material.icons.rounded.Equalizer
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.FormatQuote
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.rounded.RepeatOne
+import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -87,7 +87,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.rounded.GraphicEq
 import com.eddie.surco.data.parseKey
 import com.eddie.surco.data.SEEK_GRACE_MS
 import com.eddie.surco.data.seekShown
@@ -103,7 +103,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -197,9 +196,9 @@ private fun SeekBar(vm: LibraryViewModel, track: Track) {
         enabled = p.seekable && dur > 0,
     )
     Row(Modifier.fillMaxWidth()) {
-        Text(fmtTime(shown), color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+        Text(fmtTime(shown), color = Muted, fontSize = 12.sp, fontFeatureSettings = "tnum")
         Spacer(Modifier.weight(1f))
-        Text(if (dur > 0) "−" + fmtTime((dur - shown).coerceAtLeast(0)) else "--:--", color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+        Text(if (dur > 0) "−" + fmtTime((dur - shown).coerceAtLeast(0)) else "--:--", color = Muted, fontSize = 12.sp, fontFeatureSettings = "tnum")
     }
 }
 
@@ -329,12 +328,12 @@ fun MiniPlayer(vm: LibraryViewModel, track: Track) {
                 }
             }
             IconButton(onClick = { toggleFavorite(track) }, Modifier.semantics { stateDescription = favState }) {
-                Icon(if (fav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, stringResource(R.string.player_favorite), tint = if (fav) Copper else Muted)
+                Icon(if (fav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, stringResource(R.string.player_favorite), tint = if (fav) Copper else Muted)
             }
             IconButton(onClick = { vm.player.toggle() }) {
-                Icon(if (vm.player.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, stringResource(R.string.player_play_pause))
+                Icon(if (vm.player.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, stringResource(R.string.player_play_pause))
             }
-            IconButton(onClick = { vm.player.next() }) { Icon(Icons.Default.SkipNext, stringResource(R.string.player_next)) }
+            IconButton(onClick = { vm.player.next() }) { Icon(Icons.Rounded.SkipNext, stringResource(R.string.player_next)) }
         }
     }
 }
@@ -364,10 +363,10 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
 
     val header: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { vm.nowPlayingOpen = false }) { Icon(Icons.Default.KeyboardArrowDown, stringResource(R.string.player_close), Modifier.size(30.dp)) }
+            IconButton(onClick = { vm.nowPlayingOpen = false }) { Icon(Icons.Rounded.KeyboardArrowDown, stringResource(R.string.player_close), Modifier.size(30.dp)) }
             Text(stringResource(R.string.player_now_playing_header), color = Paper.copy(alpha = 0.7f), fontSize = 12.sp, letterSpacing = 1.6.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
             CastButton()
-            IconButton(onClick = { vm.sheet = SongSheetState(track, fromPlayer = true) }) { Icon(Icons.Default.MoreVert, stringResource(R.string.player_more)) }
+            IconButton(onClick = { vm.sheet = SongSheetState(track, fromPlayer = true) }) { Icon(Icons.Rounded.MoreVert, stringResource(R.string.player_more)) }
         }
     }
     // La portada (o la letra) a [size]: lo decide el hueco que deja la pantalla, no un tamaño fijo.
@@ -408,7 +407,7 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
                     }
                 }
                 IconButton(onClick = { toggleFavorite(track) }) {
-                    Icon(if (fav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, stringResource(if (fav) R.string.player_unfavorite else R.string.player_favorite),
+                    Icon(if (fav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, stringResource(if (fav) R.string.player_unfavorite else R.string.player_favorite),
                         tint = if (fav) Copper else Muted, modifier = Modifier.size(28.dp))
                 }
             }
@@ -416,10 +415,10 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
             if (prefs.techDetails) {
                 val q = qualityLine(track)
                 if (q.isNotEmpty()) {
-                    Text(q, color = Teal, fontSize = 12.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+                    Text(q, color = Teal, fontSize = 12.sp, fontFeatureSettings = "tnum", modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
                 }
-                outputLine(track)?.let { Text(it, color = Muted, fontSize = 11.sp, lineHeight = 15.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth()) }
-            routeLine()?.let { Text(it, color = Muted, fontSize = 11.sp, lineHeight = 15.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth()) }
+                outputLine(track)?.let { Text(it, color = Muted, fontSize = 11.sp, lineHeight = 15.sp, fontFeatureSettings = "tnum", modifier = Modifier.fillMaxWidth()) }
+            routeLine()?.let { Text(it, color = Muted, fontSize = 11.sp, lineHeight = 15.sp, fontFeatureSettings = "tnum", modifier = Modifier.fillMaxWidth()) }
             }
             Spacer(Modifier.height(10.dp))
             SeekBar(vm, track)
@@ -430,19 +429,19 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
             )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { p.toggleShuffle() }, Modifier.semantics { stateDescription = shuffleState }) {
-                    Icon(Icons.Default.Shuffle, stringResource(R.string.player_shuffle), tint = if (p.shuffle) Copper else Muted)
+                    Icon(Icons.Rounded.Shuffle, stringResource(R.string.player_shuffle), tint = if (p.shuffle) Copper else Muted)
                 }
-                IconButton(onClick = { p.prev() }, Modifier.size(56.dp)) { Icon(Icons.Default.SkipPrevious, stringResource(R.string.player_previous), Modifier.size(36.dp)) }
+                IconButton(onClick = { p.prev() }, Modifier.size(56.dp)) { Icon(Icons.Rounded.SkipPrevious, stringResource(R.string.player_previous), Modifier.size(36.dp)) }
                 FilledIconButton(
                     onClick = { p.toggle() }, modifier = Modifier.size(72.dp),
                     colors = IconButtonDefaults.filledIconButtonColors(containerColor = Copper, contentColor = Ink),
-                ) { Icon(if (p.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, stringResource(R.string.player_play_pause), Modifier.size(40.dp)) }
-                IconButton(onClick = { p.next() }, Modifier.size(56.dp)) { Icon(Icons.Default.SkipNext, stringResource(R.string.player_next), Modifier.size(36.dp)) }
+                ) { Icon(if (p.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, stringResource(R.string.player_play_pause), Modifier.size(40.dp)) }
+                IconButton(onClick = { p.next() }, Modifier.size(56.dp)) { Icon(Icons.Rounded.SkipNext, stringResource(R.string.player_next), Modifier.size(36.dp)) }
                 IconButton(onClick = { p.cycleRepeat() }, Modifier.semantics {
                     stateDescription = repeatState
                 }) {
                     Icon(
-                        if (p.repeat == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat, stringResource(R.string.player_repeat),
+                        if (p.repeat == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat, stringResource(R.string.player_repeat),
                         tint = if (p.repeat == Player.REPEAT_MODE_OFF) Muted else Copper,
                     )
                 }
@@ -450,20 +449,20 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
             Spacer(Modifier.height(10.dp))
             // Solo lo de cada día: letra y cola. Temporizador, velocidad, ecualizador y etiquetas, en «⋮».
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                ToolButton(Icons.Default.FormatQuote, stringResource(R.string.player_lyrics), showLyrics) { showLyrics = !showLyrics }
-                ToolButton(Icons.AutoMirrored.Filled.QueueMusic, stringResource(R.string.player_queue), false) { vm.queueOpen = true }
+                ToolButton(Icons.Rounded.FormatQuote, stringResource(R.string.player_lyrics), showLyrics) { showLyrics = !showLyrics }
+                ToolButton(Icons.AutoMirrored.Rounded.QueueMusic, stringResource(R.string.player_queue), false) { vm.queueOpen = true }
             }
             // Lo que está activo y cambia cómo suena, a la vista y a un toque de quitarlo.
             val stopsAtEnd = stringResource(R.string.player_sleep_pill_end)
             val active = buildList {
-                if (sleepTrack) add(Icons.Default.Timer to stopsAtEnd)
-                else sleepEnd?.let { add(Icons.Default.Timer to stringResource(R.string.player_sleep_pill_in, sleepRemaining(it))) }
-                if (prefs.speed != 1f) add(Icons.Default.Speed to "%.2f×".format(appLocale(), prefs.speed).replace(Regex("[.,]00"), ""))
+                if (sleepTrack) add(Icons.Rounded.Timer to stopsAtEnd)
+                else sleepEnd?.let { add(Icons.Rounded.Timer to stringResource(R.string.player_sleep_pill_in, sleepRemaining(it))) }
+                if (prefs.speed != 1f) add(Icons.Rounded.Speed to "%.2f×".format(appLocale(), prefs.speed).replace(Regex("[.,]00"), ""))
             }
             if (active.isNotEmpty()) {
                 Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     active.forEach { (icon, label) ->
-                        StatusPill(icon, label) { if (icon == Icons.Default.Timer) vm.sleepOpen = true else vm.speedOpen = true }
+                        StatusPill(icon, label) { if (icon == Icons.Rounded.Timer) vm.sleepOpen = true else vm.speedOpen = true }
                     }
                 }
             }
@@ -632,7 +631,7 @@ fun QueueSheet(vm: LibraryViewModel, byId: Map<Long, Track>) {
                 ) {
                     if (!p.shuffle) {
                         Icon(
-                            Icons.Default.DragHandle, stringResource(R.string.player_queue_drag), tint = Muted,
+                            Icons.Rounded.DragHandle, stringResource(R.string.player_queue_drag), tint = Muted,
                             modifier = Modifier.size(40.dp).padding(8.dp).pointerInput(e.index) {
                                 detectVerticalDragGestures(
                                     onDragStart = { dragFrom = pos; dragDy = 0f },
@@ -662,7 +661,7 @@ fun QueueSheet(vm: LibraryViewModel, byId: Map<Long, Track>) {
                         // En aleatorio no volvería a su sitio del orden: se avisa sin «Deshacer».
                         if (p.shuffle || t == null) Notice.show(Res.str(R.string.player_queue_removed))
                         else Notice.show(Res.str(R.string.player_queue_removed), Res.str(R.string.player_undo)) { p.insertAt(e.index, t) }
-                    }) { Icon(Icons.Default.Close, stringResource(R.string.player_queue_remove), tint = Muted) }
+                    }) { Icon(Icons.Rounded.Close, stringResource(R.string.player_queue_remove), tint = Muted) }
                 }
             }
         }
@@ -780,7 +779,7 @@ fun SongSheet(vm: LibraryViewModel, s: SongSheetState) {
                     Text(track.title, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(track.artist, color = Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     val q = qualityLine(track)
-                    if (q.isNotEmpty()) Text(q, color = Teal, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                    if (q.isNotEmpty()) Text(q, color = Teal, fontSize = 11.sp, fontFeatureSettings = "tnum")
                 }
             }
             // Desde «Sonando», primero lo de la escucha (a la vista sin desplegar la hoja).
@@ -788,9 +787,9 @@ fun SongSheet(vm: LibraryViewModel, s: SongSheetState) {
             if (s.fromPlayer) {
                 Spacer(Modifier.height(14.dp))
                 ActionGrid(listOf(
-                    Act(Icons.Default.Equalizer, stringResource(R.string.player_equalizer)) { close(); vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.Equalizer) },
-                    Act(Icons.Default.Timer, stringResource(R.string.player_sleep_title)) { close(); vm.sleepOpen = true },
-                    Act(Icons.Default.Speed, stringResource(R.string.player_speed)) { close(); vm.speedOpen = true },
+                    Act(Icons.Rounded.Equalizer, stringResource(R.string.player_equalizer)) { close(); vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.Equalizer) },
+                    Act(Icons.Rounded.Timer, stringResource(R.string.player_sleep_title)) { close(); vm.sleepOpen = true },
+                    Act(Icons.Rounded.Speed, stringResource(R.string.player_speed)) { close(); vm.speedOpen = true },
                 ))
                 SectionLabel(stringResource(R.string.player_this_song))
             } else Spacer(Modifier.height(14.dp))
@@ -798,29 +797,29 @@ fun SongSheet(vm: LibraryViewModel, s: SongSheetState) {
             val queued = stringResource(R.string.player_added_to_queue)
             val viewQueue = stringResource(R.string.player_view_queue)
             ActionGrid(buildList {
-                add(Act(Icons.Default.SkipNext, stringResource(R.string.player_play_next)) {
+                add(Act(Icons.Rounded.SkipNext, stringResource(R.string.player_play_next)) {
                     vm.player.playNext(listOf(track)); close()
                     Notice.show(nextNotice, viewQueue) { vm.queueOpen = true }
                 })
-                add(Act(Icons.AutoMirrored.Filled.QueueMusic, stringResource(R.string.player_add_to_queue)) {
+                add(Act(Icons.AutoMirrored.Rounded.QueueMusic, stringResource(R.string.player_add_to_queue)) {
                     vm.player.enqueue(listOf(track)); close()
                     Notice.show(queued, viewQueue) { vm.queueOpen = true }
                 })
-                add(Act(Icons.AutoMirrored.Filled.PlaylistAdd, stringResource(R.string.player_to_playlist)) { vm.addTo = listOf(track); close() })
-                add(Act(if (fav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, stringResource(if (fav) R.string.player_unfavorite_short else R.string.player_favorite)) {
+                add(Act(Icons.AutoMirrored.Rounded.PlaylistAdd, stringResource(R.string.player_to_playlist)) { vm.addTo = listOf(track); close() })
+                add(Act(if (fav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, stringResource(if (fav) R.string.player_unfavorite_short else R.string.player_favorite)) {
                     toggleFavorite(track)
                 })
-                if (track.album.isNotBlank()) add(Act(Icons.Default.Album, stringResource(R.string.player_go_album)) { close(); vm.goToAlbum(track) })
-                if (track.artist.isNotBlank()) add(Act(Icons.Default.Person, stringResource(R.string.player_go_artist)) { close(); vm.goToArtist(track) })
-                add(Act(Icons.Default.Edit, stringResource(R.string.tags_edit)) { close(); vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.TagEditor(track.id)) })
+                if (track.album.isNotBlank()) add(Act(Icons.Rounded.Album, stringResource(R.string.player_go_album)) { close(); vm.goToAlbum(track) })
+                if (track.artist.isNotBlank()) add(Act(Icons.Rounded.Person, stringResource(R.string.player_go_artist)) { close(); vm.goToArtist(track) })
+                add(Act(Icons.Rounded.Edit, stringResource(R.string.tags_edit)) { close(); vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.TagEditor(track.id)) })
                 // Con BPM o tonalidad (de la etiqueta o del análisis): lo que suena bien detrás.
                 if (track.x("bpm").isNotBlank() || track.x("key").isNotBlank()) {
-                    add(Act(Icons.Default.GraphicEq, stringResource(R.string.player_for_mixing)) { close(); vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.Compatible(track.id)) })
+                    add(Act(Icons.Rounded.GraphicEq, stringResource(R.string.player_for_mixing)) { close(); vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.Compatible(track.id)) })
                 }
                 if (s.playlistId != null && s.playlistIndex >= 0) {
                     val removed = stringResource(R.string.player_removed_from_playlist)
                     val undo = stringResource(R.string.player_undo)
-                    add(Act(Icons.Default.Delete, stringResource(R.string.player_remove_from_playlist)) {
+                    add(Act(Icons.Rounded.Delete, stringResource(R.string.player_remove_from_playlist)) {
                         val pid: Long = s.playlistId; val at = s.playlistIndex
                         UserStore.removeFromPlaylist(pid, at); close()
                         Notice.show(removed, undo) { UserStore.insertIntoPlaylist(pid, at, track.id) }
@@ -892,7 +891,7 @@ fun PermissionScreen(blocked: Boolean, onAsk: () -> Unit) {
         verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(Modifier.size(72.dp).clip(CircleShape).background(Copper), contentAlignment = Alignment.Center) {
-            Icon(Icons.Default.LibraryMusic, null, tint = Ink, modifier = Modifier.size(36.dp))
+            Icon(Icons.Rounded.LibraryMusic, null, tint = Ink, modifier = Modifier.size(36.dp))
         }
         Spacer(Modifier.height(24.dp))
         Text(stringResource(R.string.player_perm_title), fontSize = 20.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)

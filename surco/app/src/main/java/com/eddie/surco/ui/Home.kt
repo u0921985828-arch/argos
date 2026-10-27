@@ -32,19 +32,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Equalizer
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Sell
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Clear
+import androidx.compose.material.icons.rounded.Equalizer
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Sell
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -74,8 +74,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.automirrored.rounded.ViewList
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.LazyGridScope
 import kotlin.math.roundToInt
@@ -134,10 +134,10 @@ import kotlinx.coroutines.delay
 
 // ======================= BARRA INFERIOR =======================
 private fun Tab.icon(): ImageVector = when (this) {
-    Tab.HOME -> Icons.Default.Home
-    Tab.LIBRARY -> Icons.Default.LibraryMusic
-    Tab.TAGS -> Icons.Default.Sell
-    Tab.LISTS -> Icons.AutoMirrored.Filled.QueueMusic
+    Tab.HOME -> Icons.Rounded.Home
+    Tab.LIBRARY -> Icons.Rounded.LibraryMusic
+    Tab.TAGS -> Icons.Rounded.Sell
+    Tab.LISTS -> Icons.AutoMirrored.Rounded.QueueMusic
 }
 
 @Composable
@@ -163,7 +163,7 @@ fun BottomNav(vm: LibraryViewModel) {
 fun TabHeader(title: String, subtitle: String?, actions: @Composable () -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(title, fontSize = 30.sp, fontWeight = FontWeight.Black, color = Paper)
+            Text(title, fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Paper)
             if (subtitle != null) Text(subtitle, color = Muted, fontSize = 13.sp)
         }
         actions()
@@ -220,7 +220,7 @@ private fun AlbumCard(vm: LibraryViewModel, g: Group, size: Dp = 148.dp, modifie
                 onClick = { vm.player.play(g.tracks.inAlbumOrder(), 0) },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).size(48.dp),
                 colors = coverPlayColors(),
-            ) { Icon(Icons.Default.PlayArrow, stringResource(R.string.library_play_item, g.bucket.label)) }
+            ) { Icon(Icons.Rounded.PlayArrow, stringResource(R.string.library_play_item, g.bucket.label)) }
         }
         Text(g.bucket.label, fontSize = cardTitleSize(tiny, small), fontWeight = FontWeight.SemiBold, maxLines = if (small) 1 else 2,
             overflow = TextOverflow.Ellipsis, lineHeight = cardTitleLine(tiny, small),
@@ -260,7 +260,7 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, byId: Map<Long, Track>
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
             TabHeader(stringResource(greeting()), "${songs(tracks.size)} · ${fmtTotal(tracks.sumOf { it.durationMs })}") {
-                IconButton(onClick = { vm.push(Screen.Settings()) }) { Icon(Icons.Default.Settings, stringResource(R.string.library_settings), tint = Paper) }
+                IconButton(onClick = { vm.push(Screen.Settings()) }) { Icon(Icons.Rounded.Settings, stringResource(R.string.library_settings), tint = Paper) }
             }
         }
         // Sin canciones, el aviso y nada más: un «Mezclar todo» que no hace nada despista.
@@ -303,14 +303,14 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, byId: Map<Long, Track>
                 FilledIconButton(
                     onClick = { vm.player.resume(byId) },
                     colors = IconButtonDefaults.filledIconButtonColors(containerColor = Copper, contentColor = Ink),
-                ) { Icon(Icons.Default.PlayArrow, stringResource(R.string.library_resume)) }
+                ) { Icon(Icons.Rounded.PlayArrow, stringResource(R.string.library_resume)) }
             }
         }
         item {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                QuickAction(Icons.Default.Shuffle, stringResource(R.string.library_shuffle_all), Modifier.weight(1f)) { vm.player.play(tracks, 0, shuffled = true) }
-                QuickAction(Icons.Default.Favorite, stringResource(R.string.library_favorites), Modifier.weight(1f)) { vm.push(Screen.Smart(SmartList.FAVORITES)) }
-                QuickAction(Icons.Default.Star, stringResource(R.string.library_most_played), Modifier.weight(1f)) { vm.push(Screen.Smart(SmartList.MOST_PLAYED)) }
+                QuickAction(Icons.Rounded.Shuffle, stringResource(R.string.library_shuffle_all), Modifier.weight(1f)) { vm.player.play(tracks, 0, shuffled = true) }
+                QuickAction(Icons.Rounded.Favorite, stringResource(R.string.library_favorites), Modifier.weight(1f)) { vm.push(Screen.Smart(SmartList.FAVORITES)) }
+                QuickAction(Icons.Rounded.Star, stringResource(R.string.library_most_played), Modifier.weight(1f)) { vm.push(Screen.Smart(SmartList.MOST_PLAYED)) }
             }
         }
         // Cada sección se puede quitar en Ajustes → Interfaz → Inicio.
@@ -352,7 +352,7 @@ private fun SearchPill(vm: LibraryViewModel) {
             .background(Panel).clickable { vm.push(Screen.Search) }.padding(horizontal = 14.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Default.Search, null, tint = Muted)
+        Icon(Icons.Rounded.Search, null, tint = Muted)
         Spacer(Modifier.width(10.dp))
         Text(stringResource(R.string.library_search_hint), color = Muted, fontSize = 15.sp)
     }
@@ -399,7 +399,7 @@ fun LibraryScreen(vm: LibraryViewModel, tracks: List<Track>) {
                 SurcoSettings.update { it.copy(libraryGrid = if (tab in it.libraryGrid) it.libraryGrid - tab else it.libraryGrid + tab) }
             }) {
                 Icon(
-                    if (grid) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
+                    if (grid) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
                     stringResource(if (grid) R.string.library_view_list else R.string.library_view_grid), tint = Muted,
                 )
             }
@@ -430,8 +430,8 @@ fun LibraryScreen(vm: LibraryViewModel, tracks: List<Track>) {
         val playAll: LazyGridScope.() -> Unit = {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    QuickAction(Icons.Default.PlayArrow, stringResource(R.string.library_play), Modifier.weight(1f)) { vm.player.play(songsSorted, 0) }
-                    QuickAction(Icons.Default.Shuffle, stringResource(R.string.library_shuffle), Modifier.weight(1f)) { vm.player.play(songsSorted, 0, shuffled = true) }
+                    QuickAction(Icons.Rounded.PlayArrow, stringResource(R.string.library_play), Modifier.weight(1f)) { vm.player.play(songsSorted, 0) }
+                    QuickAction(Icons.Rounded.Shuffle, stringResource(R.string.library_shuffle), Modifier.weight(1f)) { vm.player.play(songsSorted, 0, shuffled = true) }
                 }
             }
         }
@@ -457,8 +457,8 @@ fun LibraryScreen(vm: LibraryViewModel, tracks: List<Track>) {
               LazyColumn(state = state, contentPadding = PaddingValues(bottom = 16.dp)) {
                 item {
                     Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        QuickAction(Icons.Default.PlayArrow, stringResource(R.string.library_play), Modifier.weight(1f)) { vm.player.play(songsSorted, 0) }
-                        QuickAction(Icons.Default.Shuffle, stringResource(R.string.library_shuffle), Modifier.weight(1f)) { vm.player.play(songsSorted, 0, shuffled = true) }
+                        QuickAction(Icons.Rounded.PlayArrow, stringResource(R.string.library_play), Modifier.weight(1f)) { vm.player.play(songsSorted, 0) }
+                        QuickAction(Icons.Rounded.Shuffle, stringResource(R.string.library_shuffle), Modifier.weight(1f)) { vm.player.play(songsSorted, 0, shuffled = true) }
                     }
                 }
                 itemsIndexed(songsSorted, key = { _, t -> t.id }) { i, t ->
@@ -520,7 +520,7 @@ private fun CoverCard(
                 onClick = onPlay,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).size(48.dp),
                 colors = coverPlayColors(),
-            ) { Icon(Icons.Default.PlayArrow, stringResource(R.string.library_play_item, title)) }
+            ) { Icon(Icons.Rounded.PlayArrow, stringResource(R.string.library_play_item, title)) }
         }
         Text(title, color = if (playing) Copper else Paper, fontSize = cardTitleSize(tiny, small), fontWeight = FontWeight.SemiBold,
             maxLines = if (small) 1 else 2, overflow = TextOverflow.Ellipsis, lineHeight = cardTitleLine(tiny, small),
@@ -606,7 +606,7 @@ private fun GroupList(
                     Text(g.bucket.label, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text("${songs(g.tracks.size)} · ${fmtTotal(g.totalMs)}", color = Muted, fontSize = 13.sp)
                 }
-                IconButton(onClick = { vm.player.play(g.tracks.inAlbumOrder(), 0) }) { Icon(Icons.Default.PlayArrow, stringResource(R.string.library_play), tint = Muted) }
+                IconButton(onClick = { vm.player.play(g.tracks.inAlbumOrder(), 0) }) { Icon(Icons.Rounded.PlayArrow, stringResource(R.string.library_play), tint = Muted) }
             }
         }
     }
@@ -677,13 +677,13 @@ fun SearchScreen(vm: LibraryViewModel, tracks: List<Track>) {
     LaunchedEffect(Unit) { delay(120); runCatching { req.requestFocus() }; keyboard?.show() }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { vm.pop() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.library_back)) }
+            IconButton(onClick = { vm.pop() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.library_back)) }
             OutlinedTextField(
                 value = vm.query, onValueChange = { vm.query = it },
                 modifier = Modifier.weight(1f).focusRequester(req),
                 placeholder = { Text(stringResource(R.string.library_search_hint), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                leadingIcon = { Icon(Icons.Default.Search, null) },
-                trailingIcon = { if (vm.query.isNotEmpty()) IconButton(onClick = { vm.query = "" }) { Icon(Icons.Default.Clear, stringResource(R.string.library_clear)) } },
+                leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                trailingIcon = { if (vm.query.isNotEmpty()) IconButton(onClick = { vm.query = "" }) { Icon(Icons.Rounded.Clear, stringResource(R.string.library_clear)) } },
                 singleLine = true, shape = RoundedCornerShape(14.dp),
                 colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = Panel, focusedContainerColor = Panel, unfocusedBorderColor = Muted.copy(alpha = 0.6f)),
             )
