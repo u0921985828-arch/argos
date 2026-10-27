@@ -36,6 +36,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Favorite
@@ -719,6 +720,7 @@ fun SongSheet(vm: LibraryViewModel, s: SongSheetState) {
                 }
                 if (track.album.isNotBlank()) ActionChip(Icons.Default.Album, stringResource(R.string.player_go_album)) { close(); vm.goToAlbum(track) }
                 if (track.artist.isNotBlank()) ActionChip(Icons.Default.Person, stringResource(R.string.player_go_artist)) { close(); vm.goToArtist(track) }
+                ActionChip(Icons.Default.Edit, stringResource(R.string.tags_edit)) { close(); vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.TagEditor(track.id)) }
                 // Con BPM o tonalidad (de la etiqueta o del análisis): lo que suena bien detrás.
                 if (track.x("bpm").isNotBlank() || track.x("key").isNotBlank()) {
                     ActionChip(Icons.Default.GraphicEq, stringResource(R.string.player_for_mixing)) { close(); vm.nowPlayingOpen = false; vm.push(com.eddie.surco.Screen.Compatible(track.id)) }

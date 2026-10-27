@@ -54,8 +54,10 @@ fun BackupSettings(vm: LibraryViewModel) {
             scope.launch {
                 val (contents, error) = withContext(Dispatchers.IO) { Backup.open(ctx, uri) }
                 busy = false
-                if (contents != null) pending = contents
-                else if (error != null) Notice.show(message(error), long = true)
+                when {
+                    contents != null -> pending = contents
+                    error != null -> Notice.show(message(error), long = true)
+                }
             }
         }
     }

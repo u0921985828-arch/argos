@@ -230,6 +230,8 @@ private fun LibraryPage(vm: LibraryViewModel) {
         stringResource(R.string.settings_lrclib_help),
         prefs.onlineLyrics,
     ) { on -> SurcoSettings.update { it.copy(onlineLyrics = on) } }
+    // Copia de seguridad antes de las carpetas (la lista de carpetas puede ser muy larga).
+    BackupSettings(vm)
     SectionLabel(stringResource(R.string.settings_folders))
     Text(stringResource(R.string.settings_folders_help),
         color = Muted, fontSize = 12.sp, lineHeight = 15.sp, modifier = Modifier.padding(horizontal = 20.dp))

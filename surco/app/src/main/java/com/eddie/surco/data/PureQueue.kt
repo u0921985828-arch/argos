@@ -23,16 +23,35 @@ fun stableKeys(path: String, title: String, artist: String, album: String, durat
         .takeIf { title.isNotBlank() },
 )
 
-/** Para cada id referenciado que ya no existe, el id actual con alguna de sus claves (si lo hay). */
-fun remapIds(referenced: Set<Long>, alive: Set<Long>, keysOf: Map<Long, List<String>>, idByKey: Map<String, Long>): Map<Long, Long> {
+/**
+ * Para cada id referenciado que ya no existe, el id actual con alguna de sus claves (si lo hay).
+ * Y para cada id que existe pero es OTRA canción (los ids de MediaStore se reparten de nuevo en
+ * otro móvil: lo que trae la copia automática de Android puede caer en una canción distinta), el
+ * id de la suya o, si aún no está, uno provisional negativo que se cambia cuando aparezca.
+ * [aliveKeysOf]: las claves de la canción que hoy tiene ese id.
+ */
+fun remapIds(
+    referenced: Set<Long>, alive: Set<Long>, keysOf: Map<Long, List<String>>, idByKey: Map<String, Long>,
+    aliveKeysOf: (Long) -> List<String>? = { null },
+): Map<Long, Long> {
     val out = HashMap<Long, Long>()
     for (old in referenced) {
-        if (old in alive) continue
-        val now = keysOf[old].orEmpty().firstNotNullOfOrNull { idByKey[it] } ?: continue
+        val stored = keysOf[old].orEmpty()
+        if (old in alive) {
+            val cur = aliveKeysOf(old) ?: continue
+            // Sin claves guardadas, o alguna en común (la misma ruta, o los mismos datos): es ella.
+            if (stored.isEmpty() || stored.any { it in cur }) continue
+            out[old] = stored.firstNotNullOfOrNull { idByKey[it] } ?: placeholderId(old)
+            continue
+        }
+        val now = stored.firstNotNullOfOrNull { idByKey[it] } ?: continue
         out[old] = now
     }
     return out
 }
+
+/** Id provisional (negativo, no choca con MediaStore) de una canción que aún no está en este móvil. */
+fun placeholderId(old: Long): Long = -(old and Long.MAX_VALUE) - 1
 
 /** Orden aleatorio que empieza por la que suena: al activar el aleatorio no se salta nada. */
 fun currentFirstOrder(count: Int, current: Int, rnd: kotlin.random.Random): IntArray {

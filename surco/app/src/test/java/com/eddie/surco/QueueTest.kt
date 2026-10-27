@@ -2,6 +2,7 @@ package com.eddie.surco
 
 import com.eddie.surco.data.keptQueue
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -65,5 +66,25 @@ class QueueTest {
         // «A la cola»: 1 nueva al final de la lista (índice 5).
         val end = com.eddie.surco.data.insertIntoOrder(order, 5, 1, 0, playNext = false)
         assertEquals(listOf(3, 0, 4, 1, 2, 5), end)
+    }
+
+    @Test fun idDeOtraCancionTrasCambiarDeMovil() {
+        // La copia automática trae la favorita 7 («Uno»). En el móvil nuevo el 7 es «Otra» y «Uno»
+        // tiene el 40; «Dos» (id 8 antes) aún no está y el 8 es otra canción: va a uno provisional.
+        val uno = com.eddie.surco.data.stableKeys("/sdcard/Music/uno.mp3", "Uno", "X", "D", 200_000)
+        val dos = com.eddie.surco.data.stableKeys("/sdcard/Music/dos.mp3", "Dos", "X", "D", 180_000)
+        val now = mapOf(
+            7L to com.eddie.surco.data.stableKeys("/sdcard/Music/otra.mp3", "Otra", "Y", "E", 100_000),
+            8L to com.eddie.surco.data.stableKeys("/sdcard/Music/mas.mp3", "Más", "Y", "E", 90_000),
+            40L to uno,
+        )
+        val idByKey = now.flatMap { (id, ks) -> ks.map { it to id } }.toMap()
+        val m = com.eddie.surco.data.remapIds(setOf(7L, 8L), now.keys, mapOf(7L to uno, 8L to dos), idByKey) { now[it] }
+        assertEquals(40L, m[7L])
+        assertEquals(com.eddie.surco.data.placeholderId(8L), m[8L])
+        assertTrue(m.getValue(8L) < 0)
+        // La misma canción con el título editado (cambia la clave de datos, no la de la ruta): no se toca.
+        val editada = com.eddie.surco.data.stableKeys("/sdcard/Music/uno.mp3", "Uno (remaster)", "X", "D", 200_000)
+        assertTrue(com.eddie.surco.data.remapIds(setOf(40L), setOf(40L), mapOf(40L to uno), mapOf()) { editada }.isEmpty())
     }
 }

@@ -126,7 +126,9 @@ object UserStore {
         val idByKey = HashMap<String, Long>()
         for (t in tracks) for (k in t.stableKeys()) idByKey.putIfAbsent(k, t.id)
         update { d ->
-            val m = remapIds(refsOf(d), byId.keys, d.keys, idByKey)
+            val m = remapIds(refsOf(d), byId.keys, d.keys, idByKey) { byId[it]?.stableKeys() }
+            // Las claves siguen a su canción al cambiarle el id (también al provisional).
+            val keysFrom = m.entries.associate { (old, now) -> now to d.keys[old].orEmpty() }
             fun f(id: Long) = m[id] ?: id
             val nd = if (m.isEmpty()) d else d.copy(
                 favorites = d.favorites.map(::f).toSet(),
@@ -137,7 +139,7 @@ object UserStore {
             )
             val newRefs = refsOf(nd)
             // Claves al día de lo que existe; las de lo que falta se guardan por si vuelve.
-            val keys = newRefs.associateWith { id -> byId[id]?.stableKeys() ?: d.keys[id].orEmpty() }.filterValues { it.isNotEmpty() }
+            val keys = newRefs.associateWith { id -> byId[id]?.stableKeys() ?: keysFrom[id] ?: d.keys[id].orEmpty() }.filterValues { it.isNotEmpty() }
             if (m.isEmpty() && keys == d.keys) d else nd.copy(keys = keys)
         }
     }

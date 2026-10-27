@@ -44,7 +44,9 @@ object TagWriter {
     /** Lo que dice cada campo en el archivo, o null si no se puede editar (Opus, roto, ilegible). */
     fun load(t: Track): Map<TagKey, String>? = readTagValues(File(t.path))
 
-    fun write(ctx: Context, t: Track, changes: Map<TagKey, String>): Result = synchronized(lock) {
+    fun write(ctx: Context, t: Track, changes: Map<TagKey, String>): Result = synchronized(lock) { writeLocked(ctx, t, changes) }
+
+    private fun writeLocked(ctx: Context, t: Track, changes: Map<TagKey, String>): Result {
         if (!isWritableFormat(t.path)) return Result.Failed(Reason.UNSUPPORTED)
         val cr = ctx.contentResolver
         val uri = t.uri

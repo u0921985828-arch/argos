@@ -241,6 +241,18 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
 
     fun loadLyrics(t: Track): Lyrics? = scanner.loadLyrics(t, online = SurcoSettings.state.value.onlineLyrics)
 
+    /**
+     * Tras escribir las etiquetas de [t] (ui/TagEditor.kt): la relee del archivo y la deja ya
+     * cambiada en la biblioteca y en la caché, sin esperar a otro escaneo. Lo analizado (BPM,
+     * tonalidad) sigue rellenando lo que la etiqueta no diga.
+     */
+    suspend fun reread(t: Track): Track = withContext(Dispatchers.IO) {
+        val r = store.apply(scanner.enrich(t))
+        tracks.value = tracks.value.map { if (it.id == r.id) r else it }
+        scanner.saveCache(tracks.value)
+        r
+    }
+
     fun goToAlbum(t: Track) = TagField.ALBUM.buckets(t).firstOrNull()?.let { openTag(TagField.ALBUM, it.key, it.label) }
     fun goToArtist(t: Track) = TagField.ARTIST.buckets(t).firstOrNull()?.let { openTag(TagField.ARTIST, it.key, it.label) }
 
