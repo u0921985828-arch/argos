@@ -27,7 +27,7 @@ mkdir -p capturas
 adb pull "/sdcard/Android/data/$PKG/files/widget/." capturas/ >/dev/null 2>&1 || true
 adb pull "/sdcard/Android/data/$PKG/files/rejilla/." capturas/ >/dev/null 2>&1 || true
 ls capturas/widget_*.png capturas/rejilla_*.png 2>/dev/null || true
-if ! grep -q "OK (6 tests)" auto.txt; then
+if ! grep -q "OK (7 tests)" auto.txt; then
     echo "::error::fallaron las pruebas de Android Auto, del widget o de la cuadrícula (ver auto.txt y auto-logcat.txt)"
     sed -n '1,120p' auto.txt
     grep -E "PlaybackService|MediaSession|MediaButtonReceiver|SurcoWidget|AndroidRuntime|SurcoAuto" auto-logcat.txt | tail -60 || true
