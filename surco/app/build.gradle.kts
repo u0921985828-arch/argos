@@ -88,6 +88,10 @@ tasks.register("exportClasspath") {
     val view = configurations.getByName("debugCompileClasspath").incoming.artifactView {
         attributes { attribute(Attribute.of("artifactType", String::class.java), "android-classes-jar") }
     }
+    // Las pruebas del emulador (androidTest), aparte: solo se usan al compilarlas.
+    val tests = configurations.getByName("debugAndroidTestCompileClasspath").incoming.artifactView {
+        attributes { attribute(Attribute.of("artifactType", String::class.java), "android-classes-jar") }
+    }
     val plugins = configurations.getByName("kotlinCompilerPluginClasspathDebug")
     doLast {
         val out = layout.buildDirectory.dir("classpath").get().asFile.apply { deleteRecursively(); mkdirs() }
@@ -97,5 +101,10 @@ tasks.register("exportClasspath") {
             a.file.copyTo(File(out, "$name-${a.file.name}"), overwrite = true)
         }
         plugins.files.forEach { it.copyTo(File(out, "plugin-${it.name}"), overwrite = true) }
+        val have = out.list()!!.toSet()
+        tests.artifacts.forEach { a ->
+            val name = a.id.componentIdentifier.displayName.replace(Regex("[^A-Za-z0-9._-]"), "_") + "-" + a.file.name
+            if (name !in have) a.file.copyTo(File(out, "test-$name"), overwrite = true)
+        }
     }
 }
