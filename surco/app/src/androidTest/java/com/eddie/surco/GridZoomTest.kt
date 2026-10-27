@@ -35,7 +35,7 @@ class GridZoomTest {
     private fun album() = dev.findObject(By.text("Disco de Prueba")).let { it.parent ?: it }.also { dev.waitForIdle() }
 
     private fun shot(name: String) {
-        val dir = File(ctx.getExternalFilesDir(null), "widget").apply { mkdirs() }
+        val dir = File(ctx.getExternalFilesDir(null), "rejilla").apply { mkdirs() }
         dev.waitForIdle()
         Thread.sleep(600)
         dev.takeScreenshot(File(dir, name))
@@ -45,10 +45,12 @@ class GridZoomTest {
         SurcoSettings.init(ctx)
         SurcoSettings.update { it.copy(albumColumns = 2) }
         ctx.startActivity(Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
-        assertTrue("no se abrió Surco", dev.wait(Until.hasObject(By.text("Biblioteca")), 15_000))
-        dev.findObject(By.text("Biblioteca")).click()
-        assertTrue("no está la pestaña Álbumes", dev.wait(Until.hasObject(By.text("Álbumes")), 5_000))
-        dev.findObject(By.text("Álbumes")).click()
+        val library = ctx.getString(R.string.app_tab_library)
+        val albums = ctx.getString(R.string.app_lib_albums)
+        assertTrue("no se abrió Surco", dev.wait(Until.hasObject(By.text(library)), 15_000))
+        dev.findObject(By.text(library)).click()
+        assertTrue("no está la pestaña $albums", dev.wait(Until.hasObject(By.text(albums)), 5_000))
+        dev.findObject(By.text(albums)).click()
         assertTrue("no sale el álbum de prueba", dev.wait(Until.hasObject(By.text("Disco de Prueba")), 5_000))
         shot("rejilla_2.png")
 

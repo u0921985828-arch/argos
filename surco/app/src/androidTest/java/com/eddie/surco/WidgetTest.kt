@@ -30,6 +30,9 @@ import java.io.File
 class WidgetTest {
     private val inst = InstrumentationRegistry.getInstrumentation()
     private val ctx = inst.targetContext
+    // Con los textos de la app (en el idioma que tenga), no con literales.
+    private val play by lazy { ctx.getString(R.string.w_play) }
+    private val pause by lazy { ctx.getString(R.string.w_pause) }
 
     @Suppress("UNCHECKED_CAST")
     private fun <T> main(block: () -> T): T { var out: Any? = null; inst.runOnMainSync { out = block() }; return out as T }
@@ -37,7 +40,7 @@ class WidgetTest {
     private fun waitFor(what: String, check: () -> Boolean) {
         val end = System.currentTimeMillis() + 25_000
         while (System.currentTimeMillis() < end) { if (main(check)) return; Thread.sleep(300) }
-        throw AssertionError("el widget no llegó a: $what")
+        throw AssertionError("el widget no llegó a: $what (play=«$play», pause=«$pause»)")
     }
 
     @Test fun enLaPantallaDeInicio() {
@@ -61,21 +64,21 @@ class WidgetTest {
             // El diseño inicial ya trae «Surco» y el botón (sin acción): se espera a lo que solo pone
             // el proveedor, la descripción del botón según el estado.
             waitFor("enseñar una canción") {
-                view.findViewById<View>(R.id.w_play_box)?.contentDescription?.toString() in setOf("Reproducir", "Pausar") &&
+                view.findViewById<View>(R.id.w_play_box)?.contentDescription?.toString() in setOf(play, pause) &&
                     view.findViewById<TextView>(R.id.w_title)?.text?.isNotBlank() == true
             }
             // Si ya sonaba (lo dejó así otra prueba), se pausa primero para empezar desde «Reproducir».
-            if (main { view.findViewById<View>(R.id.w_play_box).contentDescription == "Pausar" }) {
+            if (main { view.findViewById<View>(R.id.w_play_box).contentDescription == pause }) {
                 main { view.findViewById<View>(R.id.w_play_box).performClick() }
-                waitFor("«Reproducir» de partida") { view.findViewById<View>(R.id.w_play_box)?.contentDescription == "Reproducir" }
+                waitFor("«Reproducir» de partida") { view.findViewById<View>(R.id.w_play_box)?.contentDescription == play }
             }
             val title = main { view.findViewById<TextView>(R.id.w_title).text.toString() }
 
             // Reproducir desde el widget → suena → el botón pasa a «Pausar».
             main { view.findViewById<View>(R.id.w_play_box).performClick() }
-            waitFor("«Pausar» tras pulsar reproducir") { view.findViewById<View>(R.id.w_play_box)?.contentDescription == "Pausar" }
+            waitFor("«Pausar» tras pulsar reproducir") { view.findViewById<View>(R.id.w_play_box)?.contentDescription == pause }
             main { view.findViewById<View>(R.id.w_play_box).performClick() }
-            waitFor("«Reproducir» tras pulsar pausar") { view.findViewById<View>(R.id.w_play_box)?.contentDescription == "Reproducir" }
+            waitFor("«Reproducir» tras pulsar pausar") { view.findViewById<View>(R.id.w_play_box)?.contentDescription == play }
             Log.i("SurcoAuto", "widget: enseña «$title», reproducir y pausar desde el widget, bien")
         } finally {
             main { host.stopListening() }
@@ -104,6 +107,6 @@ class WidgetTest {
             }
             assertTrue(File(dir, "$name.png").length() > 0)
         }
-        assertEquals(3, dir.listFiles()!!.count { it.name.endsWith(".png") })
+        assertEquals(3, dir.listFiles()!!.count { it.name.startsWith("widget_") && it.name.endsWith(".png") })
     }
 }
