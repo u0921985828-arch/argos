@@ -24,6 +24,7 @@
     <string name="settings_rg_none">Ninguna canción trae la etiqueta REPLAYGAIN (se añade con foobar2000 o MusicBrainz Picard).</string>
     <plurals name="settings_rg_some">
         <item quantity="one">%1$d de %2$d canciones la traen; con ella todo suena %3$d dB más bajo para no saturar.</item>
+        <item quantity="many">%1$d de %2$d canciones la traen; con ella todo suena %3$d dB más bajo para no saturar.</item>
         <item quantity="other">%1$d de %2$d canciones la traen; con ella todo suena %3$d dB más bajo para no saturar.</item>
     </plurals>
     <string name="settings_rg_off">Apagado</string>
@@ -74,6 +75,7 @@
     <string name="settings_analyze">Analizar BPM y tonalidad</string>
     <plurals name="settings_analyzing">
         <item quantity="one">Analizando: %1$d de %2$d canciones (unos segundos cada una, sin internet).</item>
+        <item quantity="many">Analizando: %1$d de %2$d canciones (unos segundos cada una, sin internet).</item>
         <item quantity="other">Analizando: %1$d de %2$d canciones (unos segundos cada una, sin internet).</item>
     </plurals>
     <string name="settings_analyze_help">Para las canciones que no los traen en las etiquetas. Hechas: %1$d.</string>
@@ -107,6 +109,7 @@
     <!-- Tus escuchas -->
     <plurals name="settings_stats_plays">
         <item quantity="one">escucha</item>
+        <item quantity="many">escuchas</item>
         <item quantity="other">escuchas</item>
     </plurals>
     <string name="settings_stats_hours">%1$d h</string>
@@ -114,6 +117,7 @@
     <string name="settings_stats_of_music">de música</string>
     <plurals name="settings_stats_songs">
         <item quantity="one">canción</item>
+        <item quantity="many">canciones</item>
         <item quantity="other">canciones</item>
     </plurals>
     <string name="settings_stats_empty">Todavía no hay escuchas: una canción cuenta al pasar de la mitad (o de 4 minutos).</string>
