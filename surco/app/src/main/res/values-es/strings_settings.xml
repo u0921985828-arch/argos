@@ -134,4 +134,7 @@
     <string name="settings_accent_system">Del sistema</string>
     <string name="settings_language_section">Idioma</string>
     <string name="settings_language_system">El del móvil</string>
+    <string name="settings_usb_title">Bit-perfect por USB</string>
+    <string name="settings_usb_help">Con un DAC USB, Android suena cada canción a su frecuencia y sin tocarla (con el ecualizador, ReplayGain y la velocidad quitados). El volumen pasa a ser el del DAC.</string>
+    <string name="settings_usb_old">Necesita Android 14 o posterior.</string>
 </resources>

@@ -171,8 +171,15 @@ private fun SoundPage(vm: LibraryViewModel) {
         else plural(R.plurals.settings_rg_some, all.size, withRg, all.size, RG_HEADROOM_DB.toInt()),
     )
     ChipChoice(ReplayGainMode.entries.map { it to stringResource(it.labelRes) }, prefs.replayGain) { m -> SurcoSettings.update { it.copy(replayGain = m) } }
+    // DAC USB: en Android 14+ se le pide al sistema el mezclador a la frecuencia de cada canción.
+    if (Build.VERSION.SDK_INT >= 34) {
+        SwitchRow(stringResource(R.string.settings_usb_title), stringResource(R.string.settings_usb_help), prefs.usbBitPerfect) { on ->
+            SurcoSettings.update { it.copy(usbBitPerfect = on) }
+        }
+    } else SettingTitle(stringResource(R.string.settings_usb_title), stringResource(R.string.settings_usb_old))
     SettingTitle(stringResource(R.string.settings_output_title), stringResource(R.string.settings_output_help))
     outputLine()?.let { Text(it, color = Teal, fontSize = 12.sp, lineHeight = 15.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) }
+    routeLine()?.let { Text(it, color = Muted, fontSize = 12.sp, lineHeight = 15.sp, modifier = Modifier.padding(horizontal = 20.dp)) }
 }
 
 // ---------- Reproducción ----------

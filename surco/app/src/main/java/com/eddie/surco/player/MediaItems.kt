@@ -16,6 +16,11 @@ const val EXTRA_RG_TRACK = "rg_track"
 const val EXTRA_RG_ALBUM = "rg_album"
 /** Carpeta del archivo: con el álbum dice si dos canciones son del mismo disco (fundido entre canciones). */
 const val EXTRA_DIR = "dir"
+/** Para pedir el mezclador del DAC USB antes de que suene: frecuencia, bits, formato y canales del archivo. */
+const val EXTRA_SR = "sr"
+const val EXTRA_BITS = "bits"
+const val EXTRA_FORMAT = "format"
+const val EXTRA_CHANNELS = "channels"
 
 /** La canción como elemento de la cola. La URI va también en requestMetadata: el MediaController no la transmite. */
 fun Track.toMediaItem(): MediaItem {
@@ -24,6 +29,11 @@ fun Track.toMediaItem(): MediaItem {
         x("rg_track").toFloatOrNull()?.let { putFloat(EXTRA_RG_TRACK, it) }
         x("rg_album").toFloatOrNull()?.let { putFloat(EXTRA_RG_ALBUM, it) }
         putString(EXTRA_DIR, dir)
+        putInt(EXTRA_SR, sampleRate)
+        putInt(EXTRA_BITS, x("bits").take(2).trim().toIntOrNull() ?: 16)
+        putString(EXTRA_FORMAT, format)
+        // jaudiotagger da «2», «Stereo», «Joint Stereo», «1», «Mono»…
+        putInt(EXTRA_CHANNELS, x("channels").let { c -> c.toIntOrNull() ?: if (c.contains("mono", true)) 1 else 2 })
     }
     return MediaItem.Builder()
         .setMediaId(id.toString())

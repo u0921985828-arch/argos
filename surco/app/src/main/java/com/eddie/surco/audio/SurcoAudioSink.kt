@@ -42,7 +42,7 @@ object AudioOutput {
  *    llega en float a AudioTrack, a su frecuencia de muestreo.
  */
 @OptIn(UnstableApi::class)
-class SurcoAudioSink private constructor(inner: AudioSink) : ForwardingAudioSink(inner) {
+class SurcoAudioSink private constructor(inner: AudioSink, private val quiet: Boolean) : ForwardingAudioSink(inner) {
     private val engine = DspEngine()
     private var applied: DspParams? = null
     private var floatMode = false
@@ -65,7 +65,7 @@ class SurcoAudioSink private constructor(inner: AudioSink) : ForwardingAudioSink
             super.configure(inputFormat, specifiedBufferSize, outputChannels)
         }
         if (MimeTypes.AUDIO_RAW == inputFormat.sampleMimeType) {
-            AudioOutput.publish(OutputInfo(Pcm.label(inputFormat.pcmEncoding), inputFormat.sampleRate, inputFormat.channelCount, floatMode))
+            if (!quiet) AudioOutput.publish(OutputInfo(Pcm.label(inputFormat.pcmEncoding), inputFormat.sampleRate, inputFormat.channelCount, floatMode))
         }
     }
 
@@ -107,13 +107,15 @@ class SurcoAudioSink private constructor(inner: AudioSink) : ForwardingAudioSink
     }
 
     companion object {
-        fun create(ctx: Context): SurcoAudioSink = SurcoAudioSink(
+        /** [quiet]: no anuncia su salida (la cola de la canción anterior en el cruce no es «lo que suena»). */
+        fun create(ctx: Context, quiet: Boolean = false): SurcoAudioSink = SurcoAudioSink(
             DefaultAudioSink.Builder(ctx)
                 .setEnableFloatOutput(true)
                 // Velocidad y tono en AudioTrack: valen igual para 16 bits y para float.
                 .setEnableAudioTrackPlaybackParams(true)
                 .setAudioProcessors(arrayOf(SurcoAudioProcessor()))
-                .build()
+                .build(),
+            quiet,
         )
     }
 }

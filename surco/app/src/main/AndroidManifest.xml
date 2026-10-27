@@ -10,6 +10,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Pedir al sistema el mezclador del DAC USB (bit-perfect, Android 14+). -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Solo para las letras de lrclib.net, y solo si se activa en Ajustes → Biblioteca. -->
     <uses-permission android:name="android.permission.INTERNET" />
 

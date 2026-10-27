@@ -119,4 +119,10 @@
     <string name="player_perm_ask">Lee las etiquetas de tus archivos de audio para organizarlos. Nada sale del móvil.</string>
     <string name="player_perm_open_settings">Abrir ajustes</string>
     <string name="player_perm_grant">Dar permiso</string>
+    <string name="player_route_speaker">Altavoz del móvil</string>
+    <string name="player_route_wired">Auriculares con cable</string>
+    <string name="player_route_bt">Bluetooth · %1$s</string>
+    <string name="player_route_usb">USB · %1$s</string>
+    <string name="player_route_bitperfect">bit-perfect a %1$s</string>
+    <string name="player_route_native_rate">sin remuestrear, a %1$s</string>
 </resources>

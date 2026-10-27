@@ -49,6 +49,8 @@ data class Prefs(
     val techDetails: Boolean = false,
     /** Pantalla encendida mientras «Sonando» está abierta. */
     val keepScreenOn: Boolean = false,
+    /** DAC USB en Android 14+: mezclador bit-perfect (o sin remuestrear) a la frecuencia de cada canción. */
+    val usbBitPerfect: Boolean = false,
     /** Secciones de Inicio. */
     val homeRecent: Boolean = true,
     val homeAdded: Boolean = true,
@@ -171,7 +173,7 @@ object SurcoSettings {
         put("speed", p.speed.toDouble()); put("keepPitch", p.keepPitch); put("fade", p.fade)
         put("minDuration", p.minDurationSec); put("autoPreamp", p.autoPreamp)
         put("crossfade", p.crossfadeSec); put("crossfadeKeepAlbums", p.crossfadeKeepAlbums)
-        put("accent", p.accent); put("techDetails", p.techDetails); put("keepScreenOn", p.keepScreenOn)
+        put("accent", p.accent); put("techDetails", p.techDetails); put("keepScreenOn", p.keepScreenOn); put("usbBitPerfect", p.usbBitPerfect)
         put("homeRecent", p.homeRecent); put("homeAdded", p.homeAdded); put("homeTop", p.homeTop); put("homeExplore", p.homeExplore)
         put("albumColumns", p.albumColumns)
         put("excluded", JSONArray(p.excludedFolders.toList())); put("onlineLyrics", p.onlineLyrics); put("analyze", p.analyze)
@@ -206,6 +208,7 @@ object SurcoSettings {
             accent = o.optString("accent", def.accent).takeIf { it in ACCENTS || it == ACCENT_FROM_ART || (it == ACCENT_SYSTEM && Build.VERSION.SDK_INT >= 31) } ?: def.accent,
             techDetails = o.optBoolean("techDetails", false),
             keepScreenOn = o.optBoolean("keepScreenOn", false),
+            usbBitPerfect = o.optBoolean("usbBitPerfect", false),
             homeRecent = o.optBoolean("homeRecent", true), homeAdded = o.optBoolean("homeAdded", true),
             homeTop = o.optBoolean("homeTop", true), homeExplore = o.optBoolean("homeExplore", true),
             albumColumns = o.optInt("albumColumns", 2).coerceIn(ALBUM_COLUMNS),

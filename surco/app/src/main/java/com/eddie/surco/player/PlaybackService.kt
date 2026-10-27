@@ -13,6 +13,8 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
 import com.eddie.surco.data.AlbumRef
 import com.eddie.surco.data.crossfadeGain
+import com.eddie.surco.data.overlapOutGain
+import android.os.SystemClock
 import com.eddie.surco.data.currentFirstOrder
 import com.eddie.surco.data.fadesBetween
 import com.eddie.surco.data.insertIntoOrder
@@ -55,6 +57,7 @@ import com.eddie.surco.audio.ReplayGainMode
 import com.eddie.surco.audio.SurcoAudioRenderer
 import com.eddie.surco.audio.SurcoAudioSink
 import com.eddie.surco.audio.SurcoSettings
+import com.eddie.surco.audio.OutputRoute
 import com.eddie.surco.data.LibraryScanner
 import com.eddie.surco.data.SavedQueue
 import com.eddie.surco.data.UserStore
@@ -133,7 +136,9 @@ class PlaybackService : MediaLibraryService() {
         exo.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 // Sube al empezar solo si llega sola (no al saltar a mano) y si la anterior bajó.
-                xfadeIn = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && lastFadedOut
+                xfadeIn = (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || overlapping) && lastFadedOut
+                // Elegir otra canción a mano corta la cola del cruce.
+                if (!overlapping && reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) stopGhost()
                 // Saltar a mano (o elegir otra en la cola) durante un fundido: la nueva entra entera.
                 if (!xfadeIn && xfadeMul != 1f) { xfadeMul = 1f; applyVolume() }
                 lastFadedOut = false
@@ -147,6 +152,7 @@ class PlaybackService : MediaLibraryService() {
                         Player.EVENT_MEDIA_METADATA_CHANGED, Player.EVENT_PLAYBACK_STATE_CHANGED)) publishWidget()
                 // Los botones propios de la notificación siguen a la canción y al aleatorio.
                 if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED)) publishButtons()
+                if (events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION)) wantMixer()
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (isPlaying && fadeMul < 1f && fadeTarget < 1f && fadeRunnable == null) fadeTo(1f)
@@ -156,7 +162,7 @@ class PlaybackService : MediaLibraryService() {
                 // Volver al principio de la misma canción también cuenta como otra escucha.
                 if (reason == Player.DISCONTINUITY_REASON_SEEK && newPosition.positionMs < 1000) listenedId = null
                 // Volver al principio a mano no es una entrada en fundido.
-                if (reason == Player.DISCONTINUITY_REASON_SEEK) xfadeIn = false
+                if (reason == Player.DISCONTINUITY_REASON_SEEK && !overlapping) { xfadeIn = false; stopGhost() }
             }
             override fun onPlayerError(error: PlaybackException) = skipBroken(error)
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
@@ -355,9 +361,12 @@ class PlaybackService : MediaLibraryService() {
         }
         publishButtons()
 
+        // Por dónde sale el sonido y, con un DAC USB, su mezclador (bit-perfect o sin remuestrear).
+        OutputRoute.start(this)
         // Ajustes que viven en el reproductor
         scope.launch {
             SurcoSettings.state.collect { p ->
+                wantMixer()
                 exo.playbackParameters = PlaybackParameters(p.speed, if (p.keepPitch) 1f else p.speed)
                 exo.skipSilenceEnabled = p.skipSilence
                 applyReplayGain()
@@ -390,6 +399,17 @@ class PlaybackService : MediaLibraryService() {
         ))
     }
 
+    /** El mezclador del DAC USB para la canción que suena (lo aplica OutputRoute si hay DAC y Android 14+). */
+    private fun wantMixer() {
+        val e = exo.currentMediaItem?.mediaMetadata?.extras
+        OutputRoute.want(OutputRoute.Wanted(
+            enabled = SurcoSettings.state.value.usbBitPerfect,
+            sampleRate = e?.getInt(EXTRA_SR) ?: 0,
+            encoding = OutputRoute.encodingFor(e?.getString(EXTRA_FORMAT).orEmpty(), e?.getInt(EXTRA_BITS) ?: 16),
+            channels = e?.getInt(EXTRA_CHANNELS)?.takeIf { it > 0 } ?: 2,
+        ))
+    }
+
     private fun publishWidget() {
         val item = exo.currentMediaItem
         val md = exo.mediaMetadata
@@ -418,20 +438,69 @@ class PlaybackService : MediaLibraryService() {
         return fadesBetween(albumOf(exo.currentMediaItem), albumOf(exo.getMediaItemAt(next)), p.crossfadeKeepAlbums)
     }
 
+    // Cruce con solape: la cola de la canción que se va suena en un segundo reproductor (sin foco
+    // de audio ni sesión) mientras la siguiente ya entra en el principal.
+    private var ghost: ExoPlayer? = null
+    private var ghostStart = 0L
+    private var ghostLen = 0L
+    private var ghostVol = 1f
+
+    private fun ghostPlayer(): ExoPlayer = ghost ?: ExoPlayer.Builder(this, RenderersFactory { h, _, l, _, _ ->
+        arrayOf<Renderer>(SurcoAudioRenderer(this, h, l, SurcoAudioSink.create(this, quiet = true)))
+    })
+        .setMediaSourceFactory(DefaultMediaSourceFactory(this, SurcoExtractorsFactory()))
+        .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), false)
+        .build().also { ghost = it }
+
+    /** Corta la cola del cruce (pausa, salto, otra canción a mano, cerrar). */
+    private fun stopGhost() {
+        ghost?.let { it.stop(); it.clearMediaItems() }
+        ghostLen = 0L
+    }
+
+    /** La que suena sigue en el segundo reproductor y el principal pasa ya a la siguiente. */
+    private fun startOverlap(remainingMs: Long) {
+        val item = exo.currentMediaItem ?: return
+        val g = ghostPlayer()
+        ghostVol = exo.volume
+        g.volume = ghostVol
+        g.setMediaItem(item, exo.currentPosition)
+        g.playbackParameters = exo.playbackParameters
+        g.prepare(); g.play()
+        ghostStart = SystemClock.elapsedRealtime(); ghostLen = remainingMs
+        overlapping = true
+        exo.seekToNextMediaItem()
+        overlapping = false
+        // La que entra sube desde 0 como al pasar sola de una a otra.
+        xfadeIn = true; lastFadedOut = true
+        xfadeMul = 0f; applyVolume()
+    }
+    private var overlapping = false
+
     private val xfadeTick = object : Runnable {
         override fun run() {
             val p = SurcoSettings.state.value
             val fadeMs = p.crossfadeSec * 1000L
             var busy = false
+            if (ghostLen > 0) {
+                val el = SystemClock.elapsedRealtime() - ghostStart
+                if (el >= ghostLen) stopGhost() else ghost?.volume = ghostVol * overlapOutGain(el, ghostLen)
+                busy = true
+            }
             val g = if (fadeMs > 0 && exo.isPlaying) {
                 val pos = exo.currentPosition
                 val dur = exo.duration.takeIf { it != C.TIME_UNSET } ?: 0L
                 // Cerca del final o del principio, cada 50 ms; en medio de la canción, cada 500.
                 val nearEnd = dur > 0 && dur - pos < fadeMs + 600
-                busy = nearEnd || (xfadeIn && pos < fadeMs + 600)
+                busy = busy || nearEnd || (xfadeIn && pos < fadeMs + 600)
                 val out = nearEnd && fadesOut(p)
                 if (nearEnd) lastFadedOut = out
-                crossfadeGain(pos, dur, fadeMs, xfadeIn, out)
+                // Al llegar al cruce, las dos a la vez (no con «parar al acabar esta canción»).
+                val f = min(fadeMs, dur / 4)
+                if (out && ghostLen == 0L && dur - pos <= f && dur - pos > 200 && !SleepTimer.endOfTrack.value) {
+                    startOverlap(dur - pos)
+                    0f // la que entra empieza en silencio y sube en las vueltas siguientes
+                } else crossfadeGain(pos, dur, fadeMs, xfadeIn, out)
             } else if (fadeMs > 0) xfadeMul else 1f
             // Pasos de menos de medio punto no se oyen y cada cambio de volumen viaja a cada mando.
             if (kotlin.math.abs(g - xfadeMul) >= 0.005f || (g == 1f && xfadeMul != 1f) || (g == 0f && xfadeMul != 0f)) { xfadeMul = g; applyVolume() }
@@ -512,6 +581,7 @@ class PlaybackService : MediaLibraryService() {
     /** Las órdenes de reproducir/pausar de la notificación y de la app pasan por aquí: con fundido. */
     private inner class FadingPlayer(p: ExoPlayer) : ForwardingPlayer(p) {
         override fun pause() {
+            stopGhost()
             if (SurcoSettings.state.value.fade && exo.isPlaying) fadeTo(0f) { exo.pause() } else exo.pause()
         }
 
@@ -617,8 +687,10 @@ class PlaybackService : MediaLibraryService() {
         // El widget se queda con la canción, en pausa.
         SurcoWidget.last?.let { SurcoWidget.publish(this, it.copy(playing = false)) }
         UserStore.flush()
+        OutputRoute.stop()
         handler.removeCallbacksAndMessages(null)
         scope.cancel()
+        ghost?.release(); ghost = null
         session?.run { player.release(); release() }
         session = null
         super.onDestroy()

@@ -31,6 +31,14 @@ fun crossfadeGain(posMs: Long, durMs: Long, fadeMs: Long, fadeIn: Boolean, fadeO
 private fun curve(x: Double) = kotlin.math.sin(x.coerceIn(0.0, 1.0) * Math.PI / 2)
 
 /**
+ * Cruce con solape: volumen de la canción que se va, [elapsedMs] después de empezar a cruzarse
+ * con la siguiente durante [lengthMs]. Misma curva que la que entra (seno): a mitad del cruce las
+ * dos suenan a 0,71 y la suma de potencias se mantiene (sin bache de volumen).
+ */
+fun overlapOutGain(elapsedMs: Long, lengthMs: Long): Float =
+    if (lengthMs <= 0) 0f else curve(1.0 - elapsedMs.toDouble() / lengthMs).toFloat()
+
+/**
  * ¿Se funde el paso de una canción a la siguiente? No dentro del mismo disco cuando se pide
  * respetarlos: los discos en directo y los conceptuales van sin pausas a propósito («sin cortes»).
  * Un disco es el mismo álbum en la misma carpeta (dos «Grandes éxitos» distintos no lo son).

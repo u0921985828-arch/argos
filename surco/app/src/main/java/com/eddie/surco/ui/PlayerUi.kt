@@ -108,6 +108,7 @@ import com.eddie.surco.Res
 import com.eddie.surco.SongSheetState
 import com.eddie.surco.audio.AudioOutput
 import com.eddie.surco.audio.SurcoSettings
+import com.eddie.surco.audio.OutputRoute
 import com.eddie.surco.data.Lyrics
 import com.eddie.surco.data.TagField
 import com.eddie.surco.data.Track
@@ -176,6 +177,32 @@ fun outputLine(track: Track? = null): String? {
         else -> stringResource(R.string.player_output_bitperfect)
     }
     return stringResource(if (i.float) R.string.player_output_float else R.string.player_output_plain, src, khz, tail)
+}
+
+/**
+ * Por dónde sale: altavoz, cable, Bluetooth o USB (con su nombre) y, con un DAC USB en Android
+ * 14+, si va bit-perfect o sin remuestrear. El códec del Bluetooth no lo da Android a las apps.
+ */
+@Composable
+fun routeLine(): String? {
+    val r by OutputRoute.state.collectAsState()
+    val prefs by SurcoSettings.state.collectAsState()
+    val route = r ?: return null
+    val where = when (route.kind) {
+        OutputRoute.Kind.SPEAKER -> stringResource(R.string.player_route_speaker)
+        OutputRoute.Kind.WIRED -> stringResource(R.string.player_route_wired)
+        OutputRoute.Kind.BLUETOOTH -> stringResource(R.string.player_route_bt, route.name)
+        OutputRoute.Kind.USB -> stringResource(R.string.player_route_usb, route.name)
+        OutputRoute.Kind.OTHER -> route.name
+    }
+    val m = route.mixer ?: return where
+    val khz = "%.1f kHz".format(appLocale(), m.option.sampleRate / 1000f).replace(Regex("[.,]0 "), " ")
+    // Bit-perfect de verdad solo si nada toca la señal: ecualizador, ReplayGain y velocidad fuera.
+    val untouched = prefs.dsp.neutral && prefs.replayGain == com.eddie.surco.audio.ReplayGainMode.OFF && prefs.speed == 1f
+    return where + " · " + when {
+        m.bitPerfect && untouched -> stringResource(R.string.player_route_bitperfect, khz)
+        else -> stringResource(R.string.player_route_native_rate, khz)
+    }
 }
 
 // ======================= MINI REPRODUCTOR =======================
@@ -294,6 +321,7 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
                     Text(q, color = Teal, fontSize = 12.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
                 }
                 outputLine(track)?.let { Text(it, color = Muted, fontSize = 11.sp, lineHeight = 15.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth()) }
+            routeLine()?.let { Text(it, color = Muted, fontSize = 11.sp, lineHeight = 15.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth()) }
             }
             Spacer(Modifier.height(10.dp))
             SurcoSlider(

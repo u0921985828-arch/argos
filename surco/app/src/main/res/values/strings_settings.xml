@@ -130,4 +130,7 @@
     <string name="settings_accent_system">From system</string>
     <string name="settings_language_section">Language</string>
     <string name="settings_language_system">Phone\'s language</string>
+    <string name="settings_usb_title">Bit-perfect over USB</string>
+    <string name="settings_usb_help">With a USB DAC, Android plays each song at its own sample rate, untouched (with the equalizer, ReplayGain and speed off). Volume is then set on the DAC.</string>
+    <string name="settings_usb_old">Needs Android 14 or later.</string>
 </resources>

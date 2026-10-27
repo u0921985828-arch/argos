@@ -116,4 +116,10 @@
     <string name="player_perm_ask">Surco reads the tags of your audio files to organize them. Nothing leaves your phone.</string>
     <string name="player_perm_open_settings">Open settings</string>
     <string name="player_perm_grant">Allow access</string>
+    <string name="player_route_speaker">Phone speaker</string>
+    <string name="player_route_wired">Wired headphones</string>
+    <string name="player_route_bt">Bluetooth · %1$s</string>
+    <string name="player_route_usb">USB · %1$s</string>
+    <string name="player_route_bitperfect">bit-perfect at %1$s</string>
+    <string name="player_route_native_rate">no resampling, at %1$s</string>
 </resources>
