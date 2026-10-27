@@ -134,6 +134,16 @@ object OutputRoute {
         if (bits > 16 || format.equals("FLAC", true) || format.equals("ALAC", true)) AudioFormat.ENCODING_PCM_FLOAT else AudioFormat.ENCODING_PCM_16BIT
 }
 
+/** Clave de la salida para su ecualizador ([outputKey]). */
+val OutputRoute.Route.key: String get() = outputKey(kind.name, name)
+
+/**
+ * Si se sabe qué aparato es: un Bluetooth o USB sin nombre todavía (llega a veces un instante
+ * después) no se toma por otro, ni todos los sin nombre por el mismo.
+ */
+val OutputRoute.Route.identified: Boolean
+    get() = kind == OutputRoute.Kind.SPEAKER || kind == OutputRoute.Kind.WIRED || name.isNotBlank()
+
 /** Nombre visible de una salida («Auriculares de cable», «Bluetooth · WH-1000XM5»…). */
 fun routeName(ctx: Context, r: OutputRoute.Route): String = when (r.kind) {
     OutputRoute.Kind.SPEAKER -> ctx.getString(R.string.player_route_speaker)

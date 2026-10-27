@@ -64,6 +64,7 @@ import com.eddie.surco.audio.ACCENTS
 import com.eddie.surco.audio.ACCENT_FROM_ART
 import com.eddie.surco.audio.ACCENT_SYSTEM
 import com.eddie.surco.player.Scrobbler
+import com.eddie.surco.player.SystemEffects
 import android.app.LocaleManager
 import android.os.Build
 import android.os.LocaleList
@@ -172,8 +173,14 @@ private fun SoundPage(vm: LibraryViewModel) {
         else plural(R.plurals.settings_rg_some, all.size, withRg, all.size, RG_HEADROOM_DB.toInt()),
     )
     ChipChoice(ReplayGainMode.entries.map { it to stringResource(it.labelRes) }, prefs.replayGain) { m -> SurcoSettings.update { it.copy(replayGain = m) } }
-    SwitchRow(stringResource(R.string.settings_eq_per_output), stringResource(R.string.settings_eq_per_output_help), prefs.perOutputEq) { on ->
-        SurcoSettings.update { it.copy(perOutputEq = on) }
+    SwitchRow(stringResource(R.string.settings_eq_per_output), stringResource(R.string.settings_eq_per_output_help), prefs.perOutputEq) { on -> SurcoSettings.setPerOutput(on) }
+    // Los efectos del fabricante (Xiaomi Sound, Dolby…), si el móvil trae panel.
+    val ctx = LocalContext.current
+    if (remember { SystemEffects.panel(ctx) != null }) {
+        val none = stringResource(R.string.settings_system_fx_none)
+        OptionRow(stringResource(R.string.settings_system_fx), stringResource(R.string.settings_system_fx_help)) {
+            if (!SystemEffects.openPanel(ctx)) Notice.show(none)
+        }
     }
     // DAC USB: en Android 14+ se le pide al sistema el mezclador a la frecuencia de cada canción.
     if (Build.VERSION.SDK_INT >= 34) {

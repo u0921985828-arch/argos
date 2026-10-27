@@ -60,10 +60,9 @@ import com.eddie.surco.audio.SurcoAudioRenderer
 import com.eddie.surco.audio.SurcoAudioSink
 import com.eddie.surco.audio.SurcoSettings
 import com.eddie.surco.audio.OutputRoute
-import com.eddie.surco.audio.SoundProfile
-import com.eddie.surco.audio.outputKey
+import com.eddie.surco.audio.identified
+import com.eddie.surco.audio.key
 import com.eddie.surco.audio.routeName
-import com.eddie.surco.audio.switchOutput
 import com.eddie.surco.data.LibraryScanner
 import com.eddie.surco.data.SavedQueue
 import com.eddie.surco.data.UserStore
@@ -76,6 +75,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlin.math.min
@@ -145,6 +145,8 @@ class PlaybackService : MediaLibraryService() {
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
+        // Los efectos del móvil (Xiaomi Sound, Dolby…) reconocen a Surco como música y salen en su panel.
+        SystemEffects.open(this, exo.audioSessionId)
         exo.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 // Sube al empezar solo si llega sola (no al saltar a mano) y si la anterior bajó.
@@ -177,6 +179,7 @@ class PlaybackService : MediaLibraryService() {
                 if (reason == Player.DISCONTINUITY_REASON_SEEK && !overlapping) { xfadeIn = false; stopGhost() }
             }
             override fun onPlayerError(error: PlaybackException) = skipBroken(error)
+            override fun onAudioSessionIdChanged(audioSessionId: Int) = SystemEffects.open(this@PlaybackService, audioSessionId)
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 // Cualquier pausa (cascos fuera, llamada, temporizador) corta también la cola del cruce:
                 // el segundo reproductor no tiene foco de audio ni se entera de los cascos.
@@ -382,8 +385,12 @@ class PlaybackService : MediaLibraryService() {
         OutputRoute.start(this)
         // Ecualizador de cada salida: al conectar unos cascos se pone el suyo (y se guarda el de la anterior).
         scope.launch {
-            OutputRoute.state.filterNotNull().map { it to outputKey(it.kind.name, it.name) }
-                .distinctUntilChangedBy { it.second }.collect { (route, key) -> followOutput(route, key) }
+            OutputRoute.state.filterNotNull().filter { it.identified }.distinctUntilChangedBy { it.key }.collect { route ->
+                // Solo se avisa si cambia lo que suena: la primera vez de unos cascos sigue igual.
+                if (SurcoSettings.arriveAt(route.key)) {
+                    Notice.fromService(this@PlaybackService, getString(R.string.eq_for_output, routeName(this@PlaybackService, route)))
+                }
+            }
         }
         // Ajustes que viven en el reproductor
         scope.launch {
@@ -422,18 +429,6 @@ class PlaybackService : MediaLibraryService() {
                 .setSessionCommand(CMD_SHUFFLE)
                 .build(),
         ))
-    }
-
-    private fun followOutput(route: OutputRoute.Route, key: String) {
-        val p = SurcoSettings.state.value
-        if (!p.perOutputEq || p.outputKey == key) {
-            if (p.outputKey != key) SurcoSettings.update { it.copy(outputKey = key) }
-            return
-        }
-        val (profiles, next) = switchOutput(p.outputProfiles, SoundProfile(p.dsp, p.preset), p.outputKey, key)
-        SurcoSettings.update { it.copy(outputProfiles = profiles, outputKey = key, dsp = next.dsp, preset = next.preset) }
-        // Solo se avisa si cambia lo que suena: la primera vez de unos cascos sigue igual.
-        if (next.dsp != p.dsp) Notice.fromService(this, getString(R.string.eq_for_output, routeName(this, route)))
     }
 
     /** El mezclador del DAC USB para la canción que suena (lo aplica OutputRoute si hay DAC y Android 14+). */
@@ -490,7 +485,8 @@ class PlaybackService : MediaLibraryService() {
     })
         .setMediaSourceFactory(DefaultMediaSourceFactory(this, SurcoExtractorsFactory()))
         .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), false)
-        .build().also { ghost = it }
+        // La misma sesión de audio: los efectos del móvil tratan igual la cola del cruce.
+        .build().also { it.audioSessionId = exo.audioSessionId; ghost = it }
 
     /** Corta la cola del cruce (pausa, salto, otra canción a mano, cerrar). */
     private fun stopGhost() {
@@ -776,6 +772,7 @@ class PlaybackService : MediaLibraryService() {
         SurcoWidget.last?.let { SurcoWidget.publish(this, it.copy(playing = false)) }
         UserStore.flush()
         OutputRoute.stop()
+        SystemEffects.close(this)
         handler.removeCallbacksAndMessages(null)
         scope.cancel()
         ghost?.release(); ghost = null

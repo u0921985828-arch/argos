@@ -140,4 +140,7 @@
     <string name="settings_privacy_lb">ListenBrainz está activado: cada escucha (artista, título, álbum y duración) se envía a listenbrainz.org con tu token.</string>
     <string name="settings_eq_per_output">Un ecualizador para cada salida</string>
     <string name="settings_eq_per_output_help">El altavoz, los auriculares de cable y cada aparato Bluetooth o USB guardan su curva, y vuelve sola al conectarlos.</string>
+    <string name="settings_system_fx">Efectos de sonido del móvil</string>
+    <string name="settings_system_fx_help">Abre los efectos del fabricante (Xiaomi Sound, Dolby…) para Surco. Actúan después de Surco y se suman a su ecualizador; con bit-perfect por USB no actúan. No añaden bits que el archivo no tiene. El códec del Bluetooth (LDAC, aptX…) lo elige el móvil en los ajustes de Bluetooth.</string>
+    <string name="settings_system_fx_none">Este móvil no tiene panel de efectos de sonido</string>
 </resources>

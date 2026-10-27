@@ -136,4 +136,7 @@
     <string name="settings_privacy_lb">ListenBrainz is on: each play (artist, title, album and duration) is sent to listenbrainz.org with your token.</string>
     <string name="settings_eq_per_output">An equalizer for each output</string>
     <string name="settings_eq_per_output_help">The phone speaker, wired headphones and each Bluetooth or USB device keep their own curve, and it comes back by itself when you connect them.</string>
+    <string name="settings_system_fx">Phone sound effects</string>
+    <string name="settings_system_fx_help">Opens the manufacturer\'s effects (Xiaomi Sound, Dolby…) for Surco. They act after Surco and add to its equalizer; with bit-perfect over USB they don\'t act. They can\'t add bits the file doesn\'t have. The Bluetooth codec (LDAC, aptX…) is picked by the phone in Bluetooth settings.</string>
+    <string name="settings_system_fx_none">This phone has no sound effects panel</string>
 </resources>

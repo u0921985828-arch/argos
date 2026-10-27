@@ -28,3 +28,30 @@ fun switchOutput(
     val next = saved[to] ?: current
     return (saved + (to to next)) to next
 }
+
+/** Lo del ecualizador por salida en los ajustes: lo guardado de cada una, de cuál es lo de ahora y lo de ahora. */
+data class OutputState(val profiles: Map<String, SoundProfile>, val key: String?, val sound: SoundProfile)
+
+/**
+ * La salida pasa a ser [to]. Con un ecualizador por salida, se cambia como dice [switchOutput]; sin
+ * él, solo se apunta cuál es (la curva es la misma para todas).
+ */
+fun arrive(s: OutputState, to: String, perOutput: Boolean): OutputState =
+    if (!perOutput || s.key == to) s.copy(key = to)
+    else switchOutput(s.profiles, s.sound, s.key, to).let { (profiles, next) -> OutputState(profiles, to, next) }
+
+/**
+ * Se enciende el ecualizador por salida: si la de ahora ya tenía curva, vuelve la suya (lo tocado
+ * con el interruptor apagado era de todas, no de esta); si no, lo de ahora pasa a ser suyo.
+ */
+fun enablePerOutput(s: OutputState): OutputState {
+    val k = s.key ?: return s
+    return s.profiles[k]?.let { s.copy(sound = it) } ?: s.copy(profiles = s.profiles + (k to s.sound))
+}
+
+/** Si cambia lo que se oye (dos curvas apagadas o planas suenan igual aunque sus bandas no lo sean). */
+fun audibleChange(a: DspParams, b: DspParams): Boolean = a != b && !(a.neutral && b.neutral)
+
+/** Al borrar el preajuste [name], lo guardado con ese nombre pasa a «personalizado» (las bandas siguen). */
+fun forgetPreset(profiles: Map<String, SoundProfile>, name: String, custom: String): Map<String, SoundProfile> =
+    profiles.mapValues { (_, v) -> if (v.preset == name) v.copy(preset = custom) else v }

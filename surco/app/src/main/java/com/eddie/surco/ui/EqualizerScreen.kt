@@ -51,6 +51,7 @@ import com.eddie.surco.audio.CROSSFEED_LEVELS
 import com.eddie.surco.audio.DspParams
 import com.eddie.surco.audio.EQ_FREQS
 import com.eddie.surco.audio.EQ_MAX_DB
+import com.eddie.surco.audio.forgetPreset
 import com.eddie.surco.audio.OutputRoute
 import com.eddie.surco.audio.SurcoSettings
 import com.eddie.surco.audio.peakGainDb
@@ -220,7 +221,12 @@ fun EqualizerScreen(vm: LibraryViewModel) {
     deleting?.let { name ->
         ConfirmSheet(stringResource(R.string.eq_delete_title, name), stringResource(R.string.eq_delete_text), stringResource(R.string.eq_delete_confirm),
             onDismiss = { deleting = null }) {
-            SurcoSettings.update { it.copy(customPresets = it.customPresets - name, preset = if (it.preset == name) CUSTOM else it.preset) }
+            SurcoSettings.update {
+                it.copy(
+                    customPresets = it.customPresets - name, preset = if (it.preset == name) CUSTOM else it.preset,
+                    outputProfiles = forgetPreset(it.outputProfiles, name, CUSTOM),
+                )
+            }
             deleting = null
         }
     }

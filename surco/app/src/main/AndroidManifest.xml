@@ -23,6 +23,13 @@
     <!-- Buscar aparatos DLNA (SSDP es multidifusión). -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
+    <!-- El panel de efectos de sonido del fabricante (Ajustes → Sonido). -->
+    <queries>
+        <intent>
+            <action android:name="android.media.action.DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
+        </intent>
+    </queries>
+
     <application
         android:name=".SurcoApp"
         android:enableOnBackInvokedCallback="true"

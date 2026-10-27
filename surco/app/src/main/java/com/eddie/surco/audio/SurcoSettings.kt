@@ -166,6 +166,26 @@ object SurcoSettings {
 
     fun updateDsp(f: (DspParams) -> DspParams) = update { it.copy(dsp = f(it.dsp)) }
 
+    private val Prefs.outputs get() = OutputState(outputProfiles, outputKey, SoundProfile(dsp, preset))
+    private fun Prefs.with(s: OutputState) = copy(outputProfiles = s.profiles, outputKey = s.key, dsp = s.sound.dsp, preset = s.sound.preset)
+
+    /** La salida es ahora [key]: con un ecualizador por salida, suena el suyo. Devuelve si cambia lo que se oye. */
+    fun arriveAt(key: String): Boolean {
+        var audible = false
+        // Dentro de update: leer y escribir de una vez (la copia de seguridad se restaura en otro hilo).
+        update { p ->
+            val s = arrive(p.outputs, key, p.perOutputEq)
+            audible = audibleChange(p.dsp, s.sound.dsp)
+            p.with(s)
+        }
+        return audible
+    }
+
+    /** Enciende o apaga el ecualizador por salida (al encenderlo vuelve la curva de la salida de ahora). */
+    fun setPerOutput(on: Boolean) = update { p ->
+        if (on && !p.perOutputEq) p.with(enablePerOutput(p.outputs)).copy(perOutputEq = true) else p.copy(perOutputEq = on)
+    }
+
     /** Preajustes de fábrica y propios, en orden. */
     fun allPresets(p: Prefs = state.value): List<Pair<String, List<Float>>> = BUILTIN_PRESETS + p.customPresets.toList()
 
@@ -178,6 +198,8 @@ object SurcoSettings {
     /** Sustituye todos los ajustes y los guarda ya, sin esperar al guardado diferido. */
     fun restore(p: Prefs) {
         update { p }
+        // La copia se hizo quizá con otros cascos puestos: lo suyo se guarda como de ellos y suena lo de esta salida.
+        OutputRoute.state.value?.takeIf { it.identified }?.let { arriveAt(it.key) }
         val f = file ?: return
         runBlocking(Disk.writer) { Disk.write(f, toJson(_state.value).toString()) }
     }
