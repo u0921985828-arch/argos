@@ -6,6 +6,15 @@
 set -euo pipefail
 PKG=com.eddie.surco
 D="/sdcard/Android/data/$PKG/files/bateria"
+# Sin las 10.000 de rendimiento-surco.sh: al abrir Surco se pondría a analizar el BPM de todas
+# (una sola vez, pero la medida sería la del análisis y no la de reproducir).
+adb shell rm -rf /sdcard/Music/mil
+adb shell content call --uri content://media/ --method scan_volume --arg external_primary >/dev/null 2>&1 || true
+for _ in $(seq 1 60); do
+    c=$(adb shell content query --uri content://media/external/audio/media --projection _id 2>/dev/null | grep -c "^Row" || true)
+    [ "${c:-0}" -le 10 ] && break; sleep 3
+done
+adb shell am force-stop "$PKG"
 adb shell mkdir -p "$D"
 adb push bateria.mp3 bateria.flac "$D/" >/dev/null
 adb shell cmd package compile -m speed -f "$PKG" >/dev/null || true
