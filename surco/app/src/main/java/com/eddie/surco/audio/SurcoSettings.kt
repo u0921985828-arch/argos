@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -160,6 +161,19 @@ object SurcoSettings {
 
     /** Preajustes de fábrica y propios, en orden. */
     fun allPresets(p: Prefs = state.value): List<Pair<String, List<Float>>> = BUILTIN_PRESETS + p.customPresets.toList()
+
+    // ----- Copia de seguridad (data/Backup.kt): el mismo JSON que ajustes.json -----
+    fun exportJson(): String = toJson(_state.value).toString()
+
+    /** Lee sin aplicar (falla si no es JSON): se valida todo antes de tocar nada. */
+    fun parseJson(text: String): Prefs = fromJson(JSONObject(text))
+
+    /** Sustituye todos los ajustes y los guarda ya, sin esperar al guardado diferido. */
+    fun restore(p: Prefs) {
+        update { p }
+        val f = file ?: return
+        runBlocking(Disk.writer) { Disk.write(f, toJson(_state.value).toString()) }
+    }
 
     // ----- JSON -----
     private fun toJson(p: Prefs) = JSONObject().apply {

@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
@@ -69,6 +70,7 @@ private fun SmartList.icon(): ImageVector = when (this) {
 fun PlaylistsScreen(vm: LibraryViewModel, tracks: List<Track>) {
     val user by UserStore.state.collectAsState()
     var creating by remember { mutableStateOf(false) }
+    val importM3u = rememberM3uImport(vm)
     Column(Modifier.fillMaxSize()) {
         // Cabecera de pestaña, como Inicio, Biblioteca y Etiquetas: con TopBar parecía una subpantalla.
         TabHeader(
@@ -90,6 +92,10 @@ fun PlaylistsScreen(vm: LibraryViewModel, tracks: List<Track>) {
             }
             items(user.playlists, key = { it.id }) { pl ->
                 ListRow(Icons.AutoMirrored.Filled.QueueMusic, pl.name, songs(pl.trackIds.size)) { vm.push(Screen.PlaylistView(pl.id)) }
+            }
+            // Para quien llega de otro reproductor o de un PC: sus listas M3U/M3U8, casadas con esta biblioteca.
+            item {
+                ListRow(Icons.Default.FolderOpen, stringResource(R.string.m3u_import), stringResource(R.string.m3u_import_hint), onClick = importM3u)
             }
         }
     }

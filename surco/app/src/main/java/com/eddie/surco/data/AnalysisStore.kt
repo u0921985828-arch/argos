@@ -10,30 +10,32 @@ import java.io.File
  * todas las etiquetas» no tira horas de análisis.
  */
 class AnalysisStore(ctx: Context) {
-    private val file = File(ctx.filesDir, "analisis.json")
+    private val file = File(ctx.filesDir, NAME)
     private val map = HashMap<String, Pair<Float?, String?>>()
+    /** La [generation] de lo que hay en [map]: si se ha restaurado una copia, se relee. */
+    private var loaded = -1
 
-    init {
-        Disk.read(file)?.let { text ->
-            runCatching {
-                val o = JSONObject(text)
-                o.keys().forEach { k ->
-                    val v = o.getJSONObject(k)
-                    map[k] = v.optDouble("b", Double.NaN).takeUnless { it.isNaN() }?.toFloat() to v.optString("k").ifBlank { null }
-                }
-            }.onFailure { Disk.quarantine(file) }
-        }
-    }
-
-    private fun key(t: Track) = "${t.path}|${t.dateModified}"
-
-    fun has(t: Track) = key(t) in map
+    init { refresh() }
 
     @Synchronized
-    fun put(t: Track, r: AudioAnalyzer.Result?) { map[key(t)] = r?.bpm to r?.key?.code }
+    private fun refresh() {
+        val g = generation
+        if (loaded == g) return
+        map.clear()
+        map.putAll(read(file))
+        loaded = g
+    }
+
+    private fun key(t: Track) = analysisKey(t.path, t.dateModified)
+
+    fun has(t: Track): Boolean { refresh(); return key(t) in map }
+
+    @Synchronized
+    fun put(t: Track, r: AudioAnalyzer.Result?) { refresh(); map[key(t)] = r?.bpm to r?.key?.code }
 
     /** La canción con lo analizado allí donde la etiqueta no dice nada (la etiqueta manda). */
     fun apply(t: Track): Track {
+        refresh()
         val (b, k) = map[key(t)] ?: return t
         if ((b == null || t.x("bpm").isNotBlank()) && (k == null || t.x("key").isNotBlank())) return t
         val e = t.extra.toMutableMap()
@@ -44,9 +46,48 @@ class AnalysisStore(ctx: Context) {
 
     @Synchronized
     fun save() {
-        val o = JSONObject()
-        map.forEach { (k, v) -> o.put(k, JSONObject().apply { v.first?.let { put("b", it.toDouble()) }; v.second?.let { put("k", it) } }) }
-        Disk.write(file, o.toString())
+        synchronized(LOCK) {
+            // Una copia restaurada mientras tanto manda: no se guarda encima lo de antes.
+            refresh()
+            write(file, map)
+        }
+    }
+
+    companion object {
+        private const val NAME = "analisis.json"
+        private val LOCK = Any()
+        /** Sube al restaurar una copia: cada instancia viva relee el archivo antes de usarlo. */
+        @Volatile private var generation = 0
+
+        private fun read(f: File): Map<String, Pair<Float?, String?>> {
+            val text = Disk.read(f) ?: return emptyMap()
+            return runCatching {
+                val o = JSONObject(text)
+                val m = HashMap<String, Pair<Float?, String?>>()
+                o.keys().forEach { k ->
+                    val v = o.getJSONObject(k)
+                    m[k] = v.optDouble("b", Double.NaN).takeUnless { it.isNaN() }?.toFloat() to v.optString("k").ifBlank { null }
+                }
+                m
+            }.getOrElse { Disk.quarantine(f); emptyMap() }
+        }
+
+        private fun write(f: File, m: Map<String, Pair<Float?, String?>>) {
+            val o = JSONObject()
+            m.forEach { (k, v) -> o.put(k, JSONObject().apply { v.first?.let { put("b", it.toDouble()) }; v.second?.let { put("k", it) } }) }
+            Disk.write(f, o.toString())
+        }
+
+        /** Copia de seguridad: todo lo analizado, «ruta|fecha» → (bpm, tonalidad). */
+        fun exportAll(ctx: Context): Map<String, Pair<Float?, String?>> = synchronized(LOCK) { read(File(ctx.filesDir, NAME)) }
+
+        /** Restaurar una copia: sustituye todo lo analizado. */
+        fun replaceAll(ctx: Context, entries: Map<String, Pair<Float?, String?>>) {
+            synchronized(LOCK) {
+                write(File(ctx.filesDir, NAME), entries)
+                generation += 1
+            }
+        }
     }
 }
 

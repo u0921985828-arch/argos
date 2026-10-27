@@ -1,6 +1,7 @@
 package com.eddie.surco.data
 
 import java.nio.ByteBuffer
+import java.text.Normalizer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.Charset
 import java.nio.charset.CodingErrorAction
@@ -120,6 +121,9 @@ private val DURATION = Regex("^-?\\d+(\\.\\d+)?")
 private val FILE_DRIVE = Regex("^/[A-Za-z]:")
 private val BREAKS = Regex("[\\r\\n]+")
 
+/** Para comparar rutas: sin mayúsculas y en NFC (un Mac escribe «ó» como «o» + tilde suelta). */
+private fun low(s: String) = Normalizer.normalize(s, Normalizer.Form.NFC).lowercase()
+
 private fun key(s: String) = fold(s).replace(SPACES, " ").trim()
 
 /** «Artista - Título», como lo escriben las listas y como lo escribe [writeM3u8]. */
@@ -140,8 +144,8 @@ fun matchM3u(entries: List<M3uEntry>, library: List<M3uSong>, baseDir: String? =
     for (s in library) {
         val norm = "/" + s.path.split('/').filter { it.isNotEmpty() }.joinToString("/")
         byPath.putIfAbsent(norm, s)
-        byPathLower.putIfAbsent(norm.lowercase(), s)
-        val ls = s.path.lowercase().split('/').filter { it.isNotEmpty() }
+        byPathLower.putIfAbsent(low(norm), s)
+        val ls = low(s.path).split('/').filter { it.isNotEmpty() }
         segs[s.id] = ls
         ls.lastOrNull()?.let { byName.getOrPut(it) { ArrayList() } += s }
         byDisplay.getOrPut(key(displayOf(s.artist, s.title))) { ArrayList() } += s
@@ -169,9 +173,9 @@ fun matchM3u(entries: List<M3uEntry>, library: List<M3uSong>, baseDir: String? =
         val p = entryPath(e.path, baseDir) ?: return byText(e, null)
         if (p.unixAbsolute) {
             val abs = "/" + p.segments.joinToString("/")
-            (byPath[abs] ?: byPathLower[abs.lowercase()])?.let { return it }
+            (byPath[abs] ?: byPathLower[low(abs)])?.let { return it }
         }
-        val lower = p.segments.map { it.lowercase() }
+        val lower = p.segments.map(::low)
         val same = byName[lower.last()] ?: return byText(e, null)
         // Cuántas carpetas coinciden desde el final (el archivo ya coincide).
         fun common(s: M3uSong): Int {

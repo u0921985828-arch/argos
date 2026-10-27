@@ -144,6 +144,12 @@ object UserStore {
 
     fun saveQueue(q: SavedQueue) { if (q != _state.value.queue) update { it.copy(queue = q) } }
 
+    // ----- Copia de seguridad (data/Backup.kt): el mismo JSON que usuario.json -----
+    fun exportJson(): String = toJson(_state.value).toString()
+
+    /** Lee sin aplicar (falla si no es JSON): se valida todo antes y se sustituye con [update]. */
+    fun parseJson(text: String): UserData = fromJson(JSONObject(text))
+
     // ----- JSON -----
     private fun toJson(d: UserData) = JSONObject().apply {
         put("favorites", JSONArray(d.favorites.toList()))

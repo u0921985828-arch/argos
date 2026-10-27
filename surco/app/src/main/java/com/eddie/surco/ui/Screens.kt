@@ -257,10 +257,12 @@ fun PlaylistScreen(vm: LibraryViewModel, id: Long, byId: Map<Long, Track>) {
     val sourceIndex = remember(entries) { entries.map { it.first } }
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
+    val exportM3u = rememberM3uExport(vm, pl.name, list)
     SongListScreen(vm, pl.name, stringResource(R.string.library_playlist_subtitle, songs(list.size)), list, SongSort.CUSTOM, custom = true, playlistId = id,
         sourceIndex = sourceIndex,
         menu = { close ->
             DropdownMenuItem(text = { Text(stringResource(R.string.library_rename)) }, onClick = { close(); renaming = true })
+            DropdownMenuItem(text = { Text(stringResource(R.string.m3u_export)) }, onClick = { close(); exportM3u() }, enabled = list.isNotEmpty())
             DropdownMenuItem(text = { Text(stringResource(R.string.library_delete_playlist)) }, onClick = { close(); deleting = true })
         })
     if (renaming) NameDialog(stringResource(R.string.library_playlist_name), initial = pl.name, onDismiss = { renaming = false }) { n -> UserStore.renamePlaylist(id, n); renaming = false }
