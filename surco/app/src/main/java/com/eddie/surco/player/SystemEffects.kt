@@ -3,7 +3,7 @@ package com.eddie.surco.player
 import android.content.Context
 import android.content.Intent
 import android.media.audiofx.AudioEffect
-import androidx.media3.common.C
+import android.media.AudioManager
 
 /**
  * Los efectos de sonido del móvil (Xiaomi Sound, Dolby Atmos, Wavelet…): se les anuncia la sesión
@@ -12,21 +12,24 @@ import androidx.media3.common.C
  * suben los bits del archivo.
  */
 object SystemEffects {
+    /** Sin sesión (el 0 de Android; el C.AUDIO_SESSION_ID_UNSET de Media3 es API inestable). */
+    private const val NONE = AudioManager.AUDIO_SESSION_ID_GENERATE
+
     /** La sesión anunciada (la del reproductor de Surco). */
-    @Volatile var session: Int = C.AUDIO_SESSION_ID_UNSET
+    @Volatile var session: Int = NONE
         private set
 
     fun open(ctx: Context, id: Int) {
-        if (id == session || id == C.AUDIO_SESSION_ID_UNSET) return
+        if (id == session || id == NONE) return
         close(ctx)
         ctx.sendBroadcast(intent(ctx, AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION, id))
         session = id
     }
 
     fun close(ctx: Context) {
-        val id = session.takeIf { it != C.AUDIO_SESSION_ID_UNSET } ?: return
+        val id = session.takeIf { it != NONE } ?: return
         ctx.sendBroadcast(intent(ctx, AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION, id))
-        session = C.AUDIO_SESSION_ID_UNSET
+        session = NONE
     }
 
     private fun intent(ctx: Context, action: String, id: Int) = Intent(action)

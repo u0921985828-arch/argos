@@ -1,6 +1,14 @@
 package com.eddie.surco.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -76,10 +84,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.material.icons.filled.GraphicEq
 import com.eddie.surco.data.parseKey
+import com.eddie.surco.data.seekSettled
+import com.eddie.surco.data.shownDuration
+import com.eddie.surco.data.songDirection
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.lerp
@@ -126,17 +138,81 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 @Composable
-private fun rememberPosition(vm: LibraryViewModel, periodMs: Long = 400): Pair<Long, Long> {
-    var pos by remember { mutableLongStateOf(0L) }
+private fun rememberPosition(vm: LibraryViewModel, track: Track, periodMs: Long = 400): Pair<Long, Long> {
+    var pos by remember { mutableLongStateOf(vm.player.positionMs) }
     var dur by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(vm.player.currentId, vm.player.isPlaying) {
+    LaunchedEffect(vm.player.currentId, vm.player.isPlaying, track.durationMs) {
         while (true) {
-            pos = vm.player.positionMs; dur = vm.player.durationMs
+            dur = shownDuration(vm.player.durationMs, track.durationMs)
+            pos = vm.player.positionMs.let { if (dur > 0) it.coerceIn(0, dur) else it.coerceAtLeast(0) }
             delay(periodMs)
         }
     }
     return pos to dur
 }
+
+/**
+ * La barra de «Sonando» con sus tiempos, aparte para que solo ella se repinte en cada fotograma:
+ * el mando calcula la posición sin preguntar al servicio, así que avanza lisa y no a saltos de
+ * 250 ms. Al soltarla se queda en el destino hasta que el reproductor llega; si la canción no deja
+ * saltar, no se puede arrastrar; sin duración conocida, la de la biblioteca.
+ */
+@Composable
+private fun SeekBar(vm: LibraryViewModel, track: Track) {
+    val p = vm.player
+    var pos by remember { mutableLongStateOf(p.positionMs) }
+    var dur by remember { mutableLongStateOf(shownDuration(p.durationMs, track.durationMs)) }
+    var dragVal by remember { mutableStateOf<Float?>(null) }
+    // Destino del último salto y cuándo se pidió.
+    var pending by remember(p.currentId) { mutableStateOf<Pair<Long, Long>?>(null) }
+    LaunchedEffect(p.currentId, p.isPlaying, track.durationMs) {
+        while (true) {
+            val now = p.positionMs
+            dur = shownDuration(p.durationMs, track.durationMs)
+            pending?.let { (target, at) -> if (seekSettled(target, now, SystemClock.uptimeMillis() - at)) pending = null }
+            pos = pending?.first ?: now
+            if (p.isPlaying) withFrameMillis { } else delay(250)
+        }
+    }
+    val shown = dragVal?.let { (it * dur).toLong() } ?: if (dur > 0) pos.coerceIn(0, dur) else pos.coerceAtLeast(0)
+    SurcoSlider(
+        value = dragVal ?: if (dur > 0) shown / dur.toFloat() else 0f,
+        onChange = { dragVal = it },
+        onFinished = {
+            dragVal?.let { v ->
+                val target = (v * dur).toLong()
+                p.seek(target)
+                pending = target to SystemClock.uptimeMillis()
+                pos = target
+            }
+            dragVal = null
+        },
+        enabled = p.seekable && dur > 0,
+    )
+    Row(Modifier.fillMaxWidth()) {
+        Text(fmtTime(shown), color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+        Spacer(Modifier.weight(1f))
+        Text(if (dur > 0) "−" + fmtTime((dur - shown).coerceAtLeast(0)) else "--:--", color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+    }
+}
+
+/**
+ * Hacia dónde fue el último cambio de canción (1 siguiente, -1 anterior), para que la portada y el
+ * título entren por el lado del gesto o del botón.
+ */
+@Composable
+private fun rememberSongDirection(vm: LibraryViewModel): Int {
+    val p = vm.player
+    val at = p.queue.indexOfFirst { it.index == p.currentIndex }
+    // No es estado: solo recuerda la posición anterior para el cálculo de abajo.
+    val last = remember { intArrayOf(at) }
+    return remember(at) { songDirection(last[0], at, p.queue.size).also { last[0] = at } }
+}
+
+/** Entrada de una canción nueva: desliza un tercio desde el lado de [dir] y funde. */
+private fun songChange(dir: Int): ContentTransform =
+    (slideInHorizontally(tween(320)) { it * dir / 3 } + fadeIn(tween(320))) togetherWith
+        (slideOutHorizontally(tween(320)) { -it * dir / 3 } + fadeOut(tween(200))) using SizeTransform(clip = false)
 
 /** «FLAC · 24 bits · 96 kHz · 2.304 kbps» */
 fun qualityLine(t: Track): String = listOfNotNull(
@@ -209,7 +285,8 @@ fun routeLine(): String? {
 // ======================= MINI REPRODUCTOR =======================
 @Composable
 fun MiniPlayer(vm: LibraryViewModel, track: Track) {
-    val (pos, dur) = rememberPosition(vm)
+    val (pos, dur) = rememberPosition(vm, track)
+    val dir = rememberSongDirection(vm)
     val fav = UserStore.state.collectAsState().value.favorites.contains(track.id)
     val favState = stringResource(if (fav) R.string.player_fav_state_on else R.string.player_fav_state_off)
     val unknown = stringResource(R.string.player_unknown_artist)
@@ -230,11 +307,16 @@ fun MiniPlayer(vm: LibraryViewModel, track: Track) {
                 .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Art(track, 44.dp, modifier = Modifier.size(44.dp))
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(track.title, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
-                Text(track.artist.ifBlank { unknown }, color = Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // Portada y título cambian juntos, deslizando desde el lado de la canción que entra.
+            AnimatedContent(track, Modifier.weight(1f), transitionSpec = { songChange(dir) }, contentKey = { it.id }, label = "mini") { t ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Art(t, 44.dp, modifier = Modifier.size(44.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(t.title, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
+                        Text(t.artist.ifBlank { unknown }, color = Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
             }
             IconButton(onClick = { toggleFavorite(track) }, Modifier.semantics { stateDescription = favState }) {
                 Icon(if (fav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, stringResource(R.string.player_favorite), tint = if (fav) Copper else Muted)
@@ -250,9 +332,7 @@ fun MiniPlayer(vm: LibraryViewModel, track: Track) {
 // ======================= PANTALLA DE REPRODUCCIÓN =======================
 @Composable
 fun NowPlaying(vm: LibraryViewModel, track: Track) {
-    val (pos, dur) = rememberPosition(vm, 250)
-    var dragging by remember { mutableStateOf(false) }
-    var dragVal by remember { mutableFloatStateOf(0f) }
+    val dir = rememberSongDirection(vm)
     // Saveable: al girar el móvil la actividad se recrea y la letra abierta seguía cerrándose.
     var showLyrics by rememberSaveable { mutableStateOf(false) }
     val p = vm.player
@@ -284,32 +364,38 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
     val artBlock: @Composable (Dp) -> Unit = { size ->
         val artMod = Modifier.size(size)
         if (showLyrics) {
+            // La posición solo hace falta con la letra: sin ella «Sonando» no se repinta cada 250 ms.
+            val (pos, _) = rememberPosition(vm, track, 250)
             LyricsPanel(vm, track, pos, artMod.clip(RoundedCornerShape(14.dp)).background(Panel.copy(alpha = 0.6f)))
         } else {
-            Art(
-                track, size, corner = 14.dp,
-                // Deslizar a los lados cambia de canción. Solo horizontal: el vertical es de la pantalla,
-                // que con letra grande se desplaza (y se cierra con la flecha de arriba o «Atrás»).
-                modifier = artMod.pointerInput(track.id) {
-                    var acc = 0f
-                    detectHorizontalDragGestures(
-                        onDragEnd = { if (acc < -120) p.next() else if (acc > 120) p.prev(); acc = 0f },
-                        onDragCancel = { acc = 0f },
-                    ) { ch, d -> ch.consume(); acc += d }
-                },
-            )
+            AnimatedContent(track, transitionSpec = { songChange(dir) }, contentKey = { it.id }, label = "portada") { t ->
+                Art(
+                    t, size, corner = 14.dp,
+                    // Deslizar a los lados cambia de canción. Solo horizontal: el vertical es de la pantalla,
+                    // que con letra grande se desplaza (y se cierra con la flecha de arriba o «Atrás»).
+                    modifier = artMod.pointerInput(t.id) {
+                        var acc = 0f
+                        detectHorizontalDragGestures(
+                            onDragEnd = { if (acc < -120) p.next() else if (acc > 120) p.prev(); acc = 0f },
+                            onDragCancel = { acc = 0f },
+                        ) { ch, d -> ch.consume(); acc += d }
+                    },
+                )
+            }
         }
     }
     val controls: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(track.title, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(
-                        listOf(track.artist, track.album).filter { it.isNotBlank() }.joinToString(" — "),
-                        color = Muted, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.clickable { vm.goToArtist(track) },
-                    )
+                AnimatedContent(track, Modifier.weight(1f), transitionSpec = { songChange(dir) }, contentKey = { it.id }, label = "título") { t ->
+                    Column(Modifier.fillMaxWidth()) {
+                        Text(t.title, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            listOf(t.artist, t.album).filter { it.isNotBlank() }.joinToString(" — "),
+                            color = Muted, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.clickable { vm.goToArtist(t) },
+                        )
+                    }
                 }
                 IconButton(onClick = { toggleFavorite(track) }) {
                     Icon(if (fav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, stringResource(if (fav) R.string.player_unfavorite else R.string.player_favorite),
@@ -326,16 +412,7 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
             routeLine()?.let { Text(it, color = Muted, fontSize = 11.sp, lineHeight = 15.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth()) }
             }
             Spacer(Modifier.height(10.dp))
-            SurcoSlider(
-                value = if (dragging) dragVal else if (dur > 0) (pos / dur.toFloat()).coerceIn(0f, 1f) else 0f,
-                onChange = { dragging = true; dragVal = it },
-                onFinished = { p.seek((dragVal * dur).toLong()); dragging = false },
-            )
-            Row(Modifier.fillMaxWidth()) {
-                Text(fmtTime(if (dragging) (dragVal * dur).toLong() else pos), color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-                Spacer(Modifier.weight(1f))
-                Text("−" + fmtTime((dur - pos).coerceAtLeast(0)), color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-            }
+            SeekBar(vm, track)
             Spacer(Modifier.height(6.dp))
             val shuffleState = stringResource(if (p.shuffle) R.string.player_state_on else R.string.player_state_off)
             val repeatState = stringResource(

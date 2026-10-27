@@ -20,7 +20,9 @@ import androidx.media3.extractor.wav.WavExtractor
  */
 @OptIn(UnstableApi::class)
 class SurcoExtractorsFactory : ExtractorsFactory {
-    private val inner = DefaultExtractorsFactory()
+    // Saltar también en los MP3 sin tabla (ni Xing ni VBRI), los AAC sueltos (ADTS) y los AMR: sin
+    // esto Media3 los da por no saltables y la barra no hacía nada.
+    private val inner = DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
     private fun wrap(a: Array<Extractor>): Array<Extractor> = Array(a.size) { if (a[it] is WavExtractor) FloatWavExtractor(a[it]) else a[it] }
     override fun createExtractors(): Array<Extractor> = wrap(inner.createExtractors())
     override fun createExtractors(uri: android.net.Uri, responseHeaders: MutableMap<String, MutableList<String>>): Array<Extractor> =

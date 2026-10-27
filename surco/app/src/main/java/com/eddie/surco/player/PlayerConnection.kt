@@ -31,6 +31,8 @@ class PlayerConnection(ctx: Context) {
     var shuffle by mutableStateOf(false); private set
     var repeat by mutableIntStateOf(Player.REPEAT_MODE_OFF); private set
     var speed by mutableFloatStateOf(1f); private set
+    /** Si la canción deja saltar. Mientras no se sabe la duración, sí (para que la barra no parpadee al empezar). */
+    var seekable by mutableStateOf(true); private set
     /** La cola en el orden en que va a sonar (con aleatorio, el orden aleatorio). */
     var queue by mutableStateOf<List<QueueEntry>>(emptyList()); private set
 
@@ -57,6 +59,7 @@ class PlayerConnection(ctx: Context) {
         shuffle = p.shuffleModeEnabled
         repeat = p.repeatMode
         speed = p.playbackParameters.speed
+        seekable = p.isCurrentMediaItemSeekable || p.duration == C.TIME_UNSET
         if (queueChanged) queue = buildQueue(p)
     }
 

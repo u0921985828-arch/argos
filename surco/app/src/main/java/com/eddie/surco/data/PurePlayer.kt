@@ -1,6 +1,7 @@
 package com.eddie.surco.data
 
 import java.text.Normalizer
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
@@ -179,3 +180,30 @@ fun gridStep(n: Int, more: Boolean): Int {
 
 /** Hueco entre portadas y margen (dp) en proporción a la portada: 12/16 con 2 por fila … 4/8 con 8. */
 fun gridSpacing(cols: Int): Pair<Int, Int> = when (gridColumns(cols)) { 2 -> 12 to 16; 3 -> 10 to 14; 5 -> 6 to 10; else -> 4 to 8 }
+
+// ---------- Barra de progreso y cambio de canción ----------
+
+/**
+ * La duración que enseña la barra: la del reproductor; si todavía no la sabe (al empezar, o un
+ * MP3/AAC sin cabecera que la diga), la que leyó la biblioteca. Con las dos a 0, 0 (barra quieta).
+ */
+fun shownDuration(playerMs: Long, libraryMs: Long): Long = if (playerMs > 0) playerMs else libraryMs.coerceAtLeast(0)
+
+/**
+ * Tras soltar la barra se enseña el destino hasta que el reproductor llega a él (a menos de 1 s) o
+ * pasan 2 s: sin esto la barra volvía un instante a donde estaba antes de saltar.
+ */
+fun seekSettled(targetMs: Long, posMs: Long, elapsedMs: Long): Boolean = abs(posMs - targetMs) < 1_000 || elapsedMs > 2_000
+
+/**
+ * Hacia dónde va la animación al cambiar de canción, según el sitio de cada una en la cola (en el
+ * orden en que suena): 1 hacia la siguiente, -1 hacia la anterior. Dar la vuelta a la cola con
+ * «repetir todo» sigue el sentido del paso, no el salto de posición.
+ */
+fun songDirection(from: Int, to: Int, size: Int): Int = when {
+    from < 0 || to < 0 || from == to -> 1
+    size > 2 && from == size - 1 && to == 0 -> 1
+    size > 2 && from == 0 && to == size - 1 -> -1
+    to < from -> -1
+    else -> 1
+}

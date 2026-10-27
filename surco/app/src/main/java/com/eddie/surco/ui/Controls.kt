@@ -132,12 +132,13 @@ fun VerticalSlider(
 fun SurcoSlider(
     value: Float, onChange: (Float) -> Unit, modifier: Modifier = Modifier,
     range: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 0, onFinished: (() -> Unit)? = null, fill: Boolean = true,
+    enabled: Boolean = true,
 ) {
     val source = remember { MutableInteractionSource() }
     // Sin relleno en los que tienen el cero en medio (tono, balance): a 0 dB la pista medio cobre parecía un valor.
     val colors = SliderDefaults.colors(thumbColor = Copper, activeTrackColor = if (fill) Copper else Panel2, inactiveTrackColor = Panel2)
     Slider(
-        value = value, onValueChange = onChange, modifier = modifier, valueRange = range, steps = steps,
+        value = value, onValueChange = onChange, modifier = modifier, enabled = enabled, valueRange = range, steps = steps,
         onValueChangeFinished = onFinished, interactionSource = source, colors = colors,
         thumb = { SliderDefaults.Thumb(interactionSource = source, colors = colors, thumbSize = DpSize(20.dp, 20.dp)) },
         track = { SliderDefaults.Track(sliderState = it, colors = colors, drawStopIndicator = null, drawTick = { _, _ -> }, thumbTrackGapSize = 0.dp) },
