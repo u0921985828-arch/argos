@@ -212,6 +212,9 @@ fun groupTracks(tracks: List<Track>, field: TagField): List<Group> {
     return map.values.map { Group(it.first, it.second) }
 }
 
+/** Si alguna canción trae un valor de verdad en [field] (para no ofrecer apartados vacíos). */
+fun hasValues(tracks: List<Track>, field: TagField): Boolean = tracks.any { t -> field.buckets(t).any { !it.isPlaceholder } }
+
 /** Campos con al menos un valor en la biblioteca, con su número de grupos. */
 fun availableFields(tracks: List<Track>): List<Pair<TagField, List<Group>>> =
     TagField.entries.mapNotNull { f ->

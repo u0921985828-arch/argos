@@ -121,6 +121,7 @@ import com.eddie.surco.data.Track
 import com.eddie.surco.data.UserStore
 import com.eddie.surco.data.buckets
 import com.eddie.surco.data.groupTracks
+import com.eddie.surco.data.hasValues
 import com.eddie.surco.data.fold
 import com.eddie.surco.data.matchesFolded
 import java.util.Calendar
@@ -237,6 +238,11 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, byId: Map<Long, Track>
     }
     val top = rememberOffMain(tracks, user.plays, initial = emptyList()) { SmartList.MOST_PLAYED.tracks(tracks, user).take(5) }
     val resume = user.queue.ids.getOrNull(user.queue.index)?.let { byId[it] }
+    // Atajos de «Explorar por etiqueta», solo los que tienen canciones (sin estado de ánimo en ninguna, no sale).
+    val explore = rememberOffMain(tracks, initial = emptyList()) {
+        listOf(TagField.GENRE, TagField.BPM, TagField.KEY, TagField.DECADE, TagField.MOOD, TagField.QUALITY, TagField.FOLDER)
+            .filter { hasValues(tracks, it) }
+    }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
@@ -309,14 +315,14 @@ fun HomeScreen(vm: LibraryViewModel, tracks: List<Track>, byId: Map<Long, Track>
                 SongRow(t, null, t.id == vm.player.currentId, onClick = { vm.player.play(top, i) }, onLong = { vm.sheet = SongSheetState(t) })
             }
         }
-        if (prefs.homeExplore) item {
+        if (prefs.homeExplore && explore.isNotEmpty()) item {
             SectionLabel(stringResource(R.string.library_explore_tags))
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 // 40 dp de alto (los chips de Material miden 32): es lo que se toca con el pulgar.
-                listOf(TagField.GENRE, TagField.BPM, TagField.KEY, TagField.DECADE, TagField.MOOD, TagField.QUALITY, TagField.FOLDER).forEach { f ->
+                explore.forEach { f ->
                     FilterChip(selected = false, onClick = { vm.push(Screen.Groups(f)) }, label = { Text(f.label) }, colors = chipColors(), modifier = Modifier.height(ChipHeight))
                 }
                 FilterChip(selected = false, onClick = { vm.selectTab(Tab.TAGS) }, label = { Text(stringResource(R.string.library_all_tags)) }, colors = chipColors(), modifier = Modifier.height(ChipHeight))
