@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- «Enviar a»: DLNA/UPnP y Chromecast (player/Dlna.kt, RemotePlayer.kt, CastSupport.kt, ui/CastUi.kt). -->
+    <string name="cast_button">Enviar a un altavoz o una tele</string>
+    <string name="cast_title">Enviar a</string>
+    <string name="cast_subtitle">Altavoces, teles y receptores de esta wifi</string>
+    <string name="cast_close">Cerrar</string>
+    <string name="cast_this_phone">Este móvil</string>
+    <string name="cast_on_phone">Suena en este móvil</string>
+    <string name="cast_playing_on">Suena en %1$s</string>
+    <string name="cast_connecting">Conectando con %1$s…</string>
+    <string name="cast_kind_chromecast">Chromecast</string>
+    <string name="cast_kind_dlna">DLNA</string>
+    <string name="cast_searching">Buscando…</string>
+    <string name="cast_none">No se ve nada. El altavoz o la tele tienen que estar encendidos y en la misma wifi que este móvil.</string>
+    <string name="cast_now_on">Ahora suena en %1$s</string>
+    <string name="cast_no_wifi">Conéctate a una wifi para enviar la música a otro aparato</string>
+    <string name="cast_lost">Se ha perdido %1$s. La música vuelve a este móvil, en pausa.</string>
+    <string name="cast_rejected">%1$s no ha podido tocar esta canción</string>
+    <string name="cast_unknown_title">Canción sin título</string>
+</resources>

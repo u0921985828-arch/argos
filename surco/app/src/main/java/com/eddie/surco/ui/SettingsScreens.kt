@@ -85,7 +85,7 @@ enum class SettingsPage(@StringRes val title: Int, @StringRes val subtitle: Int,
     ABOUT(R.string.settings_about_title, R.string.settings_about_sub, Icons.Default.Info),
 }
 
-const val SURCO_VERSION = "Surco 2.6"
+const val SURCO_VERSION = "Surco 2.7"
 
 @Composable
 fun SettingsScreen(vm: LibraryViewModel) {

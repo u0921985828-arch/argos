@@ -16,8 +16,12 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Pedir al sistema el mezclador del DAC USB (bit-perfect, Android 14+). -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <!-- Solo para las letras de lrclib.net, y solo si se activa en Ajustes → Biblioteca. -->
+    <!-- Letras de lrclib.net y ListenBrainz (solo si se activan en Ajustes) y «Enviar a» altavoces
+         y teles de la wifi (DLNA y Chromecast: Surco les sirve la música por HTTP en la red local). -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Buscar aparatos DLNA (SSDP es multidifusión). -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
     <application
         android:name=".SurcoApp"
@@ -66,6 +70,11 @@
                 android:name="android.service.quicksettings.ACTIVE_TILE"
                 android:value="false" />
         </service>
+
+        <!-- Chromecast: opciones del SDK de Cast (receptor por defecto). -->
+        <meta-data
+            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+            android:value="com.eddie.surco.player.CastOptionsProvider" />
 
         <!-- Android Auto: Surco sale entre las aplicaciones de música del coche. -->
         <meta-data

@@ -85,6 +85,8 @@ const val RG_HEADROOM_DB = 6f
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaLibraryService() {
     private var session: MediaLibrarySession? = null
+    /** «Enviar a»: cambia el reproductor de la sesión (este móvil, DLNA o Chromecast). */
+    private var router: RemoteRouter? = null
     private val car by lazy { CarLibrary(this) }
 
     /** Lo hace [block] fuera del hilo principal y devuelve su futuro (el coche no puede esperar al disco). */
@@ -204,7 +206,7 @@ class PlaybackService : MediaLibraryService() {
                 ): ListenableFuture<SessionResult> {
                     when (customCommand.customAction) {
                         CMD_FAV.customAction -> {
-                            val id = exo.currentMediaItem?.mediaId?.toLongOrNull()
+                            val id = session.player.currentMediaItem?.mediaId?.toLongOrNull()
                                 ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
                             UserStore.toggleFavorite(id) // el colector de favoritas rehace los botones
                         }
@@ -355,6 +357,8 @@ class PlaybackService : MediaLibraryService() {
             })
             .setSessionActivity(open)
             .build()
+        // «Enviar a»: la misma sesión cambia de reproductor (este móvil, un aparato DLNA o un Chromecast).
+        session?.let { router = RemoteRouter(this, it, it.player) }
 
         // Favorita marcada desde la app o «Sonando»: el corazón del widget grande la sigue.
         scope.launch {
@@ -688,7 +692,9 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         saveQueue()
-        if (!exo.playWhenReady || exo.mediaItemCount == 0) stopSelf()
+        // Sonando en otro aparato también cuenta: no se para el servicio.
+        val p = session?.player ?: exo
+        if (!p.playWhenReady || p.mediaItemCount == 0) stopSelf()
     }
 
     override fun onDestroy() {
@@ -700,6 +706,7 @@ class PlaybackService : MediaLibraryService() {
         handler.removeCallbacksAndMessages(null)
         scope.cancel()
         ghost?.release(); ghost = null
+        router?.release(); router = null
         session?.run { player.release(); release() }
         session = null
         super.onDestroy()

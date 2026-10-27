@@ -12,8 +12,8 @@ android {
         applicationId = "com.eddie.surco"
         minSdk = 26
         targetSdk = 35
-        versionCode = 26
-        versionName = "2.6"
+        versionCode = 27
+        versionName = "2.7"
         // Prueba en el emulador que navega la biblioteca como lo hace Android Auto (androidTest/).
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -62,6 +62,9 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.3")
     // Instala los perfiles de arranque (los de Compose y Media3 y baseline-prof.txt) también fuera de Play.
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")
+    // «Enviar a»: Chromecast (con el receptor por defecto; sin servicios de Google queda solo DLNA).
+    implementation("androidx.media3:media3-cast:1.5.1")
+    implementation("androidx.mediarouter:mediarouter:1.7.0")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")

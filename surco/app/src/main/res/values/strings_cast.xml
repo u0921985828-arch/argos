@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- «Enviar a»: DLNA/UPnP y Chromecast (player/Dlna.kt, RemotePlayer.kt, CastSupport.kt, ui/CastUi.kt). -->
+    <string name="cast_button">Send to a speaker or TV</string>
+    <string name="cast_title">Send to</string>
+    <string name="cast_subtitle">Speakers, TVs and receivers on this Wi‑Fi</string>
+    <string name="cast_close">Close</string>
+    <string name="cast_this_phone">This phone</string>
+    <string name="cast_on_phone">Playing on this phone</string>
+    <string name="cast_playing_on">Playing on %1$s</string>
+    <string name="cast_connecting">Connecting to %1$s…</string>
+    <string name="cast_kind_chromecast">Chromecast</string>
+    <string name="cast_kind_dlna">DLNA</string>
+    <string name="cast_searching">Searching…</string>
+    <string name="cast_none">Nothing found. The speaker or TV has to be on and on the same Wi‑Fi as this phone.</string>
+    <string name="cast_now_on">Now playing on %1$s</string>
+    <string name="cast_no_wifi">Connect to Wi‑Fi to send music to another device</string>
+    <string name="cast_lost">Lost %1$s. The music is back on this phone, paused.</string>
+    <string name="cast_rejected">%1$s couldn\'t play this song</string>
+    <string name="cast_unknown_title">Unknown song</string>
+</resources>

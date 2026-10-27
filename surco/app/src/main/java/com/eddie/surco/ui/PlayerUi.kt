@@ -276,6 +276,7 @@ fun NowPlaying(vm: LibraryViewModel, track: Track) {
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { vm.nowPlayingOpen = false }) { Icon(Icons.Default.KeyboardArrowDown, stringResource(R.string.player_close), Modifier.size(30.dp)) }
             Text(stringResource(R.string.player_now_playing_header), color = Paper.copy(alpha = 0.7f), fontSize = 12.sp, letterSpacing = 1.6.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+            CastButton()
             IconButton(onClick = { vm.sheet = SongSheetState(track, fromPlayer = true) }) { Icon(Icons.Default.MoreVert, stringResource(R.string.player_more)) }
         }
     }
