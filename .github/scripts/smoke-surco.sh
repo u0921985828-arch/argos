@@ -20,7 +20,17 @@ PKG=com.eddie.surco
 
 # uiautomator no vuelca mientras la interfaz no está quieta (con música sonando, la barra de
 # progreso se mueve) y deja el volcado ANTERIOR: se borra antes y se reintenta.
+# Un «no responde» del lanzador del emulador (pasa al arrancar en frío) se queda con el foco
+# aunque el volcado enseñe Surco: lo escrito y los toques le llegan a él. «Atrás» lo cierra.
+sin_anr() {
+    for _ in 1 2 3 4 5; do
+        adb shell dumpsys window 2>/dev/null | grep -q "mCurrentFocus=.*Application Not Responding" || return 0
+        echo "  (cierro un «no responde» del sistema)"
+        adb shell input keyevent KEYCODE_BACK; sleep 2
+    done
+}
 ui() {
+    sin_anr
     : > ui.xml
     for _ in 1 2 3 4 5; do
         adb shell rm -f /sdcard/ui.xml
@@ -98,6 +108,9 @@ done
 echo "MediaStore ve $n canciones"
 
 adb install -r "$APK"
+# Los «no responde» de otras apps en segundo plano, sin diálogo (el lanzador del emulador los da
+# al arrancar en frío y su diálogo se quedaba con el foco).
+adb shell settings put global anr_show_background 0 || true
 # El teclado en pantalla del emulador se cuelga a veces al arrancar en frío y, colgado, se traga
 # lo escrito y también los toques (pasó en 3 de las últimas 5 pasadas). Sin él, «input text»
 # llega como teclas físicas y los toques no esperan a nadie.

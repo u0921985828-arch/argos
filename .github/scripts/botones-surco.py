@@ -32,7 +32,17 @@ def log(s=""):
     OUT.write(s + "\n"); OUT.flush()
 
 
+def no_anr():
+    """Cierra un «no responde» del sistema que se haya quedado con el foco (se traga los toques)."""
+    for _ in range(5):
+        w = sh("dumpsys", "window")
+        if not re.search(r"mCurrentFocus=.*Application Not Responding", w):
+            return
+        sh("input", "keyevent", "KEYCODE_BACK"); time.sleep(2)
+
+
 def dump():
+    no_anr()
     for i in range(15):
         if i == 12:
             # Último recurso: con la barra moviéndose el volcado del sistema se cae a veces. Pausar
