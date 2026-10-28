@@ -130,6 +130,8 @@ object PendingShortcut {
     const val SEARCH = "com.eddie.surco.action.SEARCH"
     val action = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     var query: String? = null
+    /** La búsqueda llegó con texto: se abre con los resultados, sin teclado. */
+    var quietSearch = false
 }
 
 private val audioPerm = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
@@ -212,7 +214,7 @@ private fun App(vm: LibraryViewModel) {
             PendingShortcut.FAVORITES -> { vm.selectTab(Tab.HOME); vm.push(Screen.Smart(SmartList.FAVORITES)) }
             PendingShortcut.SEARCH -> {
                 vm.selectTab(Tab.HOME)
-                PendingShortcut.query?.let { vm.query = it }
+                PendingShortcut.query?.let { vm.query = it; PendingShortcut.quietSearch = true }
                 PendingShortcut.query = null
                 vm.push(Screen.Search)
             }

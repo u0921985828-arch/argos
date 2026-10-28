@@ -113,6 +113,7 @@ import androidx.compose.ui.unit.sp
 import com.eddie.surco.AlbumSort
 import com.eddie.surco.LibraryTab
 import com.eddie.surco.LibraryViewModel
+import com.eddie.surco.PendingShortcut
 import com.eddie.surco.R
 import com.eddie.surco.Res
 import com.eddie.surco.Screen
@@ -674,7 +675,12 @@ fun SearchScreen(vm: LibraryViewModel, tracks: List<Track>) {
     val focus = LocalFocusManager.current
     val req = remember { FocusRequester() }
     // Al abrir la búsqueda, el teclado listo (tras un fotograma: antes el campo aún no está colocado).
-    LaunchedEffect(Unit) { delay(120); runCatching { req.requestFocus() }; keyboard?.show() }
+    // Con el texto ya puesto (búsqueda del sistema, acceso directo) se enseñan los resultados sin
+    // sacar el teclado, que los taparía; vacío, se escribe directamente.
+    LaunchedEffect(Unit) {
+        if (PendingShortcut.quietSearch) { PendingShortcut.quietSearch = false; return@LaunchedEffect }
+        delay(120); runCatching { req.requestFocus() }; keyboard?.show()
+    }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { vm.pop() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.library_back)) }
