@@ -89,7 +89,7 @@ adb shell am start -n "$PKG/.MainActivity" >/dev/null
 for _ in $(seq 1 20); do sleep 2; ui; grep -q 'text="4 canciones' ui.xml && break; done
 
 cap inicio
-adb shell input swipe 540 1700 540 600 400; sleep 1; cap inicio-abajo
+adb shell input swipe 540 1700 540 600 400 ; sleep 2; cap inicio-abajo
 adb shell input swipe 540 600 540 1900 300; sleep 1; ui
 
 tap "Buscar en cualquier etiqueta"; sleep 2; cap buscar-vacio
@@ -114,7 +114,7 @@ ui; tapre "Álbumes"; sleep 1; ui; tap "Disco de Prueba"; sleep 2; cap album
 ui; tap "Ordenar"; cap album-ordenar; back
 
 ui; tap "Etiquetas"; sleep 2; cap etiquetas
-adb shell input swipe 540 1700 540 600 400; sleep 1; cap etiquetas-abajo
+adb shell input swipe 540 1700 540 600 400 ; sleep 2; cap etiquetas-abajo
 adb shell input swipe 540 600 540 1900 300; sleep 1; ui; tap "Género" || tap "Década"; sleep 2; cap grupos
 ui; tap "Rock" || true; sleep 2; cap grupo-canciones
 
@@ -128,10 +128,10 @@ back
 ui; tap "Inicio"; sleep 1; ui; tap "Ajustes"; sleep 2; cap ajustes
 ui; tap "Sonido"; sleep 2; cap ajustes-sonido
 ui; tap "Ecualizador y efectos"; sleep 2; cap ecualizador
-adb shell input swipe 540 1700 540 600 400; sleep 1; cap ecualizador-abajo
+adb shell input swipe 540 1700 540 600 400 ; sleep 2; cap ecualizador-abajo
 back; back
 ui; tap "Reproducción"; sleep 2; cap ajustes-reproduccion
-ui; tap "4 s"; sleep 1; cap ajustes-fundido
+ui; tap "4 s" ; sleep 2; cap ajustes-fundido
 ui; tap "No"; sleep 1; back
 ui; tap "Carpetas, letras de internet y audios cortos"; sleep 2; cap ajustes-biblioteca; back
 ui; tap "Interfaz"; sleep 2; cap ajustes-interfaz
@@ -151,7 +151,7 @@ import sys, xml.etree.ElementTree as ET
 r = ET.parse("ui.xml").getroot()
 sys.exit(0 if any(n.get("checked") == "true" and any(c.get("text") == "Detalles técnicos" for c in n.iter("node")) for n in r.iter("node")) else 1)
 PY
-adb shell input swipe 540 1700 540 600 400; sleep 1; cap ajustes-interfaz-abajo; back
+adb shell input swipe 540 1700 540 600 400 ; sleep 2; cap ajustes-interfaz-abajo; back
 ui; tap "Tus escuchas"; sleep 2; cap ajustes-escuchas; back
 ui; tap "Acerca de Surco"; sleep 2; cap ajustes-acerca; back
 back
@@ -179,15 +179,15 @@ sleep 2; cap sonando
 adb shell settings put system accelerometer_rotation 0
 adb shell settings put system user_rotation 1; sleep 3; cap sonando-horizontal
 adb shell settings put system user_rotation 0; sleep 3
-adb shell input swipe 540 1700 540 600 400; sleep 1; cap sonando-abajo
+adb shell input swipe 540 1700 540 600 400 ; sleep 2; cap sonando-abajo
 ui; tap "Letra"; sleep 2; cap letra
 ui; tap "Letra"; sleep 1
 ui; tap "Cola"; sleep 2; cap cola
 back
 ui; tap "Más"; sleep 2; cap sonando-mas
-ui; tap "Temporizador"; sleep 1; cap temporizador
+ui; tap "Temporizador" ; sleep 2; cap temporizador
 back
-ui; tap "Más"; sleep 2; ui; tap "Velocidad"; sleep 1; cap velocidad
+ui; tap "Más"; sleep 2; ui; tap "Velocidad" ; sleep 2; cap velocidad
 back
 ui; tap "Cerrar"; sleep 1
 if [ "$ESCALA" = "1.0" ]; then

@@ -309,7 +309,7 @@ jobs:
           # Después de la prueba, el recorrido de diseño con la letra normal y con la letra grande.
           script: |
             bash .github/scripts/smoke-surco.sh Surco.apk
-            bash .github/scripts/auto-surco.sh
+            adb install -r Surco-debug.apk >/dev/null && adb install -r Surco-auto-test.apk >/dev/null
             bash .github/scripts/rendimiento-surco.sh mil.tar 10000
             bash .github/scripts/bateria-surco.sh
             adb install -r Surco.apk >/dev/null && python3 .github/scripts/botones-surco.py
