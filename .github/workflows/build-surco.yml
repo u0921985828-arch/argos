@@ -199,9 +199,11 @@ jobs:
         if: always()
         run: |
           set -e
-          [ -d capturas ] || exit 0
+          [ -d capturas ] || ls ./*.png >/dev/null 2>&1 || exit 0
           work=$(mktemp -d)
-          cp -r capturas "$work/"; [ -d capturas13 ] && cp -r capturas13 "$work/"; [ -d capturas-en ] && cp -r capturas-en "$work/"
+          [ -d capturas ] && cp -r capturas "$work/"; [ -d capturas13 ] && cp -r capturas13 "$work/"; [ -d capturas-en ] && cp -r capturas-en "$work/"
+          # Las capturas sueltas de la prueba de humo (sobre todo cuando falla).
+          mkdir -p "$work/humo"; cp ./*.png "$work/humo/" 2>/dev/null || true; cp ui.xml "$work/humo/" 2>/dev/null || true
           [ -f rendimiento.txt ] && cp rendimiento.txt "$work/"
           [ -f bateria.txt ] && cp bateria.txt "$work/"
           [ -f botones.txt ] && cp botones.txt "$work/"

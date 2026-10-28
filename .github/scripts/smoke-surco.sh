@@ -165,6 +165,10 @@ busca() {  # $1 = texto, $2 = canción que tiene que salir
     # que se prueba aquí es lo que encuentra la búsqueda, así que se le pasa el texto como lo
     # haría la búsqueda del sistema (el acceso directo «Buscar» con el texto puesto).
     echo "  (el teclado no escribe: búsqueda con el texto ya puesto)"
+    # Diagnóstico: quién tiene el foco y si el sistema ve algo colgado.
+    adb shell dumpsys window 2>/dev/null | grep -E "mCurrentFocus|mFocusedApp|mInputMethodTarget" | head -4 || true
+    adb shell dumpsys input 2>/dev/null | grep -iE "FocusedWindow|FocusedApplication|anr" | head -6 || true
+    adb logcat -d 2>/dev/null | grep -E "ANR in|Input dispatching timed out|not responding|InputDispatcher" | tail -8 || true
     adb shell am start -n "$PKG/.MainActivity" -a com.eddie.surco.action.SEARCH -e query "$1" >/dev/null
     for _ in 1 2 3 4 5; do
         sleep 2; ui
