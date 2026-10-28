@@ -66,6 +66,14 @@ class BatteryTest {
         .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
         .build()
 
+    /**
+     * Crea la carpeta de la app donde bateria-surco.sh deja los audios: si la crea el shell, la
+     * app no la ve (almacenamiento con ámbito) y la medida no encuentra nada.
+     */
+    @Test fun preparar() {
+        assertTrue(File(ctx.getExternalFilesDir(null), "bateria").apply { mkdirs() }.isDirectory)
+    }
+
     @Test fun consumo() {
         SurcoSettings.init(ctx)
         val before = SurcoSettings.state.value

@@ -23,10 +23,14 @@ PKG=com.eddie.surco
 # Un «no responde» del lanzador del emulador (pasa al arrancar en frío) se queda con el foco
 # aunque el volcado enseñe Surco: lo escrito y los toques le llegan a él. «Atrás» lo cierra.
 sin_anr() {
+    local w p
     for _ in 1 2 3 4 5; do
-        adb shell dumpsys window 2>/dev/null | grep -q "mCurrentFocus=.*Application Not Responding" || return 0
-        echo "  (cierro un «no responde» del sistema)"
-        adb shell input keyevent KEYCODE_BACK; sleep 2
+        w=$(adb shell dumpsys window 2>/dev/null | grep -m1 "mCurrentFocus=.*Application Not Responding" || true)
+        [ -n "$w" ] || return 0
+        p=$(echo "$w" | sed -n 's/.*Application Not Responding: \([A-Za-z0-9._]*\).*/\1/p')
+        echo "  (el sistema dice que «$p» no responde: se cierra; «Atrás» no quita ese diálogo)"
+        if [ -n "$p" ] && [ "$p" != "$PKG" ]; then adb shell am force-stop "$p"; else adb shell input keyevent KEYCODE_BACK; fi
+        sleep 2
     done
 }
 ui() {

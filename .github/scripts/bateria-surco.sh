@@ -15,12 +15,13 @@ for _ in $(seq 1 60); do
     [ "${c:-0}" -le 10 ] && break; sleep 3
 done
 adb shell am force-stop "$PKG"
-adb shell mkdir -p "$D"
+# La carpeta la crea la propia app (si la crea el shell, la app no ve lo que hay dentro).
+adb shell am instrument -w -e class "$PKG.BatteryTest#preparar" "$PKG.test/androidx.test.runner.AndroidJUnitRunner" >/dev/null 2>&1 || true
 adb push bateria.mp3 bateria.flac "$D/" >/dev/null
 adb shell cmd package compile -m speed -f "$PKG" >/dev/null || true
 adb shell dumpsys battery unplug || true
 adb logcat -c
-adb shell am instrument -w -e class "$PKG.BatteryTest" "$PKG.test/androidx.test.runner.AndroidJUnitRunner" > bateria-auto.txt 2>&1 || true
+adb shell am instrument -w -e class "$PKG.BatteryTest#consumo" "$PKG.test/androidx.test.runner.AndroidJUnitRunner" > bateria-auto.txt 2>&1 || true
 adb shell dumpsys battery reset || true
 adb logcat -d | grep "SurcoBateria" | sed 's/^.*SurcoBateria: //' > bateria.txt || true
 { echo "(build de depuración compilado con -m speed; emulador x86_64 sin audio real)"; } >> bateria.txt

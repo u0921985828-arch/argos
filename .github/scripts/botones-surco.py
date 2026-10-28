@@ -35,10 +35,15 @@ def log(s=""):
 def no_anr():
     """Cierra un «no responde» del sistema que se haya quedado con el foco (se traga los toques)."""
     for _ in range(5):
-        w = sh("dumpsys", "window")
-        if not re.search(r"mCurrentFocus=.*Application Not Responding", w):
+        m = re.search(r"mCurrentFocus=.*Application Not Responding: ([\w.]+)", sh("dumpsys", "window"))
+        if not m:
             return
-        sh("input", "keyevent", "KEYCODE_BACK"); time.sleep(2)
+        # «Atrás» no quita ese diálogo: se cierra la app que no responde (nunca Surco: eso se cuenta).
+        if m.group(1) != PKG:
+            sh("am", "force-stop", m.group(1))
+        else:
+            sh("input", "keyevent", "KEYCODE_BACK")
+        time.sleep(2)
 
 
 def dump():
