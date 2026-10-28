@@ -98,6 +98,11 @@ done
 echo "MediaStore ve $n canciones"
 
 adb install -r "$APK"
+# El teclado en pantalla del emulador se cuelga a veces al arrancar en frío y, colgado, se traga
+# lo escrito y también los toques (pasó en 3 de las últimas 5 pasadas). Sin él, «input text»
+# llega como teclas físicas y los toques no esperan a nadie.
+for m in $(adb shell ime list -s 2>/dev/null | tr -d '\r'); do adb shell ime disable "$m" >/dev/null 2>&1 || true; done
+echo "teclados en pantalla activos: $(adb shell ime list -s 2>/dev/null | tr -d '\r' | wc -l)"
 # La app habla inglés por defecto y español con el móvil en español: las pruebas, en español
 # (idioma por app, Android 13+). El inglés lo recorre idioma-surco.sh.
 adb shell cmd locale set-app-locales "$PKG" --locales es-ES
