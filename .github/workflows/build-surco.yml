@@ -49,8 +49,21 @@ jobs:
         with:
           packages: 'platforms;android-35 build-tools;35.0.0'
 
-      # Release minificado (R8) y firmado con la clave de depuración del
-      # ejecutor; el debug, por si R8 rompe algo de jaudiotagger.
+      # La clave fija de Surco (secreto SURCO_FIRMA: el .p12 en base64). Sin ella, la de depuración del
+      # ejecutor, que cambia en cada compilación (para actualizar habría que desinstalar).
+      - name: Signing key
+        env:
+          FIRMA: ${{ secrets.SURCO_FIRMA }}
+        run: |
+          if [ -n "$FIRMA" ]; then
+            echo "$FIRMA" | base64 -d > "$RUNNER_TEMP/surco.p12"
+            echo "SURCO_FIRMA=$RUNNER_TEMP/surco.p12" >> "$GITHUB_ENV"
+            echo "firma: clave fija de Surco"
+          else
+            echo "::warning::sin el secreto SURCO_FIRMA: el APK sale firmado con la clave de depuración del ejecutor"
+          fi
+
+      # Release minificado (R8); el debug, por si R8 rompe algo de jaudiotagger.
       - name: Build APKs
         working-directory: surco
         # SURCO_RED=1: la prueba de LRCLIB pregunta al servicio de verdad (el ejecutor tiene red).
@@ -98,6 +111,15 @@ jobs:
           "$AAPT" dump badging Surco.apk | head -3
           ls -l Surco.apk Surco-debug.apk
           sha256sum Surco.apk Surco-debug.apk
+          # Con la clave fija, los tres APK llevan su certificado (surco/firma.sha256): si no, no sale.
+          SIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          for a in Surco.apk Surco-debug.apk Surco-auto-test.apk; do
+            c=$("$SIGNER" verify --print-certs "$a" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+            echo "$a: certificado $c"
+            if [ -n "${SURCO_FIRMA:-}" ] && [ "$c" != "$(cat surco/firma.sha256)" ]; then
+              echo "::error::$a no va firmado con la clave de Surco"; exit 1
+            fi
+          done
 
       - uses: actions/upload-artifact@v4
         with:

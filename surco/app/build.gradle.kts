@@ -4,6 +4,11 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Clave fija de Surco (secreto SURCO_FIRMA del CI, ver .github/workflows/build-surco.yml): con ella
+// cada versión se instala encima de la anterior sin perder nada. Sin el secreto (una copia del
+// repositorio), la de depuración de la máquina, que cambia en cada compilación.
+val firma: File? = System.getenv("SURCO_FIRMA")?.let { File(it) }?.takeIf { it.isFile }
+
 android {
     namespace = "com.eddie.surco"
     compileSdk = 35
@@ -12,19 +17,29 @@ android {
         applicationId = "com.eddie.surco"
         minSdk = 26
         targetSdk = 35
-        versionCode = 30
-        versionName = "2.8.2"
+        versionCode = 31
+        versionName = "2.8.3"
         // Prueba en el emulador que navega la biblioteca como lo hace Android Auto (androidTest/).
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (firma != null) create("surco") {
+            storeFile = firma
+            storeType = "pkcs12"
+            // La contraseña no protege nada: lo secreto es el archivo, que solo está en el CI.
+            storePassword = "surco-firma"; keyAlias = "surco"; keyPassword = "surco-firma"
+        }
+    }
+
     buildTypes {
+        // También la de depuración y sus pruebas: en el CI se instalan encima de la de release.
+        debug { if (firma != null) signingConfig = signingConfigs.getByName("surco") }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Firmado con la clave de depuración para poder instalarlo directamente
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (firma != null) "surco" else "debug")
         }
     }
     compileOptions {

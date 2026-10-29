@@ -351,3 +351,10 @@ Encargo: «Pues pasa, hay errores por ahí»: con cascos USB-C conectados se oye
 - **CI verde completa en 6658daf** (run 40948728671): build, humo (la voz del coche pasó), diseño ×2, inglés, «OK (9 tests)», medidas: 207 botones, 0 caídas, 7 sin efecto (los mismos chips de siempre); 10.004 canciones sin caídas, 148 MB.
 - Consumo más alto en esta pasada (MP3 6,8 %, FLAC 6,5 %, ecualizador 10,0 %, abierta 20,4 %), pero la máquina era más lenta en todo (MediaStore 40 s frente a 25; etiquetas 461 s frente a 358) y el cambio de la 2.8.2 no toca el camino del sonido (con el emulador sin cascos solo llama una vez a `setPreferredAudioDevice(null)`, sin coste por bloque de audio). Para salir de dudas haría falta medir el consumo de la referencia en la misma pasada (la de rendimiento ya lo hace con la memoria); la medida de referencia de esta pasada no llegó al final (aviso, no tumba el CI).
 - APK 2.8.2 = `Surco.apk` de `apk-surco` (6658daf2). Falta lo principal: que Eddie lo pruebe con sus cascos USB-C.
+
+# Surco 2.8.3 — firma fija
+
+Encargo: «¿Con la misma firma?» → secreto de GitHub (elegido por Eddie frente a guardar la clave en el repositorio, que es público).
+- Clave EC P-256 en PKCS12, generada aquí (no está en el repositorio). Certificado SHA-256 en `surco/firma.sha256` (637a687e…898d), que es público y sirve para comprobar.
+- CI: el secreto `SURCO_FIRMA` (el .p12 en base64) se escribe en `$RUNNER_TEMP` y Gradle firma con él release, debug y la prueba (en el CI se instalan unos encima de otros). Sin el secreto, la de depuración del ejecutor y un aviso. Con el secreto, `apksigner` comprueba los tres APK contra `firma.sha256` y tumba el CI si no casan.
+- Hace falta desinstalar una última vez (de la clave de depuración a la fija); a partir de ahí, cada versión se instala encima.
