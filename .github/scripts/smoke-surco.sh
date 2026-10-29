@@ -407,11 +407,12 @@ grep -o "Surco salida: .*" salida.txt | sort -u || true
 
 # Volumen igualado sin etiquetas: la sonoridad medida (EBU R128) de los tonos de ffmpeg (amplitud 1/8).
 # Calculada a mano con el filtro K: Uno, MP3 mono a 440 Hz, −18,74 LUFS (el mono cuenta como dos
-# canales iguales, como en libebur128); Cuatro, WAV float estéreo a 192 kHz, −18,62.
+# canales iguales, como en libebur128); Cuatro, WAV float estéreo a 192 kHz, −21,63: ffmpeg reparte
+# el mono en los dos canales con −3 dB cada uno (center_mix_level), así que suena igual que el mono.
 kill "$ANALISIS" 2>/dev/null || true
 sed 's/^.*SurcoAnalisis: //' analisis.txt | sort -u
 lufs() { { grep -o "$1 · .*lufs=-\?[0-9.]*" analisis.txt || true; } | tail -1 | sed "s/.*lufs=//"; }
-for par in "Prueba Uno:-18.74" "Prueba Cuatro:-18.62"; do
+for par in "Prueba Uno:-18.74" "Prueba Cuatro:-21.63"; do
     t=${par%%:*}; want=${par##*:}; v=$(lufs "$t")
     python3 -c "import sys; sys.exit(0 if abs(float(sys.argv[1]) - float(sys.argv[2])) <= 0.6 else 1)" "${v:-999}" "$want" \
         || fallo "sonoridad de «$t»: ${v:-sin medir} LUFS, se esperaba $want"
