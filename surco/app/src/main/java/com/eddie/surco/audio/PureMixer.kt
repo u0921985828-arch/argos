@@ -23,6 +23,18 @@ object PcmEncoding {
     fun bits(e: Int) = when (e) { PCM_8BIT -> 8; PCM_16BIT -> 16; PCM_24BIT_PACKED, PCM_FLOAT -> 24; PCM_32BIT -> 32; else -> 0 }
 }
 
+/**
+ * A qué salida se ata la música mientras haya unos cascos: [ranks] de cada salida conectada (4
+ * USB, 3 cable, 2 Bluetooth, 1 altavoz, 0 otra) y [routed] la que eligió Android. Con cascos, la
+ * elegida si es de cascos y, si Android dice altavoz (pasa con algunos cascos USB-C y al cambiar
+ * el mezclador del DAC), los cascos de más rango. Sin cascos, -1: lo que decida el sistema.
+ */
+fun headsetToPin(ranks: List<Int>, routed: Int): Int {
+    if (routed in ranks.indices && ranks[routed] >= 2) return routed
+    val best = ranks.indices.maxByOrNull { ranks[it] } ?: return -1
+    return if (ranks[best] >= 2) best else -1
+}
+
 data class MixerChoice(val option: MixerOption, val bitPerfect: Boolean)
 
 /**

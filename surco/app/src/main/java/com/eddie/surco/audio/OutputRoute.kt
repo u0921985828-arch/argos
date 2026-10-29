@@ -30,6 +30,17 @@ object OutputRoute {
     private val _state = MutableStateFlow<Route?>(null)
     val state: StateFlow<Route?> = _state.asStateFlow()
 
+    /**
+     * Los cascos (USB, cable o Bluetooth) a los que se ata la música mientras estén: el reproductor
+     * se los pide a Android como salida preferida, así ni un cambio de mezclador del DAC ni el
+     * segundo reproductor del cruce acaban en el altavoz. null sin cascos.
+     */
+    private val _pinned = MutableStateFlow<AudioDeviceInfo?>(null)
+    val pinned: StateFlow<AudioDeviceInfo?> = _pinned.asStateFlow()
+
+    /** Se han ido los últimos cascos: hay que parar antes de que nada salga por el altavoz. */
+    var onHeadsetGone: (() -> Unit)? = null
+
     private val media: AudioAttributes = AudioAttributes.Builder()
         .setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build()
 
@@ -43,7 +54,12 @@ object OutputRoute {
 
     private val callback = object : AudioDeviceCallback() {
         override fun onAudioDevicesAdded(added: Array<out AudioDeviceInfo>?) = refresh()
-        override fun onAudioDevicesRemoved(removed: Array<out AudioDeviceInfo>?) = refresh()
+        override fun onAudioDevicesRemoved(removed: Array<out AudioDeviceInfo>?) {
+            val had = _pinned.value != null
+            refresh()
+            // Además del aviso de Android («ruido», que Media3 ya atiende): si no quedan cascos, pausa ya.
+            if (had && _pinned.value == null && removed.orEmpty().any { rank(it.type) >= 2 }) onHeadsetGone?.invoke()
+        }
     }
 
     /** Desde el servicio de reproducción (hilo principal). */
@@ -62,6 +78,7 @@ object OutputRoute {
         }
         am = null
         _state.value = null
+        _pinned.value = null
     }
 
     /** Cada vez que cambia la canción o el ajuste. */
@@ -73,7 +90,15 @@ object OutputRoute {
 
     private fun refresh() {
         val m = am ?: return
-        val dev = current(m)
+        val routed = current(m)
+        val outs = m.getDevices(AudioManager.GET_DEVICES_OUTPUTS).toList()
+        val pin = outs.getOrNull(headsetToPin(outs.map { rank(it.type) }, outs.indexOfFirst { routed != null && it.id == routed.id }))
+        if (pin?.id != _pinned.value?.id) {
+            Log.i("Surco", "Surco salida atada a: ${pin?.let { "${kindOf(it.type)} ${it.productName}" } ?: "lo que elija el sistema"}")
+            _pinned.value = pin
+        }
+        // Con cascos, la salida es la de los cascos aunque Android diga un instante «altavoz».
+        val dev = pin ?: routed
         var mixer: MixerChoice? = null
         if (Build.VERSION.SDK_INT >= 34) mixer = applyMixer(m, dev)
         _state.value = dev?.let { Route(kindOf(it.type), it.productName?.toString().orEmpty(), mixer) } ?: Route(Kind.SPEAKER, "")

@@ -385,6 +385,11 @@ class PlaybackService : MediaLibraryService() {
 
         // Por dónde sale el sonido y, con un DAC USB, su mezclador (bit-perfect o sin remuestrear).
         OutputRoute.start(this)
+        // Con cascos, la música va atada a ellos (también la cola del cruce); si se van, pausa ya.
+        OutputRoute.onHeadsetGone = { if (exo.playWhenReady) { stopGhost(); exo.pause() } }
+        scope.launch {
+            OutputRoute.pinned.collect { d -> exo.setPreferredAudioDevice(d); ghost?.setPreferredAudioDevice(d) }
+        }
         // Ecualizador de cada salida: al conectar unos cascos se pone el suyo (y se guarda el de la anterior).
         scope.launch {
             OutputRoute.state.filterNotNull().filter { it.identified }.distinctUntilChangedBy { it.key }.collect { route ->
@@ -488,7 +493,7 @@ class PlaybackService : MediaLibraryService() {
         .setMediaSourceFactory(DefaultMediaSourceFactory(this, SurcoExtractorsFactory()))
         .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), false)
         // La misma sesión de audio: los efectos del móvil tratan igual la cola del cruce.
-        .build().also { it.audioSessionId = exo.audioSessionId; ghost = it }
+        .build().also { it.audioSessionId = exo.audioSessionId; it.setPreferredAudioDevice(OutputRoute.pinned.value); ghost = it }
 
     /** Corta la cola del cruce (pausa, salto, otra canción a mano, cerrar). */
     private fun stopGhost() {
@@ -791,6 +796,7 @@ class PlaybackService : MediaLibraryService() {
         // El widget se queda con la canción, en pausa.
         SurcoWidget.last?.let { SurcoWidget.publish(this, it.copy(playing = false)) }
         UserStore.flush()
+        OutputRoute.onHeadsetGone = null
         OutputRoute.stop()
         SystemEffects.close(this)
         handler.removeCallbacksAndMessages(null)

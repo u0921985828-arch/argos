@@ -5,6 +5,7 @@ import com.eddie.surco.audio.PcmEncoding.PCM_16BIT
 import com.eddie.surco.audio.PcmEncoding.PCM_24BIT_PACKED
 import com.eddie.surco.audio.PcmEncoding.PCM_32BIT
 import com.eddie.surco.audio.PcmEncoding.PCM_FLOAT
+import com.eddie.surco.audio.headsetToPin
 import com.eddie.surco.audio.pickMixer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -49,5 +50,23 @@ class MixerTest {
     @Test fun normalConMenosBitsNoSirve() {
         val solo16 = listOf(MixerOption(96000, PCM_16BIT, 2, false), MixerOption(96000, PCM_32BIT, 2, false))
         assertEquals(PCM_32BIT, pickMixer(solo16, 96000, PCM_FLOAT, 2)!!.option.encoding)
+    }
+
+    // Salidas: 4 USB, 3 cable, 2 Bluetooth, 1 altavoz, 0 otra.
+    @Test fun conCascosLaMusicaVaAtadaAEllos() {
+        // Android dice USB: USB.
+        assertEquals(1, headsetToPin(listOf(1, 4), 1))
+        // Android dice altavoz con unos USB-C conectados (el fallo): los USB-C igualmente.
+        assertEquals(1, headsetToPin(listOf(1, 4), 0))
+        // Bluetooth elegido aunque haya cable: se respeta lo que eligió Android si son cascos.
+        assertEquals(2, headsetToPin(listOf(1, 3, 2), 2))
+        // Sin saber cuál eligió (Android < 13): los de más rango.
+        assertEquals(1, headsetToPin(listOf(1, 3, 2), -1))
+    }
+
+    @Test fun sinCascosDecideElSistema() {
+        assertEquals(-1, headsetToPin(listOf(1), 0))
+        assertEquals(-1, headsetToPin(listOf(1, 0), 1)) // HDMI u otra: no se ata
+        assertEquals(-1, headsetToPin(emptyList(), -1))
     }
 }

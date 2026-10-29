@@ -334,3 +334,16 @@ Encargo: «Cumple lo pendiente».
 - **Botones**: 206 pulsados, 0 caídas, 7 sin efecto (antes 17), todos chips u opciones ya elegidas, el orden ya puesto o el panel de efectos que el emulador no tiene. Los «Reproducir» y «Aleatorio» salen ahora como «suena (vuelve a empezar / estado 2 → 3 / la reproducción cambió)». «Mover» de la cola sale con «estado 2 → 3»: es el arranque de lo pulsado justo antes, que llega tarde (el asa no reproduce).
 - Consumo: pausa 0,1 %, MP3 4,7 %, FLAC 3,5–3,7 %, ecualizador 5,4 %, abierta 11,9 % (en la línea de las pasadas anteriores).
 - Pendiente fuera de mi alcance: probarlo en un móvil real (no hay aparato conectado a esta sesión).
+
+# Surco 2.8.2 — sonido por el altavoz con cascos USB-C
+
+Encargo: «Pues pasa, hay errores por ahí»: con cascos USB-C conectados se oye el altavoz del móvil, a ratos y al cambiar de canción.
+
+## Diagnóstico (sin cascos USB-C aquí: el emulador no tiene)
+- Surco nunca ataba la música a una salida: se fiaba de la elección de Android en cada AudioTrack. Con DAC USB-C hay tres momentos en que puede no ser los cascos: cada cambio de mezclador del DAC (bit-perfect, al cambiar de canción con otra frecuencia), el AudioTrack nuevo de una canción con otro formato y el segundo reproductor del cruce, que abre su propia salida. Con algunos móviles (Xiaomi) un USB-C pasa además por «altavoz» un instante al reconfigurarse.
+- Media3 pausa con el aviso de Android de «ruido» al quitar los cascos, pero no si Android no lo manda (USB-C, según el fabricante).
+
+## Arreglo
+- `OutputRoute.pinned`: con cascos conectados (USB, cable o Bluetooth), la música se ata a ellos con `ExoPlayer.setPreferredAudioDevice`, también el reproductor del cruce. Si Android dice «altavoz» con unos cascos conectados, se atan los cascos de más rango (`headsetToPin`, JVM). La salida que se enseña, su ecualizador y el mezclador del DAC siguen a los cascos atados.
+- Si se van los últimos cascos (`onAudioDevicesRemoved`), Surco pausa en ese momento, además del aviso de Android.
+- JVM 187/187 (`MixerTest.conCascosLaMusicaVaAtadaAEllos`, `sinCascosDecideElSistema`); compilación sin avisos.
