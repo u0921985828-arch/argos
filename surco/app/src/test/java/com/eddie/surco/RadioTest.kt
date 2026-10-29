@@ -70,7 +70,14 @@ class RadioTest {
         val ms = (System.nanoTime() - t) / 1e6
         assertEquals(10_000, order.toSet().size)
         assertEquals(0, adjacent(keys, order))
-        assertTrue("tardó $ms ms", ms < 3000)
+        assertTrue("tardó $ms ms", ms < 400)
+        // 20.000 con un artista que llena la mitad: tampoco se dispara.
+        val big = List(20_000) { if (it % 2 == 0) "Mucho" else "A${it % 3000}" }
+        val t2 = System.nanoTime()
+        val o2 = spreadShuffle(big, -1, Random(2))
+        assertEquals(20_000, o2.toSet().size)
+        assertEquals(0, adjacent(big, o2))
+        assertTrue("20.000 tardó ${(System.nanoTime() - t2) / 1e6} ms", (System.nanoTime() - t2) / 1e6 < 600)
     }
 
     private fun song(id: Long, artist: String, genre: String = "", year: Int = 0, bpm: Float? = null, key: MusicKey? = null, dir: String = "") =
@@ -155,11 +162,34 @@ class RadioTest {
         assertNull(LoudnessMeter(44100, 2).integrated())
     }
 
-    @Test fun monoSuenaTresDecibeliosMenosQueEstereo() {
-        // BS.1770 suma la energía de los canales: lo mismo en un solo canal son −3 dB.
+    @Test fun monoCuentaComoDosCanalesIguales() {
+        // Un archivo mono suena por los dos altavoces: mide lo mismo que su estéreo (dual mono de
+        // libebur128). Sin eso subiría 3 dB más que las demás.
         val m = LoudnessMeter(44100, 1)
         sine(m, 44100, 1, -23.0, 10.0)
-        assertEquals(-26.0, m.integrated()!!, 0.1)
+        assertEquals(-23.0, m.integrated()!!, 0.1)
+    }
+
+    @Test fun cincoPuntoUnoSinLfeYConLosDeDetrasPesando141() {
+        // L, R y C a −28 dBFS, los de detrás a −24,5 y un LFE fuerte que no debe contar. A 1 kHz el filtro K
+        // compensa justo el −0,691: LUFS = 10·log10(Σ peso·A²/2) = −21,32.
+        val rate = 48000
+        val m = LoudnessMeter(rate, 6)
+        val lfe = 10.0.pow(-10.0 / 20)
+        for (i in 0 until rate * 20) {
+            val s = sin(2 * PI * 1000 * i / rate)
+            for (c in 0 until 6) m.push(s * when (c) { 3 -> lfe; 4, 5 -> 10.0.pow(-24.5 / 20); else -> 10.0.pow(-28.0 / 20) })
+        }
+        val a1 = 10.0.pow(-28.0 / 20); val a2 = 10.0.pow(-24.5 / 20)
+        val want = 10 * kotlin.math.log10(3 * a1 * a1 / 2 + 2 * 1.41 * a2 * a2 / 2)
+        assertEquals(want, m.integrated()!!, 0.1)
+    }
+
+    @Test fun gananciaDeAlbumPorEnergia() {
+        // Dos pistas a −18 y −28 LUFS (0 y +10 dB): el disco suena a −20,6 LUFS, no a la media en dB (−23).
+        assertEquals(2.6f, com.eddie.surco.data.albumReplayGain(listOf(0f, 10f)), 0.05f)
+        assertEquals(-4f, com.eddie.surco.data.albumReplayGain(listOf(-4f, -4f, -4f)), 0.001f)
+        assertEquals(0f, com.eddie.surco.data.albumReplayGain(emptyList()), 0f)
     }
 
     @Test fun graveYAgudoPesanDistinto() {

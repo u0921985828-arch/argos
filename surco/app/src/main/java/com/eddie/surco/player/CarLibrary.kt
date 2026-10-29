@@ -40,7 +40,7 @@ class CarLibrary(private val ctx: Context) {
             .filter { File(it.path).exists() }
             .filter { prefs.minDurationSec <= 0 || it.durationMs <= 0 || it.durationMs >= prefs.minDurationSec * 1000L }
             .filter { it.dir !in prefs.excludedFolders }
-            .map { store.apply(it) }
+            .let { store.applyAll(it) }
             .sortedBy { com.eddie.surco.data.fold(it.title) }
         val user = UserStore.state.value
         val songs = tracks.map { t ->

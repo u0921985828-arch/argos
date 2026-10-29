@@ -42,14 +42,18 @@ private val SOLFEO = listOf("sol" to 7, "do" to 0, "re" to 2, "mi" to 4, "fa" to
  * Lee la tonalidad de una etiqueta tal como la escriben los programas: «Am», «A minor», «C#m»,
  * «Dbmaj», «F♯ min», «8A» (Camelot), «1m»/«1d» (Open Key de Traktor), «La menor», «Mi♭ mayor».
  */
+// Compiladas una vez: la radio y las listas para mezclar leen la tonalidad de miles de canciones.
+private val CAMELOT_RE = Regex("""^0?(\d{1,2})\s*([ABab])$""")
+private val OPENKEY_RE = Regex("""^(\d{1,2})\s*([mdMD])$""")
+
 fun parseKey(raw: String): MusicKey? {
     val s = raw.trim().replace('♯', '#').replace('♭', 'b')
     if (s.isEmpty()) return null
-    Regex("""^0?(\d{1,2})\s*([ABab])$""").matchEntire(s)?.let { m ->
+    CAMELOT_RE.matchEntire(s)?.let { m ->
         val n = m.groupValues[1].toInt(); if (n !in 1..12) return null
         return fromCamelot(n, m.groupValues[2].uppercase() == "A")
     }
-    Regex("""^(\d{1,2})\s*([mdMD])$""").matchEntire(s)?.let { m ->
+    OPENKEY_RE.matchEntire(s)?.let { m ->
         val n = m.groupValues[1].toInt(); if (n !in 1..12) return null
         return fromCamelot((n + 6) % 12 + 1, m.groupValues[2].lowercase() == "m")
     }

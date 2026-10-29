@@ -135,6 +135,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import androidx.lifecycle.viewModelScope
 import java.text.DecimalFormatSymbols
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -187,7 +189,7 @@ private fun SeekBar(vm: LibraryViewModel, track: Track) {
     val ctx = LocalContext.current.applicationContext
     var wave by remember(track.id, track.dateModified) { mutableStateOf(com.eddie.surco.player.Waveform.cached(track)) }
     LaunchedEffect(track.id, track.dateModified, waveOn) {
-        if (waveOn && wave == null) wave = withContext(Dispatchers.IO) { com.eddie.surco.player.Waveform.load(ctx, track) }
+        if (waveOn && wave == null) wave = com.eddie.surco.player.Waveform.load(ctx, track)
     }
     SurcoSlider(
         wave = wave.takeIf { waveOn },
@@ -804,6 +806,7 @@ fun SongSheet(vm: LibraryViewModel, s: SongSheetState) {
             } else Spacer(Modifier.height(14.dp))
             val nextNotice = stringResource(R.string.player_play_next_notice)
             val res = LocalContext.current.resources
+            val radioEmpty = stringResource(R.string.player_radio_empty)
             val queued = stringResource(R.string.player_added_to_queue)
             val viewQueue = stringResource(R.string.player_view_queue)
             ActionGrid(buildList {
@@ -817,11 +820,16 @@ fun SongSheet(vm: LibraryViewModel, s: SongSheetState) {
                 })
                 // Radio: lo parecido de tu biblioteca detrás de esta; si es la que suena, sigue por donde iba.
                 add(Act(Icons.Rounded.Radio, stringResource(R.string.player_radio)) {
-                    val list = vm.radioOf(track)
-                    val playing = vm.player.currentId == track.id
-                    vm.player.play(list, 0, positionMs = if (playing) vm.player.positionMs else 0)
                     close()
-                    Notice.show(res.getQuantityString(R.plurals.player_radio_notice, list.size - 1, list.size - 1), viewQueue) { vm.queueOpen = true }
+                    // En el ámbito del modelo: la hoja se cierra y su ámbito se cancelaría a medias.
+                    vm.viewModelScope.launch {
+                        val list = vm.radioOf(track)
+                        // Sola en la biblioteca: no hay radio que hacer y la cola se queda como está.
+                        if (list.size < 2) { Notice.show(radioEmpty); return@launch }
+                        val playing = vm.player.currentId == track.id
+                        vm.player.play(list, 0, positionMs = if (playing) vm.player.positionMs else 0)
+                        Notice.show(res.getQuantityString(R.plurals.player_radio_notice, list.size - 1, list.size - 1), viewQueue) { vm.queueOpen = true }
+                    }
                 })
                 add(Act(Icons.AutoMirrored.Rounded.PlaylistAdd, stringResource(R.string.player_to_playlist)) { vm.addTo = listOf(track); close() })
                 add(Act(if (fav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, stringResource(if (fav) R.string.player_unfavorite_short else R.string.player_favorite)) {

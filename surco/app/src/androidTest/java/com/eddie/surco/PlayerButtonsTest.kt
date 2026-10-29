@@ -134,10 +134,13 @@ class PlayerButtonsTest {
                     c.setMediaItems(items, 0, 0); c.prepare(); c.pause()
                     c.shuffleModeEnabled = true
                 }
-                waitFor("aleatorio puesto") { onLooper { c.shuffleModeEnabled } && shuffledArtists(c).size == items.size }
-                val order = shuffledArtists(c)
-                assertEquals("al activarlo, empieza por la que suena ($round)", "A", order.first())
-                assertTrue("seguidos al activarlo: $order", order.zipWithNext().none { (a, b) -> a == b })
+                // El mando enseña primero un orden provisional (sin mezclar) hasta que llega el del
+                // servicio: se espera al de verdad, que empieza por la que suena y no repite artista.
+                var order = emptyList<String>()
+                waitFor("aleatorio repartido al activarlo (ronda $round): $order") {
+                    order = shuffledArtists(c)
+                    onLooper { c.shuffleModeEnabled } && order.size == items.size && order.first() == "A" && order.zipWithNext().none { (a, b) -> a == b }
+                }
                 // Lista nueva con el aleatorio ya puesto (lo que hace «Mezclar» en la app).
                 onLooper { c.setMediaItems(items.reversed(), true) }
                 waitFor("lista nueva") { shuffledArtists(c).let { it.size == items.size && it.zipWithNext().none { (a, b) -> a == b } } }

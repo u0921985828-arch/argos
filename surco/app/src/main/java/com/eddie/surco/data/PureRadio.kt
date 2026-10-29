@@ -16,28 +16,58 @@ import kotlin.random.Random
  * mitad de lo que falta: entonces va él, que es lo único que deja el resto sin choques.
  */
 fun spreadShuffle(keys: List<String>, first: Int, rnd: Random): IntArray {
+    // Cada artista es un grupo; las canciones sin artista van en el grupo «», que no choca con nada.
+    val ids = HashMap<String, Int>()
+    val names = ArrayList<String>()
+    val lists = ArrayList<ArrayList<Int>>()
     fun keyOf(i: Int) = keys[i].trim().lowercase()
-    // Las canciones sin artista van en un grupo «» que no choca con nada (ni consigo mismo).
-    val groups = LinkedHashMap<String, ArrayDeque<Int>>()
-    for (i in keys.indices) if (i != first) groups.getOrPut(keyOf(i)) { ArrayDeque() }.add(i)
+    for (i in keys.indices) {
+        if (i == first) continue
+        val g = ids.getOrPut(keyOf(i)) { names.add(keyOf(i)); lists.add(ArrayList()); names.lastIndex }
+        lists[g].add(i)
+    }
     // Dentro de cada artista, sus canciones también en orden aleatorio.
-    groups.values.forEach { d -> val s = d.shuffled(rnd); d.clear(); d.addAll(s) }
+    lists.forEach { it.shuffle(rnd) }
+    val g = names.size
+    val size = IntArray(g) { lists[it].size }
+    // Árbol de Fenwick con lo que le queda a cada grupo (elegir con peso en log g) y montículo del
+    // mayor (con entradas viejas que se descartan al mirarlas): con 10.000 canciones y 2.500
+    // artistas son milisegundos, no segundos en el hilo principal.
+    val tree = IntArray(g + 1)
+    fun add(i: Int, d: Int) { var x = i + 1; while (x <= g) { tree[x] += d; x += x and -x } }
+    fun before(i: Int): Int { var x = i; var s = 0; while (x > 0) { s += tree[x]; x -= x and -x }; return s }
+    fun find(r: Int): Int { // el grupo donde cae la unidad r (0 ≤ r < total)
+        var pos = 0; var rem = r; var step = Integer.highestOneBit(maxOf(g, 1))
+        while (step > 0) { val nx = pos + step; if (nx <= g && tree[nx] <= rem) { pos = nx; rem -= tree[nx] }; step = step shr 1 }
+        return pos
+    }
+    for (i in 0 until g) add(i, size[i])
+    val heap = java.util.PriorityQueue<Long>(maxOf(g, 1), compareByDescending { it })
+    fun push(i: Int) { if (size[i] > 0) heap.add((size[i].toLong() shl 32) or i.toLong()) }
+    for (i in 0 until g) push(i)
+    val empty = ids[""] ?: -1
     val out = IntArray(keys.size)
     var n = 0
-    var prev = ""
-    if (first in keys.indices) { out[n++] = first; prev = keyOf(first) }
+    var prev = -1 // grupo de la anterior; -1 o el grupo «» no excluyen nada
+    if (first in keys.indices) { out[n++] = first; prev = ids[keyOf(first)] ?: -2 }
     var left = keys.size - n
     while (left > 0) {
-        val others = groups.entries.filter { it.value.isNotEmpty() && (it.key != prev || it.key.isEmpty()) }
+        while (heap.isNotEmpty()) { val top = heap.peek()!!; if ((top ushr 32).toInt() == size[(top and 0xFFFFFFFFL).toInt()]) break; heap.poll() }
+        val big = (heap.peek()!! and 0xFFFFFFFFL).toInt()
+        val excl = if (prev >= 0 && prev != empty) prev else -1
         val pick = when {
-            others.isEmpty() -> groups.entries.first { it.key == prev }
-            else -> others.firstOrNull { it.key.isNotEmpty() && it.value.size * 2 > left } ?: run {
-                var r = rnd.nextInt(others.sumOf { it.value.size })
-                others.first { e -> (r < e.value.size).also { if (!it) r -= e.value.size } }
+            // Uno con más de la mitad de lo que falta va ya: si no, al final no habría con qué separarlo.
+            big != excl && big != empty && size[big] * 2 > left -> big
+            excl < 0 -> find(rnd.nextInt(left))
+            size[excl] == left -> excl
+            else -> {
+                val r = rnd.nextInt(left - size[excl])
+                if (r < before(excl)) find(r) else find(r + size[excl])
             }
         }
-        out[n++] = pick.value.removeFirst()
-        prev = pick.key
+        out[n++] = lists[pick][lists[pick].size - size[pick]]
+        size[pick]--; add(pick, -1); push(pick)
+        prev = pick
         left--
     }
     return out
@@ -52,9 +82,8 @@ data class RadioSong(
 private fun genres(g: String) = g.split(';', '/', ',', '|').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
 
 /** Parecido de [o] a [seed]: género, artista, época, tonalidad vecina, tempo y carpeta. */
-fun radioScore(seed: RadioSong, o: RadioSong): Double {
+fun radioScore(seed: RadioSong, o: RadioSong, g: Set<String> = genres(seed.genre)): Double {
     var s = 0.0
-    val g = genres(seed.genre)
     if (g.isNotEmpty() && genres(o.genre).any { it in g }) s += 3.0
     if (seed.artist.isNotBlank() && seed.artist.equals(o.artist, ignoreCase = true)) s += 2.0
     if (seed.year > 0 && o.year > 0) s += (1.5 - abs(seed.year - o.year) / 5.0).coerceAtLeast(0.0)
@@ -80,7 +109,8 @@ fun radio(seed: RadioSong, all: List<RadioSong>, rnd: Random, size: Int = 50, pe
     take(seed)
     val picked = ArrayList<RadioSong>()
     val others = all.filter { it.id != seed.id }
-    others.map { it to radioScore(seed, it) + rnd.nextDouble() * 0.75 }
+    val g = genres(seed.genre)
+    others.map { it to radioScore(seed, it, g) + rnd.nextDouble() * 0.75 }
         .filter { it.second >= 1.5 }
         .sortedByDescending { it.second }
         .forEach { (s, _) -> if (picked.size < size - 1 && room(s)) { picked += s; take(s) } }

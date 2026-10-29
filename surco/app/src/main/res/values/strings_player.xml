@@ -102,6 +102,7 @@
     <string name="player_go_artist">Go to artist</string>
     <string name="player_for_mixing">Mix with</string>
     <string name="player_radio">Song radio</string>
+    <string name="player_radio_empty">Nothing similar in your library yet</string>
     <plurals name="player_radio_notice">
         <item quantity="one">Radio: %1$d similar song after this one</item>
         <item quantity="other">Radio: %1$d similar songs after this one</item>

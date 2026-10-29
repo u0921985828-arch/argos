@@ -104,6 +104,7 @@
     <string name="player_go_artist">Ir al artista</string>
     <string name="player_for_mixing">Para mezclar</string>
     <string name="player_radio">Radio de la canción</string>
+    <string name="player_radio_empty">Aún no hay nada parecido en tu biblioteca</string>
     <plurals name="player_radio_notice">
         <item quantity="one">Radio: %1$d canción parecida detrás de esta</item>
         <item quantity="many">Radio: %1$d canciones parecidas detrás de esta</item>

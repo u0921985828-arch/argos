@@ -16,9 +16,21 @@ const val RG2_REFERENCE_LUFS = -18.0
 fun replayGainFromLufs(lufs: Double): Float = (RG2_REFERENCE_LUFS - lufs).coerceIn(-30.0, 20.0).toFloat()
 
 /**
+ * Ganancia de álbum a partir de las de sus pistas: la sonoridad del disco es la media de la
+ * ENERGÍA de las pistas (no de los dB), como si se midiera el disco entero de una vez.
+ */
+fun albumReplayGain(trackGains: List<Float>): Float {
+    if (trackGains.isEmpty()) return 0f
+    val energy = trackGains.map { 10.0.pow((RG2_REFERENCE_LUFS - it) / 10) }.average()
+    return replayGainFromLufs(10 * log10(energy))
+}
+
+/**
  * Medidor de sonoridad integrada. Las muestras entran intercaladas por canal con [push] (en
  * escala ±1) y [integrated] da los LUFS con las dos puertas de BS.1770 (−70 LUFS y −10 LU), o
- * null si no ha llegado ni un bloque de 400 ms con sonido.
+ * null si no ha llegado ni un bloque de 400 ms con sonido. Un archivo mono suena por los dos
+ * altavoces: cuenta como dos canales iguales (como «dual mono» en libebur128). En 5.1 y 7.1, con el
+ * orden de canales de Android, el LFE no cuenta y los de detrás y los laterales pesan 1,41.
  */
 class LoudnessMeter(rate: Int, private val channels: Int) {
     // Filtro K: estante de agudos (la cabeza) y paso alto (RLB), calculados para esta frecuencia
@@ -46,6 +58,14 @@ class LoudnessMeter(rate: Int, private val channels: Int) {
 
     // Estado de los dos filtros por canal (forma directa II).
     private val s1 = DoubleArray(channels); private val s2 = DoubleArray(channels)
+    private val weight = DoubleArray(channels) { c ->
+        when {
+            channels == 1 -> 2.0
+            channels >= 6 && c == 3 -> 0.0
+            channels >= 6 && c >= 4 -> 1.41
+            else -> 1.0
+        }
+    }
     private val h1 = DoubleArray(channels); private val h2 = DoubleArray(channels)
 
     /** Muestras por trozo de 100 ms: un bloque de 400 ms son cuatro trozos (solape del 75 %). */
@@ -68,7 +88,7 @@ class LoudnessMeter(rate: Int, private val channels: Int) {
         val u = y - ha1 * h1[c] - ha2 * h2[c]
         val z = u - 2 * h1[c] + h2[c]
         h2[c] = h1[c]; h1[c] = u
-        acc += z * z
+        acc += weight[c] * z * z
         if (++ch == channels) {
             ch = 0
             if (++inStep == step) {

@@ -18,16 +18,19 @@ object AudioAnalyzer {
     private const val SECONDS = 30
     private const val TARGET_RATE = 11025
 
-    data class Result(val bpm: Float?, val key: MusicKey?, val lufs: Float? = null)
+    /** [decoded]: cómo llegó el audio del decodificador («44100 Hz · 2 canales · 16 bits»), para el registro de pruebas. */
+    data class Result(val bpm: Float?, val key: MusicKey?, val lufs: Float? = null, val decoded: String = "")
 
-    fun analyze(ctx: Context, t: Track): Result? = runCatching {
+    /** Sin [tempoKey], solo la sonoridad (las etiquetas o un análisis anterior ya dan BPM y tonalidad). */
+    fun analyze(ctx: Context, t: Track, tempoKey: Boolean = true): Result? = runCatching {
         val pcm = decode(ctx, t) ?: return null
-        val (x, rate, lufs) = pcm
-        Result(estimateBpm(x, rate), estimateKey(x, rate)?.takeIf { it.confidence > 0.02 }?.key, lufs)
+        val (x, rate, lufs) = pcm.first
+        if (!tempoKey) return Result(null, null, lufs, pcm.second)
+        Result(estimateBpm(x, rate), estimateKey(x, rate)?.takeIf { it.confidence > 0.02 }?.key, lufs, pcm.second)
     }.getOrNull()
 
     /** Mono, diezmado por un factor entero hasta ~11 kHz (promediando: hace de filtro paso bajo). */
-    private fun decode(ctx: Context, t: Track): Triple<FloatArray, Int, Float?>? {
+    private fun decode(ctx: Context, t: Track): Pair<Triple<FloatArray, Int, Float?>, String>? {
         val ex = MediaExtractor()
         var codec: MediaCodec? = null
         try {
@@ -91,7 +94,7 @@ object AudioAnalyzer {
                     if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) break
                 }
             }
-            return if (n < TARGET_RATE * 8) null else Triple(out.copyOf(n), rate / factor, meter?.integrated()?.toFloat())
+            return if (n < TARGET_RATE * 8) null else Triple(out.copyOf(n), rate / factor, meter?.integrated()?.toFloat()) to "$rate Hz · $channels canales · ${if (float) "float" else "16 bits"}"
         } finally {
             runCatching { codec?.stop() }
             runCatching { codec?.release() }

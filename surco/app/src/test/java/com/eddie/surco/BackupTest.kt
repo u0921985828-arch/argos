@@ -1,6 +1,7 @@
 package com.eddie.surco
 
 import com.eddie.surco.data.AnalysisEntry
+import com.eddie.surco.data.Analyzed
 import com.eddie.surco.data.BACKUP_VERSION
 import com.eddie.surco.data.BackupContents
 import com.eddie.surco.data.BackupJson
@@ -151,9 +152,9 @@ class BackupTest {
 
     @Test fun loAnalizadoPasaDeUnMovilAOtro() {
         val stored = mapOf(
-            analysisKey("/sdcard/Music/a.flac", 1_700_000_000) to (128.5f to "8A"),
-            analysisKey("/sdcard/Music/c.opus", 1_700_000_500) to (null to null),
-            analysisKey("/sdcard/Music/con|barra.mp3", 3) to (90f to null),
+            analysisKey("/sdcard/Music/a.flac", 1_700_000_000) to Analyzed(128.5f, "8A", -9.5f, true),
+            analysisKey("/sdcard/Music/c.opus", 1_700_000_500) to Analyzed(null, null, null, true),
+            analysisKey("/sdcard/Music/con|barra.mp3", 3) to Analyzed(90f, null),
         )
         val entries = analysisForBackup(stored, sameLibrary)
         assertEquals(3, entries.size)
@@ -161,13 +162,16 @@ class BackupTest {
         assertEquals("/sdcard/Music/con|barra.mp3", entries.first { it.bpm == 90f }.path)
         // Mismo móvil: vuelve exactamente lo mismo.
         assertEquals(stored, analysisForRestore(entries, sameLibrary))
+        // Y pasando por el archivo de la copia: la sonoridad medida también viaja.
+        val back = (readBackup(buildBackup(contents().copy(analysis = entries))) as BackupRead.Ok).contents.analysis
+        assertEquals(stored, analysisForRestore(back, sameLibrary))
         // Otro móvil: «a» con otra ruta y otra fecha recibe su análisis con su clave nueva.
         val other = listOf(LibraryFile(7, "/storage/emulated/0/Music/a.flac", 9, stableKeys("/storage/emulated/0/Music/a.flac", "Uno", "X", "Disco", 200_900)))
         val r = analysisForRestore(analysisForBackup(stored, sameLibrary), other)
-        assertEquals(128.5f to "8A", r[analysisKey("/storage/emulated/0/Music/a.flac", 9)])
+        assertEquals(Analyzed(128.5f, "8A", -9.5f, true), r[analysisKey("/storage/emulated/0/Music/a.flac", 9)])
         assertNull(r[analysisKey("/sdcard/Music/a.flac", 1_700_000_000)])
         // Lo que no está aquí se guarda con su clave de allí, por si llega igual.
-        assertEquals(90f to null, r[analysisKey("/sdcard/Music/con|barra.mp3", 3)])
+        assertEquals(Analyzed(90f, null), r[analysisKey("/sdcard/Music/con|barra.mp3", 3)])
     }
 
     @Test fun nombreYResumen() {

@@ -207,8 +207,19 @@ private class BackupJsonReader(private val s: String) {
 
 // ---------- El contenido ----------
 
+/**
+ * Lo analizado de un archivo (lo de AnalysisStore): BPM, tonalidad, sonoridad en LUFS y si ya se
+ * intentó medir la sonoridad ([loudnessDone]: si salió null, no se vuelve a intentar).
+ */
+data class Analyzed(val bpm: Float?, val key: String?, val lufs: Float? = null, val loudnessDone: Boolean = false) {
+    val empty: Boolean get() = bpm == null && key == null && lufs == null
+}
+
 /** Lo analizado de un archivo, con sus claves estables para reconocerlo en otro móvil. */
-data class AnalysisEntry(val path: String, val modified: Long, val keys: List<String>, val bpm: Float?, val key: String?)
+data class AnalysisEntry(
+    val path: String, val modified: Long, val keys: List<String>, val bpm: Float?, val key: String?,
+    val lufs: Float? = null, val loudnessDone: Boolean = false,
+)
 
 /** Una canción de la biblioteca actual, lo justo para reconocerla. */
 data class LibraryFile(val id: Long, val path: String, val modified: Long, val keys: List<String>)
@@ -249,6 +260,8 @@ fun buildBackup(c: BackupContents): String = writeBackupJson(
                 // Float.toString es la escritura más corta que vuelve al mismo Float.
                 e.bpm?.let { put("bpm", BackupJson.Num(it.toString())) }
                 e.key?.let { put("key", BackupJson.Str(it)) }
+                e.lufs?.let { put("lufs", BackupJson.Num(it.toString())) }
+                if (e.loudnessDone) put("loudnessDone", BackupJson.Bool(true))
             })
         }),
     )),
@@ -279,9 +292,17 @@ private fun analysisEntry(j: BackupJson): AnalysisEntry? {
     val path = (o["path"] as? BackupJson.Str)?.value ?: return null
     val modified = (o["modified"] as? BackupJson.Num)?.long ?: return null
     val keys = strings(o["keys"]) ?: return null
-    val bpm = when (val b = o["bpm"]) {
-        null, BackupJson.Null -> null
-        is BackupJson.Num -> b.raw.toFloatOrNull()?.takeIf { it.isFinite() } ?: return null
+    fun num(name: String): Result<Float?> = when (val b = o[name]) {
+        null, BackupJson.Null -> Result.success(null)
+        is BackupJson.Num -> b.raw.toFloatOrNull()?.takeIf { it.isFinite() }?.let { Result.success(it) } ?: Result.failure(IllegalArgumentException(name))
+        else -> Result.failure(IllegalArgumentException(name))
+    }
+    val bpm = num("bpm").getOrElse { return null }
+    // Copias de antes de la 2.8 no traen sonoridad: se vuelve a medir.
+    val lufs = num("lufs").getOrElse { return null }
+    val done = when (val d = o["loudnessDone"]) {
+        null, BackupJson.Null -> false
+        is BackupJson.Bool -> d.value
         else -> return null
     }
     val key = when (val k = o["key"]) {
@@ -289,7 +310,7 @@ private fun analysisEntry(j: BackupJson): AnalysisEntry? {
         is BackupJson.Str -> k.value
         else -> return null
     }
-    return AnalysisEntry(path, modified, keys, bpm, key)
+    return AnalysisEntry(path, modified, keys, bpm, key, lufs, done)
 }
 
 private fun strings(j: BackupJson?): List<String>? =
@@ -381,10 +402,10 @@ fun remapUserIds(user: BackupJson.Obj, idByKey: Map<String, Long>): BackupJson.O
 }
 
 /**
- * Lo analizado para la copia: [stored] es lo de AnalysisStore («ruta|fecha» → bpm, tonalidad).
+ * Lo analizado para la copia: [stored] es lo de AnalysisStore («ruta|fecha» → lo analizado).
  * Lleva las claves estables de la canción si está en la biblioteca y, si no, al menos la ruta.
  */
-fun analysisForBackup(stored: Map<String, Pair<Float?, String?>>, library: List<LibraryFile>): List<AnalysisEntry> {
+fun analysisForBackup(stored: Map<String, Analyzed>, library: List<LibraryFile>): List<AnalysisEntry> {
     val byKey = library.associateBy { analysisKey(it.path, it.modified) }
     return stored.mapNotNull { (k, v) ->
         val bar = k.lastIndexOf('|')
@@ -392,7 +413,7 @@ fun analysisForBackup(stored: Map<String, Pair<Float?, String?>>, library: List<
         val path = k.substring(0, bar)
         val modified = k.substring(bar + 1).toLongOrNull() ?: return@mapNotNull null
         val keys = byKey[k]?.keys ?: stableKeys(path, "", "", "", 0)
-        AnalysisEntry(path, modified, keys, v.first, v.second)
+        AnalysisEntry(path, modified, keys, v.bpm, v.key, v.lufs, v.loudnessDone)
     }.sortedWith(compareBy({ it.path }, { it.modified }))
 }
 
@@ -401,15 +422,15 @@ fun analysisForBackup(stored: Map<String, Pair<Float?, String?>>, library: List<
  * de modificación tras copiar los archivos); si no hay ninguna, con su clave de allí, por si es
  * el mismo móvil o la canción llega igual. Un «no se encontró nada» no tapa un resultado.
  */
-fun analysisForRestore(entries: List<AnalysisEntry>, library: List<LibraryFile>): Map<String, Pair<Float?, String?>> {
+fun analysisForRestore(entries: List<AnalysisEntry>, library: List<LibraryFile>): Map<String, Analyzed> {
     val idx = HashMap<String, LibraryFile>()
     for (f in library) for (k in f.keys) idx.putIfAbsent(k, f)
-    val out = LinkedHashMap<String, Pair<Float?, String?>>()
+    val out = LinkedHashMap<String, Analyzed>()
     for (e in entries) {
         val f = e.keys.firstNotNullOfOrNull { idx[it] }
         val key = if (f != null) analysisKey(f.path, f.modified) else analysisKey(e.path, e.modified)
         val old = out[key]
-        if (old == null || (old.first == null && old.second == null)) out[key] = e.bpm to e.key
+        if (old == null || old.empty) out[key] = Analyzed(e.bpm, e.key, e.lufs, e.loudnessDone)
     }
     return out
 }

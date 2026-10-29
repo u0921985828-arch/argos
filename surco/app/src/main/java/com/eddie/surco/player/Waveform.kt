@@ -9,6 +9,13 @@ import android.util.LruCache
 import com.eddie.surco.data.Track
 import com.eddie.surco.data.WAVE_BARS
 import com.eddie.surco.data.waveBars
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.ByteOrder
 import kotlin.math.sqrt
@@ -21,27 +28,36 @@ import kotlin.math.sqrt
  */
 object Waveform {
     private val memory = LruCache<String, FloatArray>(64)
+    /** Archivos que no se dejaron medir: no se vuelve a intentar en esta sesión. */
+    private val failed = HashSet<String>()
+    /** Una medida cada vez: al saltar canciones deprisa no se juntan decodificadores. */
+    private val lock = Mutex()
 
     private fun key(t: Track) = "${t.path}|${t.dateModified}"
 
     /** Lo que ya está en memoria (sin tocar el disco): para pintarla sin esperar al volver a «Sonando». */
     fun cached(t: Track): FloatArray? = memory.get(key(t))
 
-    /** Fuera del hilo principal. null si el archivo no se deja leer. */
-    fun load(ctx: Context, t: Track): FloatArray? {
+    /** null si el archivo no se deja leer. Se cancela entre barras si ya no hace falta (otra canción). */
+    suspend fun load(ctx: Context, t: Track): FloatArray? = lock.withLock { withContext(Dispatchers.IO) { loadLocked(ctx, t) } }
+
+    private suspend fun loadLocked(ctx: Context, t: Track): FloatArray? {
         val k = key(t)
         memory.get(k)?.let { return it }
+        if (synchronized(failed) { k in failed }) return null
         val f = File(File(ctx.cacheDir, "ondas"), java.security.MessageDigest.getInstance("SHA-1").digest(k.toByteArray()).joinToString("") { "%02x".format(it) }.take(20) + ".bin")
         runCatching { f.readBytes() }.getOrNull()?.takeIf { it.size == WAVE_BARS }?.let { b ->
             return FloatArray(b.size) { (b[it].toInt() and 0xFF) / 255f }.also { memory.put(k, it) }
         }
-        val bars = runCatching { measure(ctx, t) }.getOrNull() ?: return null
+        val bars = runCatching { measure(ctx, t) }.getOrNull()
+        currentCoroutineContext().ensureActive()
+        if (bars == null) { synchronized(failed) { failed += k }; return null }
         memory.put(k, bars)
         runCatching { f.parentFile?.mkdirs(); f.writeBytes(ByteArray(bars.size) { (bars[it] * 255).toInt().toByte() }) }
         return bars
     }
 
-    private fun measure(ctx: Context, t: Track): FloatArray? {
+    private suspend fun measure(ctx: Context, t: Track): FloatArray? {
         val ex = MediaExtractor()
         var codec: MediaCodec? = null
         try {
@@ -54,6 +70,9 @@ object Waveform {
             val c = MediaCodec.createDecoderByType(fmt.getString(MediaFormat.KEY_MIME)!!)
             codec = c
             c.configure(fmt, null, null, 0)
+            // El primer salto antes de arrancar: un flush() sin salida todavía deja a los
+            // decodificadores OMX (Android 8-9) sin los datos de configuración de AAC, Vorbis y Opus.
+            ex.seekTo(durUs / (2 * WAVE_BARS), MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
             c.start()
             var rate = fmt.getInteger(MediaFormat.KEY_SAMPLE_RATE)
             var channels = fmt.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
@@ -61,9 +80,11 @@ object Waveform {
             val info = MediaCodec.BufferInfo()
             val rms = FloatArray(WAVE_BARS) { Float.NaN }
             for (b in 0 until WAVE_BARS) {
-                val at = durUs * (2 * b + 1) / (2 * WAVE_BARS)
-                ex.seekTo(at, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
-                c.flush()
+                if (!currentCoroutineContext().isActive) return null
+                if (b > 0) {
+                    ex.seekTo(durUs * (2 * b + 1) / (2 * WAVE_BARS), MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+                    c.flush()
+                }
                 val want = rate / 20 // ~50 ms
                 var sum = 0.0; var n = 0
                 var inputDone = false
