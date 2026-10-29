@@ -358,3 +358,4 @@ Encargo: «¿Con la misma firma?» → secreto de GitHub (elegido por Eddie fren
 - Clave EC P-256 en PKCS12, generada aquí (no está en el repositorio). Certificado SHA-256 en `surco/firma.sha256` (637a687e…898d), que es público y sirve para comprobar.
 - CI: el secreto `SURCO_FIRMA` (el .p12 en base64) se escribe en `$RUNNER_TEMP` y Gradle firma con él release, debug y la prueba (en el CI se instalan unos encima de otros). Sin el secreto, la de depuración del ejecutor y un aviso. Con el secreto, `apksigner` comprueba los tres APK contra `firma.sha256` y tumba el CI si no casan.
 - Hace falta desinstalar una última vez (de la clave de depuración a la fija); a partir de ahí, cada versión se instala encima.
+- Secreto `SURCO_FIRMA` puesto por Eddie en GitHub (29-10, 23:06). Primera compilación con la clave fija: esta.
