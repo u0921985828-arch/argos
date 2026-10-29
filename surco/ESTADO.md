@@ -281,3 +281,30 @@ Encargo: «Cumple lo pendiente» (las tres rondas que quedaban y lo pendiente de
 - **CI**: el humo y lo largo (10.000 canciones, consumo, botones) en paralelo; el classpath de compilación se publica en `classpath-surco` y el Kotlin entero (app y pruebas del emulador, Compose incluido) se compila aquí antes de subir. Inestabilidad del emulador resuelta en las pruebas: el diálogo «Pixel Launcher isn't responding» se quedaba con el foco (no se va con Atrás: se cierra esa app) y se tragaba lo escrito y los toques.
 - Consumo (30298aa): en pausa 0,1 %; MP3 4,4 %; FLAC 24/96 3,5 %; con ecualizador 5,4 %; con Surco abierto 10,0 % (de un núcleo).
 - Visto una vez y sin repetir: la búsqueda por voz del coche no cambió de canción en 20 s en una pasada (en las demás, bien).
+
+# Surco 2.8 — lo que hacen mejor otros, hecho mejor (feria)
+
+Encargo: «Lleva la app a una feria… analizar diferentes proyectos y presentarlos mejorados» y, tras la presentación, «quiero que apliques las mejoras».
+
+## Análisis (qué tienen los demás que Surco no)
+- Plexamp / Spotify: radio de una canción. Surco lo hace sin red ni cuenta, con lo que ya lee y analiza (género, artista, año, tonalidad Camelot, tempo, carpeta).
+- Spotify (2014) / Apple: aleatorio que no amontona al mismo artista. Surco lo garantiza: sin dos seguidas siempre que sea posible (probado en 2.000 casos).
+- Neutron / foobar2000: ReplayGain medido en el propio aparato. Surco mide EBU R128 (la escala de ReplayGain 2.0) en el análisis de fondo, para las que no traen la etiqueta.
+- Poweramp / SoundCloud: barra con la forma de onda. Surco la mide en ~1 s saltando a 64 puntos (no decodifica la canción entera) y la guarda en caché.
+
+## Criterios
+- C1: pruebas JVM `RadioTest` (aleatorio sin choques en 2.000 casos y con la primera fijada; radio que se parece, ≤4 por artista, sin repetir; R128 con las señales de EBU Tech 3341 a 44,1/48/96 kHz ±0,1 LU; puertas; forma de onda). Base: no existían.
+- C2: en el emulador, `PlayerButtonsTest`: el aleatorio por el servicio real no pone seguidas dos del mismo artista (8 rondas, al activarlo y con lista nueva); «Radio de la canción» desde el menú de «Sonando» deja la cola empezando por ella y sin repetidas. Captura `sonando_onda.png`.
+- C3: humo: sonoridad medida de los tonos de ffmpeg dentro de ±0,6 LU de lo calculado a mano (Uno MP3 mono −21,75; Cuatro WAV float estéreo 192 kHz −18,62).
+- Caso reservado: Cuatro (WAV float 192 kHz) en la medida de sonoridad: otro decodificador (PCM float) y otra frecuencia.
+
+## Decisiones
+- La sonoridad sale de los mismos 30 s centrales que el BPM (lo más fuerte casi siempre: la ganancia peca de prudente). Ganancia = −18 − LUFS. Lo de la etiqueta manda. Por álbum, sin etiqueta de álbum, se usa la de pista (como antes).
+- Lo analizado antes de esta versión se vuelve a analizar solo si a la canción le falta ReplayGain (`ld` en analisis.json). La copia de seguridad no lleva la sonoridad: se vuelve a medir.
+- Radio: puntuación (género 3, artista 2, año hasta 1,5, tonalidad vecina 1, tempo 1, carpeta 0,5) + azar 0,75; si casi nada se parece, se completa al azar (la radio suena siempre). Si se pide de la que suena, sigue por donde iba.
+- Aleatorio: en cada paso un artista distinto del anterior, con peso según lo que le queda, salvo que uno tenga más de la mitad de lo que falta (entonces va él). Canciones sin artista no chocan.
+- Forma de onda: 64 barras, dB relativos al tramo más fuerte con 30 dB de recorrido; caché en `cacheDir/ondas` (SHA-1 de ruta|fecha) y en memoria (64). Se puede apagar en Ajustes → Interfaz.
+- `compilar.sh`: el R de mentira va primero en el classpath (el jar de clases de la app del CI traía un R viejo y escondía los textos nuevos).
+
+## Hecho
+- JVM: 183/183 (RadioTest nuevo). Compilación local de app y pruebas del emulador sin errores ni avisos.
