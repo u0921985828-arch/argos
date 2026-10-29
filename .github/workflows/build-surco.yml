@@ -20,6 +20,7 @@ on:
       - '.github/scripts/botones-surco.py'
       - '.github/scripts/idioma-surco.sh'
       - '.github/scripts/rendimiento-surco.sh'
+      - '.github/scripts/referencia-surco.sh'
       - '.github/scripts/mil-canciones.py'
 
 permissions:
@@ -313,6 +314,7 @@ jobs:
             bash .github/scripts/rendimiento-surco.sh mil.tar 10000
             bash .github/scripts/bateria-surco.sh
             adb install -r Surco.apk >/dev/null && python3 .github/scripts/botones-surco.py
+            bash .github/scripts/referencia-surco.sh
 
       # Las medidas en su rama (un solo commit, se reescribe).
       - name: Publish measurements to the `medidas-surco` branch
@@ -320,7 +322,7 @@ jobs:
         run: |
           set -e
           work=$(mktemp -d)
-          for f in rendimiento.txt bateria.txt botones.txt; do [ -f "$f" ] && cp "$f" "$work/"; done
+          for f in rendimiento.txt rendimiento-referencia.txt bateria.txt botones.txt; do [ -f "$f" ] && cp "$f" "$work/"; done
           [ -n "$(ls "$work")" ] || exit 0
           cd "$work"
           git init -q -b medidas-surco

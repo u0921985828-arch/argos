@@ -4,12 +4,12 @@
 # colgada (ANR) o no llega a enseñar todas; los tiempos se apuntan en rendimiento.txt (el
 # emulador del CI pinta por software: los fotogramas sirven para comparar entre versiones, no
 # como cifra de un móvil).
-# Uso: rendimiento-surco.sh mil.tar N
+# Uso: rendimiento-surco.sh mil.tar N [salida]
 set -uo pipefail
 TAR=$1
 N=$2
 PKG=com.eddie.surco
-OUT=rendimiento.txt
+OUT=${3:-rendimiento.txt}
 : > "$OUT"
 nota() { echo "$1" | tee -a "$OUT"; }
 fallo() {
@@ -103,6 +103,19 @@ for _ in $(seq 1 15); do adb shell input swipe 540 1900 540 500 120; done
 sleep 2
 adb shell dumpsys gfxinfo "$PKG" | tr -d '\r' > gfxinfo.txt
 nota "desplazar 15 veces la lista: $(grep -m1 'Total frames rendered' gfxinfo.txt | sed 's/^ *//'), $(grep -m1 'Janky frames:' gfxinfo.txt | sed 's/^ *//'), $(grep -m1 '90th percentile' gfxinfo.txt | sed 's/^ *//'), $(grep -m1 '99th percentile' gfxinfo.txt | sed 's/^ *//')"
-nota "memoria: $(adb shell dumpsys meminfo "$PKG" | tr -d '\r' | grep -m1 -E 'TOTAL PSS|TOTAL:' | sed 's/^ *//')"
+adb shell dumpsys meminfo "$PKG" | tr -d '\r' > meminfo.txt
+nota "memoria: $(grep -m1 -E 'TOTAL PSS|TOTAL:' meminfo.txt | sed 's/^ *//')"
+# Desglose (KB de PSS), y otra vez tras pedir al sistema que la app suelte lo que pueda: lo que
+# sobra en el montón de Java tras leer 10.000 canciones no es memoria que la app necesite.
+desglose() { for k in "Java Heap" "Native Heap" "Code" "Stack" "Graphics" "Private Other" "System"; do
+    printf '%s %s · ' "$k" "$(grep -m1 "^ *$k:" "$1" | sed 's/^[^:]*: *//' | awk '{print $1}')"; done; }
+nota "  desglose: $(desglose meminfo.txt)"
+pid=$(adb shell pidof "$PKG" | tr -d "\r" || true)
+adb shell am send-trim-memory "$PKG" RUNNING_CRITICAL >/dev/null 2>&1 || true
+adb shell kill -10 "$pid" >/dev/null 2>&1 || true   # SIGUSR1: ART recoge la basura (si el sistema lo deja)
+sleep 4
+adb shell dumpsys meminfo "$PKG" | tr -d '\r' > meminfo2.txt
+nota "memoria tras soltar: $(grep -m1 -E 'TOTAL PSS|TOTAL:' meminfo2.txt | sed 's/^ *//')"
+nota "  desglose: $(desglose meminfo2.txt)"
 p=$(problemas); [ -n "$p" ] && { echo "$p"; fallo "Surco se cayó o se colgó al desplazar $total canciones"; }
 nota "sin caídas ni ANR"

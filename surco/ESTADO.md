@@ -315,3 +315,16 @@ Encargo: «Lleva la app a una feria… analizar diferentes proyectos y presentar
 - Medidas (f1f9fbf): 209 botones, 0 caídas («Radio de la canción» cambia la cola). Consumo más alto que en 30298aa (MP3 6,4 %, FLAC 4,9 %, ecualizador 7,3 %, abierta 17,3 %), pero esa máquina era más lenta en todo (MediaStore 54 s frente a 36, arranque en frío 2,6 s frente a 2,0, etiquetas 419 s frente a 355). Aun así, la onda se pinta ahora como un solo trazado en caché (dos pinturas por avance en vez de 64 rectángulos).
 - **CI verde completa en 8cfca7c** (run 40811651415): build, humo (sonoridad de las cuatro), diseño ×1,0 y ×1,3 con 0 fallos (lo del ecualizador fue de una pasada), inglés 0, «OK (9 tests)» con aleatorio repartido y radio, y medidas: 212 botones, 0 caídas; consumo en pausa 0,1 %, MP3 4,4 %, FLAC 3,5 %, con ecualizador 5,4 %, con Surco abierto 8,9 % (antes 10,0); 10.004 canciones sin caídas ni ANR, arranque con caché 1,7 s. APK 2.8 = `Surco.apk` de `apk-surco` (sha256 22c1c705…f026).
 - Pendiente: memoria con 10.004 canciones 204 MB (en 89c86d8 eran 148): sin aislar si es de la 2.8 o de lo de después; candidato barato, rehacer las ganancias de álbum solo al empezar y al acabar el análisis (no cada 10 canciones). Los «sin efecto» nuevos del recorrido son «Reproducir»/«Aleatorio» de listas que ya sonaban (la pantalla no cambia); sin comprobar uno a uno.
+
+# Surco 2.8.1 — lo pendiente de la 2.8
+
+Encargo: «Cumple lo pendiente».
+
+## Criterios
+- C1: memoria con 10.004 canciones medida contra la 2.7 (APK de depuración de 30298aa, rama `referencia-surco`) en el mismo emulador y la misma pasada (`referencia-surco.sh` → `rendimiento-referencia.txt`), con desglose (Java, nativa, código, gráficos) y otra vez tras pedir que suelte memoria. Base: 204 MB (2.8) frente a 148 MB de 89c86d8 medidos en pasadas y máquinas distintas.
+- C2: el recorrido de botones mira también la sesión multimedia (canción, estado y su última actualización): un «Reproducir» o «Aleatorio» que vuelve a poner lo que ya sonaba sale como «suena (…)» y no como «sin efecto». Base: 17 sin efecto.
+- C3: CI verde entero.
+- Caso reservado: la medida de referencia con el APK viejo (otra firma: se desinstala y se vuelve a leer todo).
+
+## Hecho
+- Ganancias de álbum solo al empezar y al acabar el análisis; con más de 500 canciones por analizar, la biblioteca se rehace cada 100 (no cada 10). Compilado sin avisos, JVM 185/185.

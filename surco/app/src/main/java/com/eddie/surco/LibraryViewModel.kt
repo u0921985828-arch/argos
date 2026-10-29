@@ -134,7 +134,7 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Analiza, una a una y con prioridad baja, las canciones a las que les falta BPM o tonalidad.
-     * Lo hecho se aplica a la biblioteca cada 10 canciones y se guarda; se puede cortar en Ajustes.
+     * Lo hecho se aplica a la biblioteca cada 10 canciones (cada 100 con miles) y se guarda; se puede cortar en Ajustes.
      */
     fun analyzeLibrary() {
         if (!SurcoSettings.state.value.analyze || analysisJob?.isActive == true || !fresh.value) return
@@ -144,6 +144,7 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
             val todo = tracks.value.filter { it.needsAnalysis() && !store.has(it) }
             if (todo.isEmpty()) return@launch
             analysis.value = 0 to todo.size
+            val every = if (todo.size > 500) 100 else 10
             try {
                 todo.forEachIndexed { i, t ->
                     if (!SurcoSettings.state.value.analyze) return@launch
@@ -154,8 +155,10 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
                         android.util.Log.d(ANALYSIS_TAG, "${t.title} · bpm=${r?.bpm} · tonalidad=${r?.key?.code} · ${r?.decoded} · lufs=${r?.lufs?.let { "%.2f".format(java.util.Locale.ROOT, it) }}")
                     }
                     analysis.value = i + 1 to todo.size
-                    if ((i + 1) % 10 == 0 || i == todo.lastIndex) {
-                        tracks.value = store.applyAll(tracks.value)
+                    // Cada canción aplicada rehace los grupos de toda la biblioteca: con miles, cada 100
+                    // (no cada 10); y las ganancias de álbum, que miran discos enteros, solo al acabar.
+                    if ((i + 1) % every == 0 || i == todo.lastIndex) {
+                        tracks.value = if (i == todo.lastIndex) store.applyAll(tracks.value) else tracks.value.map { store.apply(it) }
                         store.save()
                     }
                 }

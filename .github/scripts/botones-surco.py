@@ -140,6 +140,34 @@ def foreground():
     return m.group(1) if m else ""
 
 
+def player():
+    """Lo que suena según la sesión multimedia de Surco: (canción, estado, posición en ms). Un
+    «Reproducir» de una lista que ya sonaba no cambia la pantalla, pero vuelve a empezar la canción."""
+    out = sh("dumpsys", "media_session")
+    i = out.find("package=" + PKG)
+    block = out[i:] if i >= 0 else out
+    st = re.search(r"state=PlaybackState \{state=([A-Z_]+)?\(?(\d+)\)?, position=(-?\d+)", block)
+    upd = re.search(r"updated=(\d+)", block)
+    desc = re.search(r"description=([^\n]*)", block)
+    return (desc.group(1).strip() if desc else "", st.group(2) if st else "", int(st.group(3)) if st else -1,
+            upd.group(1) if upd else "")
+
+
+def player_change(p0, p1):
+    """Qué cambió en la reproducción, o None."""
+    if p0[0] != p1[0]:
+        return f"suena otra: {p1[0][:40]}"
+    if p0[1] != p1[1]:
+        return f"estado {p0[1]} → {p1[1]}"
+    # Vuelve a empezar (la sesión da la posición del último cambio de estado: un salto atrás es un reinicio).
+    if p0[2] > 1500 and 0 <= p1[2] < p0[2] - 1000:
+        return "vuelve a empezar"
+    # La sesión solo se actualiza con un cambio de verdad (otra lista, salto, otra cola), no al avanzar.
+    if p0[3] != p1[3]:
+        return "la reproducción cambió"
+    return None
+
+
 def tap_xy(x, y):
     sh("input", "tap", str(x), str(y))
 
@@ -255,6 +283,7 @@ def main():
                 continue
             total += 1
             sig = signature(before)
+            p0 = player()
             tap_xy(*here[k]); time.sleep(1.5)
             c = crashed()
             if c:
@@ -266,7 +295,11 @@ def main():
             if fg and fg != PKG:
                 what = f"abre {fg}"
             elif signature(after) == sig:
-                what = "NADA"; dead.append(f"{name} › {lab}")
+                pc = player_change(p0, player())
+                if pc:
+                    what = f"suena ({pc})"
+                else:
+                    what = "NADA"; dead.append(f"{name} › {lab}")
             else:
                 new = sorted(texts(after) - texts(before))[:3]
                 what = "cambia" + (f" ({', '.join(new)})" if new else "")
