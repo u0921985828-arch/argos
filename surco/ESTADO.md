@@ -359,3 +359,4 @@ Encargo: «¿Con la misma firma?» → secreto de GitHub (elegido por Eddie fren
 - CI: el secreto `SURCO_FIRMA` (el .p12 en base64) se escribe en `$RUNNER_TEMP` y Gradle firma con él release, debug y la prueba (en el CI se instalan unos encima de otros). Sin el secreto, la de depuración del ejecutor y un aviso. Con el secreto, `apksigner` comprueba los tres APK contra `firma.sha256` y tumba el CI si no casan.
 - Hace falta desinstalar una última vez (de la clave de depuración a la fija); a partir de ahí, cada versión se instala encima.
 - Secreto `SURCO_FIRMA` puesto por Eddie en GitHub (29-10, 23:06). Primera compilación con la clave fija: esta.
+- Primera pasada con el secreto: Gradle firmó (SURCO_FIRMA llegó), pero la comprobación leía la línea de `apksigner` y salió vacía → el CI se paró sin publicar. Ahora el certificado se lee con `.github/scripts/certificado-apk.py` (bloque de firma v3/v2, sin depender del formato de apksigner).

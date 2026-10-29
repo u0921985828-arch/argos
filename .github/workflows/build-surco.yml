@@ -112,9 +112,8 @@ jobs:
           ls -l Surco.apk Surco-debug.apk
           sha256sum Surco.apk Surco-debug.apk
           # Con la clave fija, los tres APK llevan su certificado (surco/firma.sha256): si no, no sale.
-          SIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
           for a in Surco.apk Surco-debug.apk Surco-auto-test.apk; do
-            c=$("$SIGNER" verify --print-certs "$a" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+            c=$(python3 .github/scripts/certificado-apk.py "$a")
             echo "$a: certificado $c"
             if [ -n "${SURCO_FIRMA:-}" ] && [ "$c" != "$(cat surco/firma.sha256)" ]; then
               echo "::error::$a no va firmado con la clave de Surco"; exit 1
