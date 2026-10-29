@@ -31,7 +31,9 @@ ls capturas/widget_*.png capturas/rejilla_*.png capturas/sonando_onda.png 2>/dev
 if ! grep -q "OK (9 tests)" auto.txt; then
     echo "::error::fallaron las pruebas de Android Auto, del widget o de la cuadrícula (ver auto.txt y auto-logcat.txt)"
     sed -n '1,120p' auto.txt
-    grep -E "PlaybackService|MediaSession|MediaButtonReceiver|SurcoWidget|AndroidRuntime|SurcoAuto" auto-logcat.txt | tail -60 || true
+    # Lo del coche y de la voz entero (lo de las portadas que faltan llena la cola de abajo y lo tapaba).
+    grep -E "Surco (voz|coche)|Failed to (add|set)|onPlayFromSearch|SessionResult|AndroidRuntime" auto-logcat.txt | grep -v "load bitmap" | head -40 || true
+    grep -E "PlaybackService|MediaSession|MediaButtonReceiver|SurcoWidget|AndroidRuntime|SurcoAuto" auto-logcat.txt | grep -v "load bitmap" | tail -60 || true
     exit 1
 fi
 echo "Android Auto, widget y cuadrícula: navegación, búsqueda, reproducción en contexto, mandos del widget y pellizco de 2 a 5, bien"

@@ -1,5 +1,6 @@
 package com.eddie.surco.player
 
+import android.util.Log
 import android.app.PendingIntent
 import android.content.ContentUris
 import android.content.Context
@@ -100,7 +101,10 @@ class PlaybackService : MediaLibraryService() {
         val f = SettableFuture.create<T>()
         // Con el servicio ya cerrándose, la corrutina no llegaría a correr y el futuro no acabaría nunca.
         if (!scope.isActive) { f.setException(IllegalStateException("servicio cerrado")); return f }
-        scope.launch { runCatching { withContext(Dispatchers.IO) { block() } }.onSuccess { f.set(it) }.onFailure { f.setException(it) } }
+        scope.launch {
+            runCatching { withContext(Dispatchers.IO) { block() } }.onSuccess { f.set(it) }
+                .onFailure { Log.w("Surco", "Surco coche: ${it.message}"); f.setException(it) }
+        }
         return f
     }
     private lateinit var exo: ExoPlayer
@@ -252,6 +256,7 @@ class PlaybackService : MediaLibraryService() {
                         }
                         // Sin nada que case, error: una lista vacía pararía lo que suena y vaciaría la cola.
                         if (hits.isEmpty()) throw UnsupportedOperationException("nada casa con «$voice»")
+                        Log.i("Surco", "Surco voz: ${hits.size} canciones para la frase pedida")
                         handler.post { exo.shuffleModeEnabled = false }
                         hits.mapNotNull { b.byId[it]?.toMediaItem() }.toMutableList()
                     }
