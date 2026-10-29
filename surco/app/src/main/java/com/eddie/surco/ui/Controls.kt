@@ -62,6 +62,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
@@ -159,21 +162,33 @@ fun SurcoSlider(
 @Composable
 private fun WaveTrack(wave: FloatArray, frac: Float, grow: Float, played: Color) {
     val rest = Muted.copy(alpha = 0.38f)
+    // Las barras son un solo trazado que se rehace solo si cambian el tamaño o la subida; en cada
+    // avance de la canción se pinta dos veces (tenue entero y en color hasta donde va), no 64 rectángulos.
+    val cache = remember(wave) { WavePath(wave) }
     Canvas(Modifier.fillMaxWidth().height(28.dp)) {
-        val n = wave.size
-        val slot = size.width / n
+        val path = cache.get(size, grow, 2.dp.toPx())
+        drawPath(path, rest)
+        clipRect(right = frac * size.width) { drawPath(path, played) }
+    }
+}
+
+private class WavePath(private val wave: FloatArray) {
+    private var key: Triple<Size, Float, Float>? = null
+    private val path = Path()
+
+    fun get(size: Size, grow: Float, line: Float): Path {
+        val k = Triple(size, grow, line)
+        if (k == key) return path
+        key = k
+        path.reset()
+        val slot = size.width / wave.size
         val bar = (slot * 0.62f).coerceAtLeast(1f)
-        val line = 2.dp.toPx()
-        val cut = frac * size.width
-        for (i in 0 until n) {
+        for (i in wave.indices) {
             val h = (line + (size.height - line) * wave[i] * grow).coerceAtMost(size.height)
             val x = i * slot + (slot - bar) / 2
-            drawRoundRect(
-                color = if (x + bar / 2 <= cut) played else rest,
-                topLeft = Offset(x, (size.height - h) / 2), size = Size(bar, h),
-                cornerRadius = CornerRadius(bar / 2, bar / 2),
-            )
+            path.addRoundRect(RoundRect(x, (size.height - h) / 2, x + bar, (size.height + h) / 2, CornerRadius(bar / 2, bar / 2)))
         }
+        return path
     }
 }
 
