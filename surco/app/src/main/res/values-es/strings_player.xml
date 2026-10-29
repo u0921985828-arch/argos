@@ -103,6 +103,12 @@
     <string name="player_go_album">Ir al álbum</string>
     <string name="player_go_artist">Ir al artista</string>
     <string name="player_for_mixing">Para mezclar</string>
+    <string name="player_radio">Radio de la canción</string>
+    <plurals name="player_radio_notice">
+        <item quantity="one">Radio: %1$d canción parecida detrás de esta</item>
+        <item quantity="many">Radio: %1$d canciones parecidas detrás de esta</item>
+        <item quantity="other">Radio: %1$d canciones parecidas detrás de esta</item>
+    </plurals>
     <string name="player_remove_from_playlist">Quitar de la lista</string>
     <string name="player_removed_from_playlist">Quitada de la lista</string>
     <plurals name="player_played_times">

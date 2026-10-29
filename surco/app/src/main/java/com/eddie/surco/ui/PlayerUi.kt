@@ -58,6 +58,7 @@ import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.Shuffle
@@ -181,7 +182,15 @@ private fun SeekBar(vm: LibraryViewModel, track: Track) {
         }
     }
     val shown = dragVal?.let { (it * dur).toLong() } ?: if (dur > 0) pos.coerceIn(0, dur) else pos.coerceAtLeast(0)
+    // Forma de onda: de memoria al instante; si no, se mide fuera del hilo principal (y queda en la caché).
+    val waveOn = SurcoSettings.state.collectAsState().value.waveSeek
+    val ctx = LocalContext.current.applicationContext
+    var wave by remember(track.id, track.dateModified) { mutableStateOf(com.eddie.surco.player.Waveform.cached(track)) }
+    LaunchedEffect(track.id, track.dateModified, waveOn) {
+        if (waveOn && wave == null) wave = withContext(Dispatchers.IO) { com.eddie.surco.player.Waveform.load(ctx, track) }
+    }
     SurcoSlider(
+        wave = wave.takeIf { waveOn },
         value = dragVal ?: if (dur > 0) shown / dur.toFloat() else 0f,
         onChange = { dragVal = it },
         onFinished = {
@@ -794,6 +803,7 @@ fun SongSheet(vm: LibraryViewModel, s: SongSheetState) {
                 SectionLabel(stringResource(R.string.player_this_song))
             } else Spacer(Modifier.height(14.dp))
             val nextNotice = stringResource(R.string.player_play_next_notice)
+            val res = LocalContext.current.resources
             val queued = stringResource(R.string.player_added_to_queue)
             val viewQueue = stringResource(R.string.player_view_queue)
             ActionGrid(buildList {
@@ -804,6 +814,14 @@ fun SongSheet(vm: LibraryViewModel, s: SongSheetState) {
                 add(Act(Icons.AutoMirrored.Rounded.QueueMusic, stringResource(R.string.player_add_to_queue)) {
                     vm.player.enqueue(listOf(track)); close()
                     Notice.show(queued, viewQueue) { vm.queueOpen = true }
+                })
+                // Radio: lo parecido de tu biblioteca detrás de esta; si es la que suena, sigue por donde iba.
+                add(Act(Icons.Rounded.Radio, stringResource(R.string.player_radio)) {
+                    val list = vm.radioOf(track)
+                    val playing = vm.player.currentId == track.id
+                    vm.player.play(list, 0, positionMs = if (playing) vm.player.positionMs else 0)
+                    close()
+                    Notice.show(res.getQuantityString(R.plurals.player_radio_notice, list.size - 1, list.size - 1), viewQueue) { vm.queueOpen = true }
                 })
                 add(Act(Icons.AutoMirrored.Rounded.PlaylistAdd, stringResource(R.string.player_to_playlist)) { vm.addTo = listOf(track); close() })
                 add(Act(if (fav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, stringResource(if (fav) R.string.player_unfavorite_short else R.string.player_favorite)) {

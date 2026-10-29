@@ -21,11 +21,11 @@
     <string name="settings_eq_on">%1$s · tono, balance, crossfeed, limitador</string>
     <string name="settings_eq_off">Apagado</string>
     <string name="settings_rg_title">Normalizar volumen (ReplayGain)</string>
-    <string name="settings_rg_none">Ninguna canción trae la etiqueta REPLAYGAIN (se añade con foobar2000 o MusicBrainz Picard).</string>
+    <string name="settings_rg_none">Ninguna canción tiene aún ReplayGain: Surco lo mide al analizar la biblioteca (Ajustes → Biblioteca).</string>
     <plurals name="settings_rg_some">
-        <item quantity="one">%1$d de %2$d canciones la traen; con ella todo suena %3$d dB más bajo para no saturar.</item>
-        <item quantity="many">%1$d de %2$d canciones la traen; con ella todo suena %3$d dB más bajo para no saturar.</item>
-        <item quantity="other">%1$d de %2$d canciones la traen; con ella todo suena %3$d dB más bajo para no saturar.</item>
+        <item quantity="one">%1$d de %2$d canciones lo tienen (de sus etiquetas o medido por Surco); con él todo suena %3$d dB más bajo para no saturar.</item>
+        <item quantity="many">%1$d de %2$d canciones lo tienen (de sus etiquetas o medido por Surco); con él todo suena %3$d dB más bajo para no saturar.</item>
+        <item quantity="other">%1$d de %2$d canciones lo tienen (de sus etiquetas o medido por Surco); con él todo suena %3$d dB más bajo para no saturar.</item>
     </plurals>
     <string name="settings_rg_off">Apagado</string>
     <string name="settings_rg_track">Por pista</string>
@@ -72,13 +72,13 @@
     <string name="settings_shorter_min">&lt; %1$d min</string>
     <string name="settings_rescan">Volver a leer todas las etiquetas</string>
     <string name="settings_rescan_help">Útil si has editado etiquetas con otro programa</string>
-    <string name="settings_analyze">Analizar BPM y tonalidad</string>
+    <string name="settings_analyze">Analizar BPM, tonalidad y volumen</string>
     <plurals name="settings_analyzing">
         <item quantity="one">Analizando: %1$d de %2$d canciones (unos segundos cada una, sin internet).</item>
         <item quantity="many">Analizando: %1$d de %2$d canciones (unos segundos cada una, sin internet).</item>
         <item quantity="other">Analizando: %1$d de %2$d canciones (unos segundos cada una, sin internet).</item>
     </plurals>
-    <string name="settings_analyze_help">Para las canciones que no los traen en las etiquetas. Hechas: %1$d.</string>
+    <string name="settings_analyze_help">Para las canciones a las que les faltan en las etiquetas. El volumen iguala las canciones con ReplayGain puesto. Hechas: %1$d.</string>
     <string name="settings_lrclib">Letras de internet (LRCLIB)</string>
     <string name="settings_lrclib_help">Si una canción no trae letra, se busca en lrclib.net (muchas, sincronizadas). Solo sale artista, título, álbum y duración.</string>
     <string name="settings_folders">Carpetas</string>
@@ -96,6 +96,8 @@
     <string name="settings_accent_violet">Violeta</string>
     <string name="settings_accent_amber">Ámbar</string>
     <string name="settings_now_playing_section">«Sonando»</string>
+    <string name="settings_wave">Barra con forma de onda</string>
+    <string name="settings_wave_help">La forma de la canción en «Sonando»: se ve dónde están las partes suaves y las fuertes. Se mide en el móvil.</string>
     <string name="settings_tech">Detalles técnicos</string>
     <string name="settings_tech_help">Formato, bits, frecuencia y cómo sale el audio, debajo del título.</string>
     <string name="settings_screen_on">Pantalla encendida</string>

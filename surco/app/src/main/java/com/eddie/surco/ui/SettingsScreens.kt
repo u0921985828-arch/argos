@@ -227,7 +227,7 @@ private fun LibraryPage(vm: LibraryViewModel) {
     ) { s -> SurcoSettings.update { it.copy(minDurationSec = s) } }
     OptionRow(stringResource(R.string.settings_rescan), stringResource(R.string.settings_rescan_help)) { vm.scan(force = true); vm.pop() }
     val analysis by vm.analysis.collectAsState()
-    val analyzed = remember(all) { all.count { it.x("bpm_src") == "análisis" || it.x("key_src") == "análisis" } }
+    val analyzed = remember(all) { all.count { it.x("bpm_src") == "análisis" || it.x("key_src") == "análisis" || it.x("rg_src") == "análisis" } }
     SwitchRow(
         stringResource(R.string.settings_analyze),
         analysis?.let { (d, n) -> plural(R.plurals.settings_analyzing, n, d, n) }
@@ -297,6 +297,9 @@ private fun LookPage() {
     SectionLabel(stringResource(R.string.settings_now_playing_section))
     SwitchRow(stringResource(R.string.settings_tech), stringResource(R.string.settings_tech_help), prefs.techDetails) { t ->
         SurcoSettings.update { it.copy(techDetails = t) }
+    }
+    SwitchRow(stringResource(R.string.settings_wave), stringResource(R.string.settings_wave_help), prefs.waveSeek) { w ->
+        SurcoSettings.update { it.copy(waveSeek = w) }
     }
     SwitchRow(stringResource(R.string.settings_screen_on), stringResource(R.string.settings_screen_on_help), prefs.keepScreenOn) { k ->
         SurcoSettings.update { it.copy(keepScreenOn = k) }

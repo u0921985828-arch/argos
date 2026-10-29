@@ -101,7 +101,7 @@ class PlayerConnection(ctx: Context) {
     val positionMs: Long get() = controller?.currentPosition ?: 0
     val durationMs: Long get() = controller?.duration?.takeIf { it > 0 } ?: 0
 
-    fun play(list: List<Track>, start: Int, shuffled: Boolean = false) {
+    fun play(list: List<Track>, start: Int, shuffled: Boolean = false, positionMs: Long = 0) {
         val c = controller ?: return
         if (list.isEmpty()) return
         val items = list.map { it.toMediaItem() }
@@ -111,7 +111,7 @@ class PlayerConnection(ctx: Context) {
             c.setMediaItems(items, true)
         } else {
             c.shuffleModeEnabled = false
-            c.setMediaItems(items, start.coerceIn(list.indices), 0)
+            c.setMediaItems(items, start.coerceIn(list.indices), positionMs)
         }
         c.prepare(); c.play()
     }

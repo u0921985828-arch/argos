@@ -147,7 +147,9 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 todo.forEachIndexed { i, t ->
                     if (!SurcoSettings.state.value.analyze) return@launch
-                    store.put(t, AudioAnalyzer.analyze(getApplication<Application>(), t))
+                    val r = AudioAnalyzer.analyze(getApplication<Application>(), t)
+                    store.put(t, r)
+                    android.util.Log.i("SurcoAnalisis", "${t.title} · bpm=${r?.bpm} · tonalidad=${r?.key?.code} · lufs=${r?.lufs?.let { "%.2f".format(java.util.Locale.ROOT, it) }}")
                     analysis.value = i + 1 to todo.size
                     if ((i + 1) % 10 == 0 || i == todo.lastIndex) {
                         tracks.value = tracks.value.map { store.apply(it) }
@@ -254,6 +256,17 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun goToAlbum(t: Track) = TagField.ALBUM.buckets(t).firstOrNull()?.let { openTag(TagField.ALBUM, it.key, it.label) }
+    /** Radio de [t]: canciones de la biblioteca parecidas a ella (género, artista, época, tonalidad y tempo), empezando por ella. */
+    fun radioOf(t: Track): List<Track> {
+        val all = tracks.value
+        val byId = all.associateBy { it.id }
+        fun song(x: Track) = com.eddie.surco.data.RadioSong(
+            x.id, x.artist, x.genre, x.year, x.x("bpm").replace(',', '.').toFloatOrNull()?.takeIf { it > 0 },
+            com.eddie.surco.data.parseKey(x.x("key")), x.dir,
+        )
+        return com.eddie.surco.data.radio(song(t), all.map(::song), kotlin.random.Random).mapNotNull { byId[it] }
+    }
+
     fun goToArtist(t: Track) = TagField.ARTIST.buckets(t).firstOrNull()?.let { openTag(TagField.ARTIST, it.key, it.label) }
 
     /** Desde un aviso («Ver»): la lista, en su pestaña, cerrando lo que la tape. */

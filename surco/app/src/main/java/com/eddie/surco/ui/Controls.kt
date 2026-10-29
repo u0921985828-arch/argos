@@ -40,6 +40,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -131,17 +133,48 @@ fun VerticalSlider(
 fun SurcoSlider(
     value: Float, onChange: (Float) -> Unit, modifier: Modifier = Modifier,
     range: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 0, onFinished: (() -> Unit)? = null, fill: Boolean = true,
-    enabled: Boolean = true,
+    enabled: Boolean = true, wave: FloatArray? = null,
 ) {
     val source = remember { MutableInteractionSource() }
+    // La forma de onda sube desde la línea cuando llega (no aparece de golpe).
+    val grow by animateFloatAsState(if (wave != null) 1f else 0f, tween(450), label = "onda")
     // Sin relleno en los que tienen el cero en medio (tono, balance): a 0 dB la pista medio cobre parecía un valor.
     val colors = SliderDefaults.colors(thumbColor = Copper, activeTrackColor = if (fill) Copper else Panel2, inactiveTrackColor = Panel2)
     Slider(
         value = value, onValueChange = onChange, modifier = modifier, enabled = enabled, valueRange = range, steps = steps,
         onValueChangeFinished = onFinished, interactionSource = source, colors = colors,
         thumb = { SliderDefaults.Thumb(interactionSource = source, colors = colors, enabled = enabled, thumbSize = DpSize(20.dp, 20.dp)) },
-        track = { SliderDefaults.Track(sliderState = it, colors = colors, enabled = enabled, drawStopIndicator = null, drawTick = { _, _ -> }, thumbTrackGapSize = 0.dp) },
+        track = { st ->
+            if (wave == null) SliderDefaults.Track(sliderState = st, colors = colors, enabled = enabled, drawStopIndicator = null, drawTick = { _, _ -> }, thumbTrackGapSize = 0.dp)
+            else {
+                val span = st.valueRange.endInclusive - st.valueRange.start
+                val frac = if (span > 0) ((st.value - st.valueRange.start) / span).coerceIn(0f, 1f) else 0f
+                WaveTrack(wave, frac, grow, if (enabled) Copper else Muted)
+            }
+        },
     )
+}
+
+/** Pista de la barra como forma de onda: lo ya sonado en [played], lo que falta tenue. */
+@Composable
+private fun WaveTrack(wave: FloatArray, frac: Float, grow: Float, played: Color) {
+    val rest = Muted.copy(alpha = 0.38f)
+    Canvas(Modifier.fillMaxWidth().height(28.dp)) {
+        val n = wave.size
+        val slot = size.width / n
+        val bar = (slot * 0.62f).coerceAtLeast(1f)
+        val line = 2.dp.toPx()
+        val cut = frac * size.width
+        for (i in 0 until n) {
+            val h = (line + (size.height - line) * wave[i] * grow).coerceAtMost(size.height)
+            val x = i * slot + (slot - bar) / 2
+            drawRoundRect(
+                color = if (x + bar / 2 <= cut) played else rest,
+                topLeft = Offset(x, (size.height - h) / 2), size = Size(bar, h),
+                cornerRadius = CornerRadius(bar / 2, bar / 2),
+            )
+        }
+    }
 }
 
 /** Fila de ajuste con título, valor a la derecha y deslizador debajo. */

@@ -17,7 +17,7 @@ import com.eddie.surco.data.AlbumRef
 import com.eddie.surco.data.crossfadeGain
 import com.eddie.surco.data.overlapOutGain
 import android.os.SystemClock
-import com.eddie.surco.data.currentFirstOrder
+import com.eddie.surco.data.spreadShuffle
 import com.eddie.surco.data.fadesBetween
 import com.eddie.surco.data.insertIntoOrder
 import com.google.common.util.concurrent.SettableFuture
@@ -245,7 +245,9 @@ class PlaybackService : MediaLibraryService() {
                             .filter { it.isNotBlank() }
                         val hits = when {
                             parts.isNotEmpty() -> b.tree.search(parts.joinToString(" ")).ifEmpty { b.tree.search(voice) }.map { it.id }
-                            voice.isBlank() -> b.tree.playContext(BrowseIds.SHUFFLE_ALL)?.first.orEmpty().shuffled()
+                            voice.isBlank() -> b.tree.playContext(BrowseIds.SHUFFLE_ALL)?.first.orEmpty().let { ids ->
+                                spreadShuffle(ids.map { b.byId[it]?.artist.orEmpty() }, -1, Random).map { ids[it] }
+                            }
                             else -> b.tree.search(voice).map { it.id }
                         }
                         // Sin nada que case, error: una lista vacía pararía lo que suena y vaciaría la cola.
@@ -281,7 +283,7 @@ class PlaybackService : MediaLibraryService() {
                         // Como en la app: un disco o una lista suenan en su orden (aunque el aleatorio
                         // estuviera puesto); «Mezclar todo» ya llega mezclado.
                         handler.post { exo.shuffleModeEnabled = false }
-                        val items = (if (shuffle) list.shuffled() else list).map { it.toMediaItem() }
+                        val items = (if (shuffle) spreadShuffle(list.map { it.artist }, -1, Random).map { list[it] } else list).map { it.toMediaItem() }
                         MediaSession.MediaItemsWithStartPosition(items, if (shuffle) 0 else at, C.TIME_UNSET)
                     }
                 }
@@ -649,9 +651,27 @@ class PlaybackService : MediaLibraryService() {
         // Al activar el aleatorio, la que suena va primero: si no, lo que cae delante no suena nunca.
         override fun setShuffleModeEnabled(shuffleModeEnabled: Boolean) {
             if (shuffleModeEnabled && !exo.shuffleModeEnabled && exo.mediaItemCount > 1) {
-                exo.setShuffleOrder(DefaultShuffleOrder(currentFirstOrder(exo.mediaItemCount, exo.currentMediaItemIndex, Random), Random.nextLong()))
+                spreadFrom(exo.currentMediaItemIndex)
             }
             exo.shuffleModeEnabled = shuffleModeEnabled
+        }
+
+        // Una lista nueva con el aleatorio puesto (la app manda «mezclar» así): también repartida,
+        // empezando por la que haya quedado como actual para que ninguna se quede sin sonar.
+        override fun setMediaItems(mediaItems: MutableList<MediaItem>, resetPosition: Boolean) {
+            exo.setMediaItems(mediaItems, resetPosition)
+            if (exo.shuffleModeEnabled && exo.mediaItemCount > 1) spreadFrom(exo.currentMediaItemIndex)
+        }
+
+        override fun setMediaItems(mediaItems: MutableList<MediaItem>, startIndex: Int, startPositionMs: Long) {
+            exo.setMediaItems(mediaItems, startIndex, startPositionMs)
+            if (exo.shuffleModeEnabled && exo.mediaItemCount > 1) spreadFrom(exo.currentMediaItemIndex)
+        }
+
+        /** Orden aleatorio que empieza por [first] y no pone seguidas dos del mismo artista si se puede. */
+        private fun spreadFrom(first: Int) {
+            val artists = List(exo.mediaItemCount) { exo.getMediaItemAt(it).mediaMetadata.artist?.toString().orEmpty() }
+            exo.setShuffleOrder(DefaultShuffleOrder(spreadShuffle(artists, first, Random), Random.nextLong()))
         }
 
         // «A la cola» llega sin índice (va al final también del orden aleatorio); «A continuación»,

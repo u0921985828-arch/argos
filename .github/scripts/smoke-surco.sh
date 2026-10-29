@@ -126,6 +126,9 @@ adb shell cmd locale set-app-locales "$PKG" --locales es-ES
 adb shell pm grant "$PKG" android.permission.READ_MEDIA_AUDIO
 adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS || true
 adb logcat -c
+# Lo que mide el análisis (BPM, tonalidad y sonoridad), aparte: los logcat -c de después no lo borran.
+adb logcat -s SurcoAnalisis:I > analisis.txt 2>/dev/null &
+ANALISIS=$!
 adb shell am start -n "$PKG/.MainActivity"
 
 # Espera a que termine la lectura profunda de etiquetas.
@@ -400,6 +403,19 @@ grep -q "Surco salida: coma flotante 32 bits → coma flotante 32 bits · 192000
 adb logcat -d > logcat.txt || true
 adb shell dumpsys media.audio_flinger > flinger.txt 2>/dev/null || true
 grep -o "Surco salida: .*" salida.txt | sort -u || true
+
+# Volumen igualado sin etiquetas: la sonoridad medida (EBU R128) de los tonos de ffmpeg (amplitud 1/8).
+# Calculada a mano con el filtro K: Uno, MP3 mono a 440 Hz, −21,75 LUFS; Cuatro, WAV float estéreo
+# a 192 kHz, −18,62 (dos canales suman 3 dB). Pasa por los dos caminos de decodificación.
+kill "$ANALISIS" 2>/dev/null || true
+sed 's/^.*SurcoAnalisis: //' analisis.txt | sort -u
+lufs() { { grep -o "$1 · .*lufs=-\?[0-9.]*" analisis.txt || true; } | tail -1 | sed "s/.*lufs=//"; }
+for par in "Prueba Uno:-21.75" "Prueba Cuatro:-18.62"; do
+    t=${par%%:*}; want=${par##*:}; v=$(lufs "$t")
+    python3 -c "import sys; sys.exit(0 if abs(float(sys.argv[1]) - float(sys.argv[2])) <= 0.6 else 1)" "${v:-999}" "$want" \
+        || fallo "sonoridad de «$t»: ${v:-sin medir} LUFS, se esperaba $want"
+done
+echo "sonoridad medida: Uno $(lufs 'Prueba Uno') LUFS, Cuatro $(lufs 'Prueba Cuatro') LUFS"
 
 # --- Accesos directos del icono: «Buscar» abre el buscador y «Mezclar todo» pone todo en aleatorio. ---
 adb shell input keyevent KEYCODE_MEDIA_PAUSE; sleep 1

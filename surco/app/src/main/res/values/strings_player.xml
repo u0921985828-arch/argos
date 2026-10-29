@@ -101,6 +101,11 @@
     <string name="player_go_album">Go to album</string>
     <string name="player_go_artist">Go to artist</string>
     <string name="player_for_mixing">Mix with</string>
+    <string name="player_radio">Song radio</string>
+    <plurals name="player_radio_notice">
+        <item quantity="one">Radio: %1$d similar song after this one</item>
+        <item quantity="other">Radio: %1$d similar songs after this one</item>
+    </plurals>
     <string name="player_remove_from_playlist">Remove from playlist</string>
     <string name="player_removed_from_playlist">Removed from playlist</string>
     <plurals name="player_played_times">

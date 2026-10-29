@@ -21,10 +21,10 @@
     <string name="settings_eq_on">%1$s · tone, balance, crossfeed, limiter</string>
     <string name="settings_eq_off">Off</string>
     <string name="settings_rg_title">Normalize volume (ReplayGain)</string>
-    <string name="settings_rg_none">No song has the REPLAYGAIN tag (add it with foobar2000 or MusicBrainz Picard).</string>
+    <string name="settings_rg_none">No song has ReplayGain yet: Surco measures it when it analyzes the library (Settings → Library).</string>
     <plurals name="settings_rg_some">
-        <item quantity="one">%1$d of %2$d song has it; with it everything plays %3$d dB quieter to avoid clipping.</item>
-        <item quantity="other">%1$d of %2$d songs have it; with it everything plays %3$d dB quieter to avoid clipping.</item>
+        <item quantity="one">%1$d of %2$d song has it (from its tags or measured by Surco); with it everything plays %3$d dB quieter to avoid clipping.</item>
+        <item quantity="other">%1$d of %2$d songs have it (from their tags or measured by Surco); with it everything plays %3$d dB quieter to avoid clipping.</item>
     </plurals>
     <string name="settings_rg_off">Off</string>
     <string name="settings_rg_track">Per track</string>
@@ -71,12 +71,12 @@
     <string name="settings_shorter_min">&lt; %1$d min</string>
     <string name="settings_rescan">Re-read all tags</string>
     <string name="settings_rescan_help">Useful if you\'ve edited tags in another app</string>
-    <string name="settings_analyze">Analyze BPM and key</string>
+    <string name="settings_analyze">Analyze BPM, key and loudness</string>
     <plurals name="settings_analyzing">
         <item quantity="one">Analyzing: %1$d of %2$d song (a few seconds each, offline).</item>
         <item quantity="other">Analyzing: %1$d of %2$d songs (a few seconds each, offline).</item>
     </plurals>
-    <string name="settings_analyze_help">For songs that don\'t have them in their tags. Done: %1$d.</string>
+    <string name="settings_analyze_help">For songs whose tags lack them. Loudness evens out the volume with ReplayGain on. Done: %1$d.</string>
     <string name="settings_lrclib">Online lyrics (LRCLIB)</string>
     <string name="settings_lrclib_help">If a song has no lyrics, they\'re looked up on lrclib.net (many are synced). Only artist, title, album and duration are sent.</string>
     <string name="settings_folders">Folders</string>
@@ -94,6 +94,8 @@
     <string name="settings_accent_violet">Violet</string>
     <string name="settings_accent_amber">Amber</string>
     <string name="settings_now_playing_section">Now playing</string>
+    <string name="settings_wave">Waveform progress bar</string>
+    <string name="settings_wave_help">The song\'s shape in Now playing: you can see where the quiet and the loud parts are. Measured on the phone.</string>
     <string name="settings_tech">Technical details</string>
     <string name="settings_tech_help">Format, bits, sample rate and how the audio is output, under the title.</string>
     <string name="settings_screen_on">Keep screen on</string>

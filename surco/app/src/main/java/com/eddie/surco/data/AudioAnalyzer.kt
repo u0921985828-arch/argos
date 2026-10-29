@@ -10,22 +10,24 @@ import java.nio.ByteOrder
 /**
  * BPM y tonalidad de una canción: decodifica 30 s de la parte central (a partir del 30 %: la
  * introducción suele ir sin batería) con el decodificador del móvil, los pasa a mono a ~11 kHz y
- * se los da a [estimateBpm] y [estimateKey]. Nada sale del móvil.
+ * se los da a [estimateBpm] y [estimateKey]. De esos mismos 30 s, antes de pasarlos a mono, mide la
+ * sonoridad (EBU R128, [LoudnessMeter]) para igualar el volumen de las que no traen ReplayGain: es
+ * la parte central, la más fuerte casi siempre, así que la ganancia peca de prudente. Nada sale del móvil.
  */
 object AudioAnalyzer {
     private const val SECONDS = 30
     private const val TARGET_RATE = 11025
 
-    data class Result(val bpm: Float?, val key: MusicKey?)
+    data class Result(val bpm: Float?, val key: MusicKey?, val lufs: Float? = null)
 
     fun analyze(ctx: Context, t: Track): Result? = runCatching {
         val pcm = decode(ctx, t) ?: return null
-        val (x, rate) = pcm
-        Result(estimateBpm(x, rate), estimateKey(x, rate)?.takeIf { it.confidence > 0.02 }?.key)
+        val (x, rate, lufs) = pcm
+        Result(estimateBpm(x, rate), estimateKey(x, rate)?.takeIf { it.confidence > 0.02 }?.key, lufs)
     }.getOrNull()
 
     /** Mono, diezmado por un factor entero hasta ~11 kHz (promediando: hace de filtro paso bajo). */
-    private fun decode(ctx: Context, t: Track): Pair<FloatArray, Int>? {
+    private fun decode(ctx: Context, t: Track): Triple<FloatArray, Int, Float?>? {
         val ex = MediaExtractor()
         var codec: MediaCodec? = null
         try {
@@ -46,6 +48,7 @@ object AudioAnalyzer {
             val out = FloatArray(SECONDS * (rate / factor) + 1)
             var n = 0
             var acc = 0.0; var accN = 0
+            var meter: LoudnessMeter? = null
             val info = MediaCodec.BufferInfo()
             var inputDone = false
             var guard = 0
@@ -66,13 +69,18 @@ object AudioAnalyzer {
                     channels = f.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
                     float = f.containsKey(MediaFormat.KEY_PCM_ENCODING) && f.getInteger(MediaFormat.KEY_PCM_ENCODING) == AudioFormat.ENCODING_PCM_FLOAT
                     factor = (rate / TARGET_RATE).coerceAtLeast(1)
+                    meter = null
                 } else if (o >= 0) {
+                    val m = meter ?: LoudnessMeter(rate, channels).also { meter = it }
                     val buf = c.getOutputBuffer(o)!!.order(ByteOrder.nativeOrder())
                     buf.position(info.offset); buf.limit(info.offset + info.size)
                     val frames = info.size / (channels * if (float) 4 else 2)
                     for (fr in 0 until frames) {
                         var v = 0.0
-                        for (ch in 0 until channels) v += if (float) buf.float.toDouble() else buf.short / 32768.0
+                        for (ch in 0 until channels) {
+                            val s = if (float) buf.float.toDouble() else buf.short / 32768.0
+                            m.push(s); v += s
+                        }
                         acc += v / channels; accN++
                         if (accN == factor) {
                             if (n < out.size) out[n++] = (acc / factor).toFloat()
@@ -83,7 +91,7 @@ object AudioAnalyzer {
                     if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) break
                 }
             }
-            return if (n < TARGET_RATE * 8) null else out.copyOf(n) to rate / factor
+            return if (n < TARGET_RATE * 8) null else Triple(out.copyOf(n), rate / factor, meter?.integrated()?.toFloat())
         } finally {
             runCatching { codec?.stop() }
             runCatching { codec?.release() }
