@@ -328,3 +328,9 @@ Encargo: «Cumple lo pendiente».
 
 ## Hecho
 - Ganancias de álbum solo al empezar y al acabar el análisis; con más de 500 canciones por analizar, la biblioteca se rehace cada 100 (no cada 10). Compilado sin avisos, JVM 185/185.
+- **CI verde completa en 7424959** (run 40827441880).
+- **Memoria, misma pasada y mismo emulador**: 2.8.1 146 MB de PSS (Java 27,8 · nativa 23,7 · código 5,5 · otros 74,7 MB) frente a 142 MB de la 2.7 (30298aa): +3 %. Los 204 MB de la 2.8 no se repiten (otra máquina y la biblioteca rehecha cada 10 canciones durante el análisis). Pedirle que suelte memoria no la baja (152/148): no es basura, es lo que usa.
+- Tiempos de la referencia no comparables: va segunda, con los 10.000 archivos ya en la caché del disco (etiquetas 210 s frente a 358 s; arranque con caché al revés, 3,4 s frente a 1,3 s).
+- **Botones**: 206 pulsados, 0 caídas, 7 sin efecto (antes 17), todos chips u opciones ya elegidas, el orden ya puesto o el panel de efectos que el emulador no tiene. Los «Reproducir» y «Aleatorio» salen ahora como «suena (vuelve a empezar / estado 2 → 3 / la reproducción cambió)». «Mover» de la cola sale con «estado 2 → 3»: es el arranque de lo pulsado justo antes, que llega tarde (el asa no reproduce).
+- Consumo: pausa 0,1 %, MP3 4,7 %, FLAC 3,5–3,7 %, ecualizador 5,4 %, abierta 11,9 % (en la línea de las pasadas anteriores).
+- Pendiente fuera de mi alcance: probarlo en un móvil real (no hay aparato conectado a esta sesión).
