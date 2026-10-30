@@ -83,10 +83,13 @@ class PlayerButtonsTest {
             control(ctx.getString(R.string.player_play_pause)).click()
             waitFor("pausar") { !onLooper { c.isPlaying } }
 
+            // En pausa, «siguiente» pasa de canción Y la pone a sonar (pulsar después «reproducir» sobra).
             control(ctx.getString(R.string.player_next)).click()
-            waitFor("pasar a la segunda") { onLooper { c.currentMediaItemIndex } == 1 }
+            waitFor("pasar a la segunda y sonar") { onLooper { c.currentMediaItemIndex == 1 && c.isPlaying } }
+            control(ctx.getString(R.string.player_play_pause)).click()
+            waitFor("pausar otra vez") { !onLooper { c.isPlaying } }
             control(ctx.getString(R.string.player_previous)).click()
-            waitFor("volver a la primera") { onLooper { c.currentMediaItemIndex } == 0 }
+            waitFor("volver a la primera y sonar") { onLooper { c.currentMediaItemIndex == 0 && c.isPlaying } }
 
             val modes = listOf(Player.REPEAT_MODE_ALL, Player.REPEAT_MODE_ONE, Player.REPEAT_MODE_OFF)
             for (m in modes) {
@@ -98,7 +101,7 @@ class PlayerButtonsTest {
             control(ctx.getString(R.string.player_shuffle)).click()
             waitFor("aleatorio apagado") { !onLooper { c.shuffleModeEnabled } }
             assertEquals(0, onLooper { c.currentMediaItemIndex })
-            Log.i("SurcoAuto", "mandos de «Sonando»: reproducir, pausar, siguiente, anterior, repetir ×3 y aleatorio, bien")
+            Log.i("SurcoAuto", "mandos de «Sonando»: reproducir, pausar, siguiente y anterior (que arrancan en pausa), repetir ×3 y aleatorio, bien")
         } finally {
             onLooper { c.pause(); c.release() }
             dev.pressBack(); dev.pressHome()

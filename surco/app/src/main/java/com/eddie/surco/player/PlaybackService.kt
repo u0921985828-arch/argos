@@ -658,6 +658,24 @@ class PlaybackService : MediaLibraryService() {
             if (SurcoSettings.state.value.fade && exo.isPlaying) fadeTo(0f) { exo.pause() } else exo.pause()
         }
 
+        // Saltar de canción con la música parada la pone en marcha: pulsar «siguiente» y luego
+        // «reproducir» son dos pasos para una sola intención. Vale para el móvil, el widget, la
+        // notificación, el coche y el botón de los cascos, que pasan todos por aquí.
+        override fun seekToNext() = skipThenPlay { exo.seekToNext() }
+        override fun seekToNextMediaItem() = skipThenPlay { exo.seekToNextMediaItem() }
+        override fun seekToPrevious() = skipThenPlay { exo.seekToPrevious() }
+        override fun seekToPreviousMediaItem() = skipThenPlay { exo.seekToPreviousMediaItem() }
+
+        private fun skipThenPlay(skip: () -> Unit) {
+            val sonaba = exo.playWhenReady
+            val desde = exo.currentMediaItemIndex
+            skip()
+            // Si el salto no lleva a ninguna parte (final de la cola sin repetición), no se pone a
+            // sonar sola: solo se arranca cuando de verdad ha cambiado de canción o ha vuelto al principio.
+            val saltó = exo.currentMediaItemIndex != desde || exo.currentPosition < 500
+            if (!sonaba && saltó && exo.playbackState != Player.STATE_ENDED) play()
+        }
+
         // Al activar el aleatorio, la que suena va primero: si no, lo que cae delante no suena nunca.
         override fun setShuffleModeEnabled(shuffleModeEnabled: Boolean) {
             if (shuffleModeEnabled && !exo.shuffleModeEnabled && exo.mediaItemCount > 1) {

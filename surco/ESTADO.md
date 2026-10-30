@@ -364,3 +364,10 @@ Encargo: «¿Con la misma firma?» → secreto de GitHub (elegido por Eddie fren
 - Humo de b1742e4: la primera vez ni arrancó (la imagen del emulador bajó corrupta de Google: «Error on ZipFile unknown archive»); relanzado, rojo por el diseño ×1,3 de `25-ecualizador-abajo` (dos toques de 37 dp), la segunda vez que sale (la primera en f1f9fbf). Causa, de la jerarquía de la captura: tras desplazar, un elemento clicable de la lista sale en [0,264][1080,313], por encima de la vista desplazable ([0,327]), y Compose recorta a cada nodo para TalkBack lo que le tapa otro pintado después: «Atrás», «Graves» y el interruptor acababan en 264. Real para TalkBack, no solo para la prueba. Arreglo: la cabecera (`TopBar`) con `zIndex(1f)`, por encima de lo que se desplaza, en todas las pantallas que la usan.
 - **CI verde completa en 5086db0** (run 40977130576), con la clave fija: humo, diseño ×1,0 y ×1,3 con 0 fallos (también `25-ecualizador-abajo`), inglés, «OK (9 tests)», 211 botones y 0 caídas; consumo MP3 5,2 %, FLAC 4,3 %, ecualizador 6,8 %, abierta 16,8 % en una máquina lenta (MediaStore 45 s). Memoria 161 MB frente a 140 MB de la 2.7 en la misma pasada (en 7424959 fue 146 frente a 142): a vigilar.
 - APK 2.8.3 = `Surco.apk` de `apk-surco` (5086db0e), certificado 637a687e…898d. Es la última que obliga a desinstalar.
+
+# Surco 2.8.4 — saltar de canción con la música parada
+
+Encargo: «Cuando uso el botón siguiente canción, y hay una parada tiene que funcionar como siguiente y play».
+- `FadingPlayer.seekToNext/seekToPrevious` (y sus `…MediaItem`): si estaba en pausa, tras el salto se llama a `play()`. En el servicio, así que vale para «Sonando», el minirreproductor, el widget, la notificación, el coche y el botón de los cascos.
+- No arranca sola si el salto no lleva a ninguna parte (final de la cola sin repetición) ni con la reproducción terminada.
+- `PlayerButtonsTest.mandosDeSonando` lo comprueba en el emulador: en pausa, «siguiente» deja index 1 sonando; se pausa y «anterior» deja index 0 sonando.
