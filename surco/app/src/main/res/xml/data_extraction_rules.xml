@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12 y posteriores (android:dataExtractionRules): lo mismo que backup_rules.xml, en la
+  copia en la nube y al pasar los datos de un móvil a otro. La caché de etiquetas no va ni al
+  cambiar de móvil: allí los ids de MediaStore son otros y se leería de todos modos.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="file" path="usuario.json" />
+        <include domain="file" path="ajustes.json" />
+        <include domain="file" path="analisis.json" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="file" path="usuario.json" />
+        <include domain="file" path="ajustes.json" />
+        <include domain="file" path="analisis.json" />
+    </device-transfer>
+</data-extraction-rules>

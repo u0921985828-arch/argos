@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Editar las etiquetas de una canción (ui/TagEditor.kt) (inglés, por defecto). -->
+<resources>
+    <string name="tags_edit">Edit tags</string>
+    <string name="tags_title">Edit tags</string>
+    <string name="tags_back">Back</string>
+    <string name="tags_saving">Saving…</string>
+    <string name="tags_loading">Reading the file…</string>
+
+    <!-- Campos -->
+    <string name="tags_field_title">Title</string>
+    <string name="tags_field_artist">Artist</string>
+    <string name="tags_field_album">Album</string>
+    <string name="tags_field_album_artist">Album artist</string>
+    <string name="tags_field_genre">Genre</string>
+    <string name="tags_field_year">Year</string>
+    <string name="tags_field_track">Track number</string>
+    <string name="tags_field_disc">Disc number</string>
+    <string name="tags_field_composer">Composer</string>
+    <string name="tags_field_bpm">BPM</string>
+    <string name="tags_field_key">Key</string>
+    <string name="tags_field_mood">Mood</string>
+    <string name="tags_field_comment">Comment</string>
+    <string name="tags_multi_hint">Separate several with ;</string>
+
+    <!-- Números que no valen -->
+    <string name="tags_error_year">Four digits, like 1999</string>
+    <string name="tags_error_count">A whole number from 1 to 999</string>
+    <string name="tags_error_bpm">A number like 120 or 120.5</string>
+
+    <!-- Formatos que no se pueden editar -->
+    <string name="tags_unsupported">Surco can\'t write tags to %1$s files. You can still play them as usual.</string>
+    <string name="tags_unreadable">This file can\'t be opened to edit its tags. You can still play it as usual.</string>
+
+    <!-- Avisos al guardar -->
+    <string name="tags_saved">Tags saved</string>
+    <string name="tags_denied">Not allowed: the file stays as it was</string>
+    <string name="tags_no_access">Surco isn\'t allowed to change this file</string>
+    <string name="tags_no_space">Not enough free space to save the change</string>
+    <string name="tags_failed">Couldn\'t save the tags</string>
+</resources>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ListenBrainz (ui/ListenBrainzUi.kt, player/Scrobbler.kt). Inglés: idioma por defecto. -->
+    <string name="lb_enable">Send listens to ListenBrainz</string>
+    <string name="lb_enable_help">Off by default. Only artist, title, album and duration leave your phone, and only with your token. A song counts after half of it or 4 minutes.</string>
+    <string name="lb_token">User token</string>
+    <string name="lb_get_token">Get your token at listenbrainz.org/settings</string>
+    <string name="lb_open_browser">Open in the browser</string>
+    <string name="lb_no_browser">No browser to open listenbrainz.org/settings</string>
+    <string name="lb_check">Check token</string>
+    <string name="lb_checking">Checking…</string>
+    <string name="lb_connected">Connected as %1$s</string>
+    <string name="lb_bad_token">Token not valid</string>
+    <string name="lb_offline">Couldn\'t reach ListenBrainz. Try again later.</string>
+    <string name="lb_need_token">Paste your token to start sending.</string>
+    <plurals name="lb_pending">
+        <item quantity="one">%d listen waiting to be sent</item>
+        <item quantity="other">%d listens waiting to be sent</item>
+    </plurals>
+    <string name="lb_pending_none">No listens waiting to be sent</string>
+    <string name="lb_bad_token_notice">ListenBrainz rejected your token, so sending is paused. Check it in Settings → Your listening.</string>
+</resources>

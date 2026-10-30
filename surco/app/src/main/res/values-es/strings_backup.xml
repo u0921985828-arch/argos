@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Copia de seguridad (ui/BackupUi.kt, data/Backup.kt). -->
+    <string name="backup_section">Copia de seguridad</string>
+    <string name="backup_save">Guardar copia de seguridad</string>
+    <string name="backup_save_help">Favoritas, listas, escuchas, ajustes, preajustes del ecualizador y BPM y tonalidad analizados, en un archivo para llevar a otro móvil.</string>
+    <string name="backup_restore">Restaurar copia…</string>
+    <string name="backup_restore_help">Sustituye lo de este móvil por una copia de Surco. Las canciones se reconocen por su archivo y sus etiquetas, no por la numeración de este móvil.</string>
+    <string name="backup_working">Un momento…</string>
+    <string name="backup_no_picker">No hay ninguna app de archivos en este móvil para elegir dónde.</string>
+    <string name="backup_confirm_title">¿Restaurar esta copia?</string>
+    <string name="backup_confirm_text">Copia del %1$s. Favoritas: %2$d · Listas: %3$d · Canciones analizadas: %4$d. Sustituye tus favoritas, listas, escuchas, ajustes y análisis actuales.</string>
+    <string name="backup_confirm_ok">Restaurar</string>
+    <string name="backup_saved">Copia guardada</string>
+    <string name="backup_restored">Copia restaurada</string>
+    <string name="backup_io_error">No se pudo leer o escribir el archivo</string>
+    <string name="backup_broken">El archivo está dañado o incompleto: no se ha cambiado nada</string>
+    <string name="backup_not_surco">Este archivo no es una copia de Surco: no se ha cambiado nada</string>
+    <string name="backup_too_new">Copia de un Surco más nuevo (formato %1$d): actualiza Surco para restaurarla</string>
+</resources>

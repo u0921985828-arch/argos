@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Copia de seguridad (ui/BackupUi.kt, data/Backup.kt). -->
+    <string name="backup_section">Backup</string>
+    <string name="backup_save">Save backup</string>
+    <string name="backup_save_help">Favorites, playlists, plays, settings, equalizer presets and analyzed BPM and key, in one file to take to another phone.</string>
+    <string name="backup_restore">Restore backup…</string>
+    <string name="backup_restore_help">Replaces what is on this phone with a Surco backup. Songs are recognized by their file and tags, not by this phone\'s numbering.</string>
+    <string name="backup_working">Working…</string>
+    <string name="backup_no_picker">There is no file app on this phone to choose where.</string>
+    <string name="backup_confirm_title">Restore this backup?</string>
+    <string name="backup_confirm_text">Backup from %1$s. Favorites: %2$d · Playlists: %3$d · Analyzed songs: %4$d. It replaces your current favorites, playlists, plays, settings and analysis.</string>
+    <string name="backup_confirm_ok">Restore</string>
+    <string name="backup_saved">Backup saved</string>
+    <string name="backup_restored">Backup restored</string>
+    <string name="backup_io_error">Couldn\'t read or write the file</string>
+    <string name="backup_broken">The file is damaged or incomplete: nothing was changed</string>
+    <string name="backup_not_surco">This file isn\'t a Surco backup: nothing was changed</string>
+    <string name="backup_too_new">Backup from a newer Surco (format %1$d): update Surco to restore it</string>
+</resources>

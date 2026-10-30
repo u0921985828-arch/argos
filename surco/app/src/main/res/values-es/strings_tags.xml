@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Editar las etiquetas de una canción (ui/TagEditor.kt). -->
+<resources>
+    <string name="tags_edit">Editar etiquetas</string>
+    <string name="tags_title">Editar etiquetas</string>
+    <string name="tags_back">Volver</string>
+    <string name="tags_saving">Guardando…</string>
+    <string name="tags_loading">Leyendo el archivo…</string>
+
+    <!-- Campos -->
+    <string name="tags_field_title">Título</string>
+    <string name="tags_field_artist">Artista</string>
+    <string name="tags_field_album">Álbum</string>
+    <string name="tags_field_album_artist">Artista del álbum</string>
+    <string name="tags_field_genre">Género</string>
+    <string name="tags_field_year">Año</string>
+    <string name="tags_field_track">Número de pista</string>
+    <string name="tags_field_disc">Número de disco</string>
+    <string name="tags_field_composer">Compositor</string>
+    <string name="tags_field_bpm">BPM</string>
+    <string name="tags_field_key">Tonalidad</string>
+    <string name="tags_field_mood">Estado de ánimo</string>
+    <string name="tags_field_comment">Comentario</string>
+    <string name="tags_multi_hint">Si son varios, separados por ;</string>
+
+    <!-- Números que no valen -->
+    <string name="tags_error_year">Cuatro cifras, como 1999</string>
+    <string name="tags_error_count">Un número entero del 1 al 999</string>
+    <string name="tags_error_bpm">Un número como 120 o 120,5</string>
+
+    <!-- Formatos que no se pueden editar -->
+    <string name="tags_unsupported">Surco no puede escribir etiquetas en archivos %1$s. Se siguen escuchando como siempre.</string>
+    <string name="tags_unreadable">Este archivo no se puede abrir para editar sus etiquetas. Se sigue escuchando como siempre.</string>
+
+    <!-- Avisos al guardar -->
+    <string name="tags_saved">Etiquetas guardadas</string>
+    <string name="tags_denied">Sin permiso: el archivo se queda como estaba</string>
+    <string name="tags_no_access">Surco no tiene permiso para cambiar este archivo</string>
+    <string name="tags_no_space">No hay espacio libre para guardar el cambio</string>
+    <string name="tags_failed">No se han podido guardar las etiquetas</string>
+</resources>

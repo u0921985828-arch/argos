@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Etiquetas, grupos, listas de canciones, Inicio, Biblioteca, Buscar y Listas (español). -->
+<resources>
+    <!-- Etiquetas y grupos -->
+    <string name="library_tags_title">Etiquetas</string>
+    <string name="library_tags_subtitle">Tu música ordenada por lo que dicen sus archivos</string>
+    <string name="library_tags_empty">Cuando haya canciones en el móvil, aquí salen todas sus etiquetas.</string>
+    <plurals name="library_groups">
+        <item quantity="one">%d grupo</item>
+        <item quantity="many">%d grupos</item>
+        <item quantity="other">%d grupos</item>
+    </plurals>
+    <string name="library_sort_in_order">Por orden</string>
+    <string name="library_sort_az">A – Z</string>
+    <string name="library_sort_most_songs">Más canciones</string>
+
+    <!-- Orden de las listas de canciones -->
+    <string name="library_songsort_custom">Orden de la lista</string>
+    <string name="library_songsort_title">Título</string>
+    <string name="library_songsort_artist">Artista</string>
+    <string name="library_songsort_album">Álbum y pista</string>
+    <string name="library_songsort_year">Año</string>
+    <string name="library_songsort_duration">Duración</string>
+    <string name="library_songsort_added">Recientes</string>
+    <string name="library_songsort_plays">Más escuchadas</string>
+    <string name="library_songsort_bpm">BPM</string>
+    <string name="library_songsort_key">Tonalidad (rueda Camelot)</string>
+
+    <!-- Listas de canciones -->
+    <string name="library_mix_with">Para mezclar con «%1$s»</string>
+    <string name="library_library">Biblioteca</string>
+    <string name="library_smart_list">Lista automática</string>
+    <string name="library_playlist_subtitle">Lista · %1$s</string>
+    <string name="library_rename">Cambiar el nombre</string>
+    <string name="library_delete_playlist">Borrar la lista</string>
+    <string name="library_playlist_name">Nombre de la lista</string>
+    <string name="library_delete_title">¿Borrar «%1$s»?</string>
+    <string name="library_delete_text">Las canciones no se tocan; solo desaparece la lista.</string>
+    <string name="library_delete_confirm">Borrar lista</string>
+    <string name="library_playlist_deleted">Lista «%1$s» borrada</string>
+    <string name="library_undo">Deshacer</string>
+    <string name="library_sort">Ordenar</string>
+    <string name="library_more">Más</string>
+    <string name="library_all_to_queue">Todo a la cola</string>
+    <string name="library_queued">%1$s a la cola</string>
+    <string name="library_view_queue">Ver cola</string>
+    <string name="library_all_to_playlist">Todo a una lista</string>
+    <string name="library_names_and_more">%1$s y %2$d más</string>
+    <string name="library_play">Reproducir</string>
+    <string name="library_play_item">Reproducir %1$s</string>
+    <string name="library_shuffle">Aleatorio</string>
+    <string name="library_playlist_empty">Lista vacía. Mantén pulsada una canción y elige «A una lista».</string>
+    <string name="library_nothing_here">Nada por aquí todavía.</string>
+    <string name="library_more_options">Más opciones</string>
+    <string name="library_unknown">Desconocido</string>
+    <string name="library_back">Atrás</string>
+
+    <!-- Inicio -->
+    <string name="library_greeting_morning">Buenos días</string>
+    <string name="library_greeting_afternoon">Buenas tardes</string>
+    <string name="library_greeting_evening">Buenas noches</string>
+    <string name="library_settings">Ajustes</string>
+    <string name="library_home_empty">No hay canciones en el móvil todavía. Copia música a la memoria y vuelve a abrir Surco (o Ajustes → Volver a leer).</string>
+    <string name="library_reading_tags">Leyendo etiquetas · %1$d de %2$d</string>
+    <string name="library_continue_listening">Seguir escuchando</string>
+    <string name="library_resume">Seguir</string>
+    <string name="library_shuffle_all">Mezclar todo</string>
+    <string name="library_favorites">Favoritas</string>
+    <string name="library_most_played">Más escuchadas</string>
+    <string name="library_recently_played">Escuchado hace poco</string>
+    <string name="library_recently_added">Añadido hace poco</string>
+    <string name="library_top">Lo que más suena</string>
+    <string name="library_explore_tags">Explorar por etiquetas</string>
+    <string name="library_all_tags">Todas…</string>
+    <string name="library_search_hint">Buscar en cualquier etiqueta</string>
+
+    <!-- Biblioteca -->
+    <plurals name="library_albums">
+        <item quantity="one">%d álbum</item>
+        <item quantity="many">%d álbumes</item>
+        <item quantity="other">%d álbumes</item>
+    </plurals>
+    <plurals name="library_artists">
+        <item quantity="one">%d artista</item>
+        <item quantity="many">%d artistas</item>
+        <item quantity="other">%d artistas</item>
+    </plurals>
+    <string name="library_no_albums">Sin álbumes.</string>
+    <string name="library_letter_index">Índice de letras</string>
+
+    <!-- Buscar -->
+    <string name="library_clear">Borrar</string>
+    <string name="library_search_help">Título, artista, álbum, género, año, carpeta… y también estado de ánimo, sello, compositor, comentario o cualquier otra etiqueta de texto. Sin importar tildes ni mayúsculas.</string>
+    <string name="library_albums_section">Álbumes</string>
+    <plurals name="library_found">
+        <item quantity="one">%d canción encontrada</item>
+        <item quantity="many">%d canciones encontradas</item>
+        <item quantity="other">%d canciones encontradas</item>
+    </plurals>
+
+    <!-- Listas -->
+    <string name="library_lists_title">Listas</string>
+    <string name="library_lists_subtitle">Automáticas y tuyas</string>
+    <plurals name="library_own_lists">
+        <item quantity="one">%d propia</item>
+        <item quantity="many">%d propias</item>
+        <item quantity="other">%d propias</item>
+    </plurals>
+    <string name="library_new_playlist">Lista nueva</string>
+    <string name="library_smart_section">Automáticas</string>
+    <string name="library_my_lists">Mis listas</string>
+    <string name="library_lists_empty">Todavía no hay listas. Crea una con + o mantén pulsada una canción y elige «A una lista».</string>
+    <string name="library_create">Crear</string>
+    <string name="library_zoom_in">Portadas más grandes</string>
+    <string name="library_zoom_out">Portadas más pequeñas</string>
+    <string name="library_view_grid">Ver en carátulas</string>
+    <string name="library_view_list">Ver en lista</string>
+</resources>

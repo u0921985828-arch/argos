@@ -40,14 +40,27 @@ MEDIA_PREFIXES = ("/api/sources/", )
 MEDIA_SUFFIXES = ("/preview", "/stream.mjpg")
 MEDIA_CONTAINS = ("/file/", )
 
+# Módulos que `index.html` carga con `<script src>`: son el programa, no datos.
+#
+# Esta lista se quedó corta al crecer el cliente y el fallo era mudo: con token
+# configurado --- el único caso en que la autenticación sirve de algo ---
+# `behaviour.js`, `cameras.js`, `groundplane.js` y `detector-worker.js`
+# devolvían 401, así que la interfaz arrancaba sin comportamiento aprendido,
+# sin catálogo de cámaras, sin rectificación métrica y con el detector en el
+# hilo principal. `tests/test_api_static.py` compara esta lista con los
+# `<script src>` del HTML para que no vuelva a separarse.
+CLIENT_MODULES = ("engine.js", "solver.js", "photogrammetry.js", "detector.js",
+                  "brain.js", "archive.js", "identity.js", "behaviour.js",
+                  "cameras.js", "groundplane.js", "detector-worker.js",
+                  "ops.js", "ask.js")
+
 # Accesibles sin credencial: la interfaz y el sondeo de vida. `/api/health` no
 # revela nada que no revele ya el hecho de que el puerto responde.
 # `/docs`, `/openapi.json` y `/redoc` estaban aquí y no deben estarlo: publican
 # la superficie completa de la API --- rutas, parámetros, formas de sesión ---
 # antes de pedir el token. Un atacante no necesitaba adivinar nada.
-PUBLIC_PATHS = {"/", "/engine.js", "/solver.js", "/photogrammetry.js",
-                "/detector.js", "/brain.js", "/archive.js", "/identity.js",
-                "/api/health", "/favicon.ico"}
+PUBLIC_PATHS = {"/", "/api/health", "/favicon.ico",
+                *{f"/{m}" for m in CLIENT_MODULES}}
 
 
 @dataclass

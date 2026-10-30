@@ -23,9 +23,12 @@ Run:
 
 Then open http://<ip-del-servidor>:8000 on the phone.
 
-There is no authentication in this file. It is a local-network tool as written;
-putting it on the public internet without a reverse proxy handling auth and TLS
-would expose a camera feed and a search index to anyone who finds the port.
+Authentication lives in `auth.py` and is wired below: with `ARGOS_TOKEN` set,
+every route except the UI, its modules and `/api/health` requires the token.
+Without one, the service refuses to start when it binds outside loopback --- a
+warning in the log gets ignored, a failure at startup does not. That token is
+no substitute for TLS or a reverse proxy: what is served is a live camera feed
+and a search index over people.
 """
 
 from __future__ import annotations
@@ -93,6 +96,12 @@ PROFILE = PROFILES[os.environ.get("ARGOS_PROFILE", "server").lower()
                    if os.environ.get("ARGOS_PROFILE", "server").lower() in PROFILES
                    else "server"]
 
+# El token se resuelve ANTES de construir la app porque `docs_url` depende de
+# él. Estaba asignado dos líneas más abajo y el módulo no se podía ni importar:
+# `uvicorn argos.api.main:app` --- el arranque que documentan el README y
+# COMO_PROBARLO --- moría con NameError antes de servir nada.
+AUTH = resolve_auth()
+
 # La documentación interactiva describe la superficie completa de la API,
 # incluidos los parámetros de sesión. Con token configurado se apaga: no hay
 # motivo para publicar el mapa antes de pedir la llave.
@@ -107,7 +116,6 @@ app = FastAPI(title="ARGOS", version="0.1",
 # esto, ese caso se manifiesta como un "Failed to fetch" sin más explicación.
 # Es aceptable porque esta API está pensada para red local; ver la nota de
 # seguridad en el docstring antes de exponerla fuera de ella.
-AUTH = resolve_auth()
 app.add_middleware(TokenAuthMiddleware, cfg=AUTH)
 
 # CORS restringido al propio origen.
@@ -253,6 +261,21 @@ def groundplane_js():
 @app.get("/detector-worker.js")
 def detector_worker_js():
     return _js("detector-worker.js")
+
+
+# `ops.js` y `ask.js` se añadieron al cliente y no se añadieron aquí: servida
+# por FastAPI, la app abría con el cuadro de mando multicámara y la consulta en
+# lenguaje natural en 404. El bundle los inlinea, así que el APK y el escritorio
+# no lo enseñaban. `tests/test_api_static.py` recorre los `<script src>` del
+# HTML y exige 200 a todos, que es lo que impide repetirlo.
+@app.get("/ops.js")
+def ops_js():
+    return _js("ops.js")
+
+
+@app.get("/ask.js")
+def ask_js():
+    return _js("ask.js")
 
 
 def _js(name: str):

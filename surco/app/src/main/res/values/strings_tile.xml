@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tile_label">Surco</string>
+    <string name="shortcut_shuffle">Shuffle all</string>
+    <string name="shortcut_shuffle_long">Shuffle the whole library</string>
+    <string name="shortcut_favorites">Favorites</string>
+    <string name="shortcut_favorites_long">Open your favorites</string>
+    <string name="shortcut_search">Search</string>
+    <string name="shortcut_search_long">Search any tag</string>
+</resources>

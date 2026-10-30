@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Reproductor (ui/PlayerUi.kt): inglés, idioma por defecto. El español está en values-es. -->
+<resources>
+    <!-- Línea de salida -->
+    <string name="player_output_decoder16">Output: %1$s · %2$s · this phone\'s decoder delivers 16 bits</string>
+    <string name="player_output_effects">with effects</string>
+    <string name="player_output_effects_dither">with effects and dither</string>
+    <string name="player_output_untruncated">not cut down to 16 bits</string>
+    <string name="player_output_bitperfect">bit-perfect to the system</string>
+    <string name="player_output_float">Output: %1$s → floating point · %2$s · %3$s</string>
+    <string name="player_output_plain">Output: %1$s · %2$s · %3$s</string>
+
+    <!-- Minirreproductor y «Sonando» -->
+    <string name="player_unknown_artist">Unknown</string>
+    <string name="player_fav_state_on">Favorited</string>
+    <string name="player_fav_state_off">Not favorited</string>
+    <string name="player_favorite">Favorite</string>
+    <string name="player_unfavorite">Remove from favorites</string>
+    <string name="player_play_pause">Play or pause</string>
+    <string name="player_next">Next</string>
+    <string name="player_previous">Previous</string>
+    <string name="player_close">Close</string>
+    <string name="player_now_playing_header">NOW PLAYING</string>
+    <string name="player_now_playing">Now playing</string>
+    <string name="player_more">More</string>
+    <string name="player_state_on">On</string>
+    <string name="player_state_off">Off</string>
+    <string name="player_shuffle">Shuffle</string>
+    <string name="player_repeat">Repeat</string>
+    <string name="player_repeat_one">One</string>
+    <string name="player_repeat_all">All</string>
+    <string name="player_lyrics">Lyrics</string>
+    <string name="player_queue">Queue</string>
+    <string name="player_sleep_pill_end">Stops at end</string>
+    <string name="player_sleep_pill_in">Stops in %1$s</string>
+
+    <!-- Letra -->
+    <string name="player_lyrics_none_offline">This song has no lyrics.\n\nSurco reads the file\'s LYRICS tag (synced LRC too) and a .lrc file with the same name.\n\nIt can also search online: Settings → Library → Online lyrics.</string>
+    <string name="player_lyrics_none_online">This song has no lyrics.\n\nSurco reads the file\'s LYRICS tag (synced LRC too) and a .lrc file with the same name; it isn\'t on lrclib.net either.</string>
+    <string name="player_lyrics_searching">Searching for lyrics…</string>
+
+    <!-- Avisos -->
+    <string name="player_fav_removed">Removed from favorites</string>
+    <string name="player_fav_added">Added to favorites</string>
+    <string name="player_undo">Undo</string>
+    <string name="player_view">View</string>
+
+    <!-- Cola -->
+    <string name="player_queue_save">Save</string>
+    <string name="player_queue_clear">Clear</string>
+    <string name="player_queue_shuffle_note">With shuffle on, the queue shows the order songs will play in. To reorder them, turn shuffle off.</string>
+    <string name="player_queue_move_up">Move up</string>
+    <string name="player_queue_move_down">Move down</string>
+    <string name="player_queue_drag">Move</string>
+    <string name="player_queue_removed">Removed from queue</string>
+    <string name="player_queue_remove">Remove from queue</string>
+    <string name="player_queue_save_title">Save queue as playlist</string>
+    <string name="player_queue_saved">Queue saved as “%1$s”</string>
+
+    <!-- Temporizador y velocidad -->
+    <string name="player_sleep_title">Sleep timer</string>
+    <string name="player_sleep_sub_track">Pauses when this song ends.</string>
+    <string name="player_sleep_sub_in">Pauses in %1$s (fades out over the last 10 s).</string>
+    <string name="player_sleep_sub_off">Music stops on its own: choose when.</string>
+    <string name="player_sleep_cancel">Turn off</string>
+    <string name="player_sleep_cancelled">Sleep timer off</string>
+    <plurals name="player_minutes">
+        <item quantity="one">%d minute</item>
+        <item quantity="other">%d minutes</item>
+    </plurals>
+    <plurals name="player_sleep_in_minutes">
+        <item quantity="one">Pauses in %d minute</item>
+        <item quantity="other">Pauses in %d minutes</item>
+    </plurals>
+    <string name="player_sleep_end_of_track">When the song ends</string>
+    <string name="player_sleep_at_end_notice">Pauses when the song ends</string>
+    <string name="player_speed">Speed</string>
+    <string name="player_done">Done</string>
+    <string name="player_keep_pitch">Keep pitch</string>
+    <string name="player_keep_pitch_sub">Otherwise it goes up and down like a record played at another speed.</string>
+
+    <!-- Listas -->
+    <string name="player_add_to_playlist">Add to a playlist</string>
+    <string name="player_add_songs_to_playlist">Add %1$s to a playlist</string>
+    <string name="player_new_playlist_option">+ New playlist…</string>
+    <string name="player_added_to">Added to “%1$s”</string>
+    <string name="player_new_playlist">New playlist</string>
+    <string name="player_create">Create</string>
+    <string name="player_playlist_created">Playlist “%1$s” created</string>
+
+    <!-- Menú de una canción -->
+    <string name="player_equalizer">Equalizer</string>
+    <string name="player_this_song">This song</string>
+    <string name="player_play_next">Play next</string>
+    <string name="player_play_next_notice">Playing next</string>
+    <string name="player_view_queue">View queue</string>
+    <string name="player_add_to_queue">Add to queue</string>
+    <string name="player_added_to_queue">Added to queue</string>
+    <string name="player_to_playlist">Add to playlist</string>
+    <string name="player_unfavorite_short">Unfavorite</string>
+    <string name="player_go_album">Go to album</string>
+    <string name="player_go_artist">Go to artist</string>
+    <string name="player_for_mixing">Mix with</string>
+    <string name="player_radio">Song radio</string>
+    <string name="player_radio_empty">Nothing similar in your library yet</string>
+    <plurals name="player_radio_notice">
+        <item quantity="one">Radio: %1$d similar song after this one</item>
+        <item quantity="other">Radio: %1$d similar songs after this one</item>
+    </plurals>
+    <string name="player_remove_from_playlist">Remove from playlist</string>
+    <string name="player_removed_from_playlist">Removed from playlist</string>
+    <plurals name="player_played_times">
+        <item quantity="one">Played %d time</item>
+        <item quantity="other">Played %d times</item>
+    </plurals>
+    <string name="player_organize_by">Browse by</string>
+    <string name="player_more_info">More info</string>
+
+    <!-- Permiso -->
+    <string name="player_perm_title">Surco needs access to your music</string>
+    <string name="player_perm_blocked">Android won\'t ask again. Open Surco\'s settings → Permissions → Music and audio → Allow.</string>
+    <string name="player_perm_ask">Surco reads the tags of your audio files to organize them. Nothing leaves your phone.</string>
+    <string name="player_perm_open_settings">Open settings</string>
+    <string name="player_perm_grant">Allow access</string>
+    <string name="player_route_speaker">Phone speaker</string>
+    <string name="player_route_wired">Wired headphones</string>
+    <string name="player_route_bt">Bluetooth · %1$s</string>
+    <string name="player_route_usb">USB · %1$s</string>
+    <string name="player_route_bitperfect">bit-perfect at %1$s</string>
+    <string name="player_route_native_rate">no resampling, at %1$s</string>
+</resources>

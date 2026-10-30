@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Al mantener pulsado el icono de Surco. Las acciones las atiende MainActivity (Shortcut). -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="mezclar"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_shuffle"
+        android:shortcutShortLabel="@string/shortcut_shuffle"
+        android:shortcutLongLabel="@string/shortcut_shuffle_long">
+        <intent
+            android:action="com.eddie.surco.action.SHUFFLE_ALL"
+            android:targetPackage="com.eddie.surco"
+            android:targetClass="com.eddie.surco.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="favoritas"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_favorites"
+        android:shortcutShortLabel="@string/shortcut_favorites"
+        android:shortcutLongLabel="@string/shortcut_favorites_long">
+        <intent
+            android:action="com.eddie.surco.action.FAVORITES"
+            android:targetPackage="com.eddie.surco"
+            android:targetClass="com.eddie.surco.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="buscar"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_search"
+        android:shortcutShortLabel="@string/shortcut_search"
+        android:shortcutLongLabel="@string/shortcut_search_long">
+        <intent
+            android:action="com.eddie.surco.action.SEARCH"
+            android:targetPackage="com.eddie.surco"
+            android:targetClass="com.eddie.surco.MainActivity" />
+    </shortcut>
+</shortcuts>

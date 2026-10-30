@@ -284,7 +284,7 @@ paridad tiene que cubrir el camino con detector: es el que corre en uso real.
 ## Comandos
 
 ```bash
-python3 -m pytest tests/ -q          # 30 tests
+python3 -m pytest tests/ -q          # 34 tests (CI: .github/workflows/tests.yml)
 python3 scripts/bundle.py --out argos.html
 python3 scripts/run_video.py VIDEO --out /tmp/x --stride 4
 python3 scripts/demo_viewer.py VIDEO --out v.mp4 --clean

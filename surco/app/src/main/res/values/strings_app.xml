@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Textos del área «app»: controles comunes, pestañas, formatos y avisos del servicio. Inglés (por defecto). -->
+<resources>
+    <!-- ui/Controls.kt -->
+    <string name="app_reset_zero">Reset to 0</string>
+    <string name="app_cancel">Cancel</string>
+    <string name="app_save">Save</string>
+    <string name="app_name_hint">Name</string>
+
+    <!-- ui/Theme.kt -->
+    <plurals name="app_songs">
+        <item quantity="one">%d song</item>
+        <item quantity="other">%d songs</item>
+    </plurals>
+    <string name="app_total_hm">%1$d h %2$d min</string>
+    <string name="app_total_m">%1$d min</string>
+
+    <!-- LibraryViewModel.kt: pestañas de la barra inferior -->
+    <string name="app_tab_home">Home</string>
+    <string name="app_tab_library">Library</string>
+    <string name="app_tab_tags">Tags</string>
+    <string name="app_tab_lists">Playlists</string>
+    <!-- LibraryViewModel.kt: orden de los álbumes -->
+    <string name="app_sort_title">A–Z</string>
+    <string name="app_sort_artist">Artist</string>
+    <string name="app_sort_year">Year</string>
+    <string name="app_sort_added">Recent</string>
+    <!-- LibraryViewModel.kt: pestañas de Biblioteca -->
+    <string name="app_lib_songs">Songs</string>
+    <string name="app_lib_albums">Albums</string>
+    <string name="app_lib_artists">Artists</string>
+    <string name="app_lib_folders">Folders</string>
+
+    <!-- player/PlaybackService.kt: avisos -->
+    <string name="app_err_the_song">the song</string>
+    <string name="app_err_output">Audio output error (%1$s). Press play to try again.</string>
+    <string name="app_err_play">Couldn\'t play “%1$s”: removed from the queue.</string>
+
+    <!-- audio/PurePcm.kt (por Texts.t, la clave es el nombre del recurso) -->
+    <string name="app_pcm_float">32-bit float</string>
+</resources>

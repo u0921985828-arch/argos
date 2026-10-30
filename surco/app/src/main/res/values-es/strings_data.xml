@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Textos de data/ (parte pura, por Texts y TextsAndroid.kt) y del coche. -->
+<resources>
+    <!-- Idioma de los textos: meses y separador decimal (etiqueta de idioma BCP 47) -->
+    <string name="data_locale">es</string>
+    <!-- Etiquetas: grupos -->
+    <string name="data_group_people">Personas</string>
+    <string name="data_group_work">Obra</string>
+    <string name="data_group_time">Tiempo</string>
+    <string name="data_group_rhythm">Ritmo y tono</string>
+    <string name="data_group_file">Archivo</string>
+    <!-- Etiquetas: campos -->
+    <string name="data_field_artist">Artista</string>
+    <string name="data_field_album_artist">Artista del álbum</string>
+    <string name="data_field_composer">Compositor</string>
+    <string name="data_field_lyricist">Letrista</string>
+    <string name="data_field_producer">Productor</string>
+    <string name="data_field_remixer">Remezclador</string>
+    <string name="data_field_conductor">Director</string>
+    <string name="data_field_album">Álbum</string>
+    <string name="data_field_genre">Género</string>
+    <string name="data_field_mood">Estado de ánimo</string>
+    <string name="data_field_grouping">Agrupación</string>
+    <string name="data_field_label">Sello</string>
+    <string name="data_field_media">Soporte original</string>
+    <string name="data_field_language">Idioma</string>
+    <string name="data_field_country">País</string>
+    <string name="data_field_year">Año</string>
+    <string name="data_field_decade">Década</string>
+    <string name="data_field_original_year">Año original</string>
+    <string name="data_field_duration">Duración</string>
+    <string name="data_field_bpm">BPM</string>
+    <string name="data_field_key">Tonalidad</string>
+    <string name="data_field_added">Fecha de añadido</string>
+    <string name="data_field_format">Formato</string>
+    <string name="data_field_quality">Calidad</string>
+    <string name="data_field_bitrate">Bitrate</string>
+    <string name="data_field_sample_rate">Frecuencia de muestreo</string>
+    <string name="data_field_bit_depth">Profundidad de bits</string>
+    <string name="data_field_channels">Canales</string>
+    <string name="data_field_encoder">Codificador</string>
+    <string name="data_field_folder">Carpeta</string>
+    <!-- Etiquetas: valores -->
+    <string name="data_unknown">Desconocido</string>
+    <string name="data_no_year">Sin año</string>
+    <string name="data_quality_hires">Alta resolución</string>
+    <string name="data_quality_lossless">Sin pérdida</string>
+    <string name="data_quality_lossy_high">Con pérdida · alta</string>
+    <string name="data_quality_lossy_low">Con pérdida · media/baja</string>
+    <string name="data_duration_under_1">Menos de 1 min</string>
+    <string name="data_duration_over_20">Más de 20 min</string>
+    <string name="data_bitrate_under_128">Menos de 128 kbps</string>
+    <string name="data_bitrate_1000_plus">1000 kbps o más</string>
+    <string name="data_stereo">Estéreo</string>
+    <string name="data_mono">Mono</string>
+    <!-- Tonalidad: las doce notas separadas por comas, de Do a Si -->
+    <string name="data_note_names">Do,Do♯,Re,Mi♭,Mi,Fa,Fa♯,Sol,La♭,La,Si♭,Si</string>
+    <string name="data_key_minor">%1$s menor</string>
+    <string name="data_key_major">%1$s mayor</string>
+    <!-- Ficha de la canción -->
+    <string name="data_info_title">Título</string>
+    <string name="data_info_subtitle">Subtítulo</string>
+    <string name="data_info_track">Pista</string>
+    <string name="data_info_disc">Disco</string>
+    <string name="data_n_of_total">%1$s de %2$s</string>
+    <string name="data_info_comment">Comentario</string>
+    <string name="data_info_catalog">Nº de catálogo</string>
+    <string name="data_info_rating">Valoración</string>
+    <string name="data_info_lyrics">Letra incluida</string>
+    <string name="data_yes">Sí</string>
+    <string name="data_info_codec">Códec</string>
+    <string name="data_info_size">Tamaño</string>
+    <string name="data_info_rg_track">ReplayGain pista</string>
+    <string name="data_info_rg_album">ReplayGain álbum</string>
+    <string name="data_info_file">Archivo</string>
+    <!-- Listas automáticas -->
+    <string name="data_smart_favorites">Favoritas</string>
+    <string name="data_smart_most_played">Más escuchadas</string>
+    <string name="data_smart_recent">Escuchadas hace poco</string>
+    <string name="data_smart_added">Añadidas hace poco</string>
+    <string name="data_smart_never">Sin escuchar</string>
+    <string name="data_playlist_default">Lista</string>
+    <!-- Android Auto -->
+    <string name="data_car_for_you">Para ti</string>
+    <string name="data_car_lists">Listas</string>
+    <string name="data_car_albums">Álbumes</string>
+    <string name="data_car_artists">Artistas</string>
+    <string name="data_car_shuffle_all">Mezclar todo</string>
+    <string name="data_car_by_genre">Por género</string>
+    <string name="data_car_by_tempo">Por ritmo</string>
+    <!-- Plurales -->
+    <plurals name="data_songs">
+        <item quantity="one">%d canción</item>
+        <item quantity="many">%d canciones</item>
+        <item quantity="other">%d canciones</item>
+    </plurals>
+    <plurals name="data_genres">
+        <item quantity="one">%d género</item>
+        <item quantity="many">%d géneros</item>
+        <item quantity="other">%d géneros</item>
+    </plurals>
+    <plurals name="data_channels_n">
+        <item quantity="one">%d canal</item>
+        <item quantity="many">%d canales</item>
+        <item quantity="other">%d canales</item>
+    </plurals>
+</resources>

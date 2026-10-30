@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copia automática de Android hasta Android 11 (android:fullBackupContent). Solo lo que no se
+  puede volver a sacar del móvil: lo del usuario, los ajustes y lo analizado de BPM y tonalidad.
+  Fuera, la caché de etiquetas (library2.json, se relee de los archivos), las letras bajadas de
+  LRCLIB (letras/) y las portadas (en la caché, que Android nunca copia).
+-->
+<full-backup-content>
+    <include domain="file" path="usuario.json" />
+    <include domain="file" path="ajustes.json" />
+    <include domain="file" path="analisis.json" />
+</full-backup-content>

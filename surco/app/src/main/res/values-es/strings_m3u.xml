@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Importar y exportar listas M3U/M3U8 (español). -->
+<resources>
+    <string name="m3u_import">Importar lista M3U</string>
+    <string name="m3u_import_hint">De otro reproductor o de un ordenador</string>
+    <string name="m3u_export">Exportar como M3U</string>
+    <string name="m3u_default_name">Lista importada</string>
+    <string name="m3u_view">Ver</string>
+    <string name="m3u_imported">Lista «%1$s» importada: %2$s</string>
+    <string name="m3u_imported_missing">Lista «%1$s» importada: %2$s (%3$s)</string>
+    <string name="m3u_none_found">Ninguna canción de «%1$s» está en el móvil (%2$s)</string>
+    <string name="m3u_empty">«%1$s» no tiene canciones</string>
+    <plurals name="m3u_not_found">
+        <item quantity="one">%d no encontrada</item>
+        <item quantity="many">%d no encontradas</item>
+        <item quantity="other">%d no encontradas</item>
+    </plurals>
+    <string name="m3u_read_error">No se ha podido leer el archivo</string>
+    <string name="m3u_exported">«%1$s» guardada como M3U: %2$s</string>
+    <string name="m3u_write_error">No se ha podido guardar la lista</string>
+    <string name="m3u_no_picker">No hay ninguna app para elegir archivos en este móvil</string>
+</resources>

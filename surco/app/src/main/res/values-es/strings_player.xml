@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Reproductor (ui/PlayerUi.kt): español, el texto de siempre (las pruebas lo buscan tal cual). -->
+<resources>
+    <!-- Línea de salida -->
+    <string name="player_output_decoder16">Salida: %1$s · %2$s · el decodificador de este móvil entrega 16 bits</string>
+    <string name="player_output_effects">con efectos</string>
+    <string name="player_output_effects_dither">con efectos y dither</string>
+    <string name="player_output_untruncated">sin recortar a 16 bits</string>
+    <string name="player_output_bitperfect">bit a bit hasta el sistema</string>
+    <string name="player_output_float">Salida: %1$s → coma flotante · %2$s · %3$s</string>
+    <string name="player_output_plain">Salida: %1$s · %2$s · %3$s</string>
+
+    <!-- Minirreproductor y «Sonando» -->
+    <string name="player_unknown_artist">Desconocido</string>
+    <string name="player_fav_state_on">Marcada</string>
+    <string name="player_fav_state_off">Sin marcar</string>
+    <string name="player_favorite">Favorita</string>
+    <string name="player_unfavorite">Quitar de favoritas</string>
+    <string name="player_play_pause">Reproducir o pausar</string>
+    <string name="player_next">Siguiente</string>
+    <string name="player_previous">Anterior</string>
+    <string name="player_close">Cerrar</string>
+    <string name="player_now_playing_header">SONANDO</string>
+    <string name="player_now_playing">Sonando</string>
+    <string name="player_more">Más</string>
+    <string name="player_state_on">Activado</string>
+    <string name="player_state_off">Desactivado</string>
+    <string name="player_shuffle">Aleatorio</string>
+    <string name="player_repeat">Repetir</string>
+    <string name="player_repeat_one">Una</string>
+    <string name="player_repeat_all">Todas</string>
+    <string name="player_lyrics">Letra</string>
+    <string name="player_queue">Cola</string>
+    <string name="player_sleep_pill_end">Para al acabar</string>
+    <string name="player_sleep_pill_in">Para en %1$s</string>
+
+    <!-- Letra -->
+    <string name="player_lyrics_none_offline">Esta canción no tiene letra.\n\nSurco lee la etiqueta LYRICS del archivo (también en LRC sincronizado) y un .lrc con el mismo nombre.\n\nTambién puede buscarla en internet: Ajustes → Biblioteca → Letras de internet.</string>
+    <string name="player_lyrics_none_online">Esta canción no tiene letra.\n\nSurco lee la etiqueta LYRICS del archivo (también en LRC sincronizado) y un .lrc con el mismo nombre; en lrclib.net tampoco está.</string>
+    <string name="player_lyrics_searching">Buscando la letra…</string>
+
+    <!-- Avisos -->
+    <string name="player_fav_removed">Quitada de favoritas</string>
+    <string name="player_fav_added">Añadida a favoritas</string>
+    <string name="player_undo">Deshacer</string>
+    <string name="player_view">Ver</string>
+
+    <!-- Cola -->
+    <string name="player_queue_save">Guardar</string>
+    <string name="player_queue_clear">Vaciar</string>
+    <string name="player_queue_shuffle_note">En aleatorio la cola sale en el orden en que va a sonar. Para moverlas, quita el aleatorio.</string>
+    <string name="player_queue_move_up">Subir</string>
+    <string name="player_queue_move_down">Bajar</string>
+    <string name="player_queue_drag">Mover</string>
+    <string name="player_queue_removed">Quitada de la cola</string>
+    <string name="player_queue_remove">Quitar de la cola</string>
+    <string name="player_queue_save_title">Guardar la cola como lista</string>
+    <string name="player_queue_saved">Cola guardada como «%1$s»</string>
+
+    <!-- Temporizador y velocidad -->
+    <string name="player_sleep_title">Temporizador</string>
+    <string name="player_sleep_sub_track">Se pausa al acabar esta canción.</string>
+    <string name="player_sleep_sub_in">Se pausa en %1$s (baja el volumen los últimos 10 s).</string>
+    <string name="player_sleep_sub_off">La música se para sola: elige cuándo.</string>
+    <string name="player_sleep_cancel">Quitar</string>
+    <string name="player_sleep_cancelled">Temporizador quitado</string>
+    <plurals name="player_minutes">
+        <item quantity="one">%d minuto</item>
+        <item quantity="many">%d minutos</item>
+        <item quantity="other">%d minutos</item>
+    </plurals>
+    <plurals name="player_sleep_in_minutes">
+        <item quantity="one">Se pausa en %d minuto</item>
+        <item quantity="many">Se pausa en %d minutos</item>
+        <item quantity="other">Se pausa en %d minutos</item>
+    </plurals>
+    <string name="player_sleep_end_of_track">Al acabar la canción</string>
+    <string name="player_sleep_at_end_notice">Se pausa al acabar la canción</string>
+    <string name="player_speed">Velocidad</string>
+    <string name="player_done">Hecho</string>
+    <string name="player_keep_pitch">Mantener el tono</string>
+    <string name="player_keep_pitch_sub">Si no, sube y baja como un disco al cambiar las revoluciones.</string>
+
+    <!-- Listas -->
+    <string name="player_add_to_playlist">Añadir a una lista</string>
+    <string name="player_add_songs_to_playlist">Añadir %1$s a una lista</string>
+    <string name="player_new_playlist_option">+ Lista nueva…</string>
+    <string name="player_added_to">Añadida a «%1$s»</string>
+    <string name="player_new_playlist">Lista nueva</string>
+    <string name="player_create">Crear</string>
+    <string name="player_playlist_created">Lista «%1$s» creada</string>
+
+    <!-- Menú de una canción -->
+    <string name="player_equalizer">Ecualizador</string>
+    <string name="player_this_song">Esta canción</string>
+    <string name="player_play_next">A continuación</string>
+    <string name="player_play_next_notice">Suena a continuación</string>
+    <string name="player_view_queue">Ver cola</string>
+    <string name="player_add_to_queue">A la cola</string>
+    <string name="player_added_to_queue">Añadida a la cola</string>
+    <string name="player_to_playlist">A una lista</string>
+    <string name="player_unfavorite_short">Quitar favorita</string>
+    <string name="player_go_album">Ir al álbum</string>
+    <string name="player_go_artist">Ir al artista</string>
+    <string name="player_for_mixing">Para mezclar</string>
+    <string name="player_radio">Radio de la canción</string>
+    <string name="player_radio_empty">Aún no hay nada parecido en tu biblioteca</string>
+    <plurals name="player_radio_notice">
+        <item quantity="one">Radio: %1$d canción parecida detrás de esta</item>
+        <item quantity="many">Radio: %1$d canciones parecidas detrás de esta</item>
+        <item quantity="other">Radio: %1$d canciones parecidas detrás de esta</item>
+    </plurals>
+    <string name="player_remove_from_playlist">Quitar de la lista</string>
+    <string name="player_removed_from_playlist">Quitada de la lista</string>
+    <plurals name="player_played_times">
+        <item quantity="one">Escuchada %d vez</item>
+        <item quantity="many">Escuchada %d veces</item>
+        <item quantity="other">Escuchada %d veces</item>
+    </plurals>
+    <string name="player_organize_by">Organizar por</string>
+    <string name="player_more_info">Más datos</string>
+
+    <!-- Permiso -->
+    <string name="player_perm_title">Surco necesita acceso a tu música</string>
+    <string name="player_perm_blocked">Android ya no vuelve a preguntar. Abre los ajustes de Surco → Permisos → Música y audio → Permitir.</string>
+    <string name="player_perm_ask">Lee las etiquetas de tus archivos de audio para organizarlos. Nada sale del móvil.</string>
+    <string name="player_perm_open_settings">Abrir ajustes</string>
+    <string name="player_perm_grant">Dar permiso</string>
+    <string name="player_route_speaker">Altavoz del móvil</string>
+    <string name="player_route_wired">Auriculares con cable</string>
+    <string name="player_route_bt">Bluetooth · %1$s</string>
+    <string name="player_route_usb">USB · %1$s</string>
+    <string name="player_route_bitperfect">bit-perfect a %1$s</string>
+    <string name="player_route_native_rate">sin remuestrear, a %1$s</string>
+</resources>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Surco</string>
+    <string name="widget_desc">What\'s playing, with its controls</string>
+    <string name="widget_empty">Tap to choose music</string>
+    <string name="w_play_pause">Play or pause</string>
+    <string name="w_prev">Previous</string>
+    <string name="w_next">Next</string>
+    <string name="w_fav">Favorite</string>
+    <string name="w_play">Play</string>
+    <string name="w_pause">Pause</string>
+    <string name="w_unfav">Remove from favorites</string>
+    <string name="w_unknown">Unknown</string>
+    <string name="canal_musica">Music</string>
+    <string name="n_fav">Add to favorites</string>
+    <string name="n_unfav">Remove from favorites</string>
+    <string name="n_shuffle_on">Turn off shuffle</string>
+    <string name="n_shuffle_off">Turn on shuffle</string>
+</resources>

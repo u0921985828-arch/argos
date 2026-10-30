@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ListenBrainz (ui/ListenBrainzUi.kt, player/Scrobbler.kt). -->
+    <string name="lb_enable">Enviar escuchas a ListenBrainz</string>
+    <string name="lb_enable_help">Apagado por defecto. Solo salen del móvil artista, título, álbum y duración, y solo con tu token. Una canción cuenta al oír la mitad o 4 minutos.</string>
+    <string name="lb_token">Token de usuario</string>
+    <string name="lb_get_token">Saca tu token en listenbrainz.org/settings</string>
+    <string name="lb_open_browser">Abrir en el navegador</string>
+    <string name="lb_no_browser">No hay navegador para abrir listenbrainz.org/settings</string>
+    <string name="lb_check">Comprobar token</string>
+    <string name="lb_checking">Comprobando…</string>
+    <string name="lb_connected">Conectado como %1$s</string>
+    <string name="lb_bad_token">Token no válido</string>
+    <string name="lb_offline">No se pudo conectar con ListenBrainz. Prueba más tarde.</string>
+    <string name="lb_need_token">Pega tu token para empezar a enviar.</string>
+    <plurals name="lb_pending">
+        <item quantity="one">%d escucha pendiente de enviar</item>
+        <item quantity="many">%d escuchas pendientes de enviar</item>
+        <item quantity="other">%d escuchas pendientes de enviar</item>
+    </plurals>
+    <string name="lb_pending_none">No hay escuchas pendientes de enviar</string>
+    <string name="lb_bad_token_notice">ListenBrainz no acepta tu token: el envío queda en pausa. Revísalo en Ajustes → Tus escuchas.</string>
+</resources>
