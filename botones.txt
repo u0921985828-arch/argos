@@ -1,0 +1,278 @@
+== Inicio: 11 tocables
+  cambia (Acerca de Surco, Atrás, Carpetas, letras de internet y audios cortos) Ajustes
+  cambia (Atrás, Título, artista, álbum, género, año, carpeta… y también estado de ánimo, sello, compositor, comentario o cualquier otra etiqueta de texto. Sin importar tildes ni mayúsculas.) Buscar en cualquier etiqueta
+  cambia (Cuarta Banda, Favorita, Prueba Cuatro) Mezclar todo
+  cambia (0:20, 1 canción · 0 min, Aleatorio) Favoritas
+  cambia (0:20, 2 canciones · 0 min, Aleatorio) Más escuchadas
+  cambia (0:20, 2 canciones · 0 min, Aleatorio) D / Reproducir Disco de Prueba / Disco de Prueba / Otra Band
+  suena (la reproducción cambió) Reproducir Disco de Prueba
+  cambia (0:20, 2 canciones · 0 min, Aleatorio) S / Reproducir surco / surco / Cuarta Banda, Tercera Banda
+  cambia (Cuarta Banda, Prueba Cuatro) Reproducir surco
+  (ya no está) D / Reproducir Disco de Prueba / Disco de Prueba / Otra Band
+  cambia (Otra Banda, Prueba Dos) Reproducir Disco de Prueba
+== Biblioteca · Canciones: 19 tocables
+  cambia (Cuarta Banda, Ver en lista) Ver en carátulas
+  cambia (Atrás, Título, artista, álbum, género, año, carpeta… y también estado de ánimo, sello, compositor, comentario o cualquier otra etiqueta de texto. Sin importar tildes ni mayúsculas.) Buscar en cualquier etiqueta
+  cambia (Artista, Año, A–Z) Álbumes
+  cambia (1 canción · 0 min, Banda Surco, Tercera Banda) Artistas
+  cambia (4 canciones · 1 min, Ver en carátulas, surco) Carpetas
+  cambia       Reproducir
+  suena (la reproducción cambió) Aleatorio
+  (ya no está) S / Prueba Cuatro / Cuarta Banda · surco / 0:20 / Más opcion
+  (ya no está) Más opciones
+  (ya no está) D / Prueba Dos / Otra Banda · Disco de Prueba / 0:20 / Más o
+  (ya no está) Más opciones
+  (ya no está) S / Prueba Tres / Tercera Banda · surco / 0:20 / Más opcione
+  (ya no está) Más opciones
+  (ya no está) D / Prueba Uno / Banda Surco · Disco de Prueba / 0:20 / Más 
+  (ya no está) Más opciones
+  (ya no está) D / Prueba Dos / Otra Banda / Favorita / Reproducir o pausar
+  cambia (Añadida a favoritas, Deshacer) Favorita
+  cambia       Reproducir o pausar
+  cambia       Siguiente
+== Biblioteca · Álbumes: 17 tocables
+  cambia (2 canciones · 0 min, Reproducir, Ver en carátulas) Ver en lista
+  cambia (Atrás, Título, artista, álbum, género, año, carpeta… y también estado de ánimo, sello, compositor, comentario o cualquier otra etiqueta de texto. Sin importar tildes ni mayúsculas.) Buscar en cualquier etiqueta
+  cambia (Aleatorio, Cuarta Banda, Prueba Cuatro) Canciones
+  cambia (1 canción · 0 min, Banda Surco, Cuarta Banda) Artistas
+  cambia (4 canciones · 1 min) Carpetas
+  NADA         A–Z
+  cambia       Artista
+  cambia       Año
+  cambia       Recientes
+  (ya no está) D / Reproducir Disco de Prueba / Disco de Prueba / Otra Band
+  (ya no está) Reproducir Disco de Prueba
+  (ya no está) S / Reproducir surco / surco / Cuarta Banda, Tercera Banda
+  (ya no está) Reproducir surco
+  cambia (0:00, Aleatorio, Altavoz del móvil) D / Prueba Dos / Otra Banda / Favorita / Reproducir o pausar
+  cambia (Deshacer, Quitada de favoritas) Favorita
+  cambia       Reproducir o pausar
+  cambia (Banda Surco, Prueba Uno) Siguiente
+== Biblioteca · Artistas: 17 tocables
+  cambia (1 canción, Reproducir Banda Surco, Reproducir Cuarta Banda) Ver en carátulas
+  cambia (Atrás, Título, artista, álbum, género, año, carpeta… y también estado de ánimo, sello, compositor, comentario o cualquier otra etiqueta de texto. Sin importar tildes ni mayúsculas.) Buscar en cualquier etiqueta
+  cambia (Aleatorio, Prueba Cuatro, Prueba Dos) Canciones
+  cambia (2 canciones · 0 min, Artista, Año) Álbumes
+  cambia (4 canciones · 1 min, Reproducir, Ver en carátulas) Carpetas
+  (ya no está) D / Banda Surco / 1 canción · 0 min / Reproducir
+  (ya no está) Reproducir
+  (ya no está) S / Cuarta Banda / 1 canción · 0 min / Reproducir
+  (ya no está) Reproducir
+  (ya no está) D / Otra Banda / 1 canción · 0 min / Reproducir
+  (ya no está) Reproducir
+  (ya no está) S / Tercera Banda / 1 canción · 0 min / Reproducir
+  (ya no está) Reproducir
+  cambia (0:00, Aleatorio, Altavoz del móvil) D / Prueba Uno / Banda Surco / Favorita / Reproducir o pausa
+  cambia (Deshacer, Quitada de favoritas) Favorita
+  cambia (Otra Banda, Tercera Banda) Reproducir o pausar
+  cambia (Prueba Cuatro) Siguiente
+== Biblioteca · Carpetas: 11 tocables
+  cambia (4 canciones, Reproducir surco, Ver en lista) Ver en carátulas
+  cambia (Atrás, Título, artista, álbum, género, año, carpeta… y también estado de ánimo, sello, compositor, comentario o cualquier otra etiqueta de texto. Sin importar tildes ni mayúsculas.) Buscar en cualquier etiqueta
+  cambia (Aleatorio, D, Otra Banda) Canciones
+  cambia (2 canciones · 0 min, Artista, Año) Álbumes
+  cambia (1 canción, Banda Surco, D) Artistas
+  (ya no está) S / surco / 4 canciones · 1 min / Reproducir
+  (ya no está) Reproducir
+  cambia (0:01, Aleatorio, Altavoz del móvil) S / Prueba Cuatro / Cuarta Banda / Favorita / Reproducir o p
+  cambia (Añadida a favoritas, Deshacer) Favorita
+  cambia       Reproducir o pausar
+  cambia (Prueba Tres, Tercera Banda) Siguiente
+== Álbum: 12 tocables
+  cambia (Otra Banda) Reproducir
+  suena (vuelve a empezar) Aleatorio
+  suena (vuelve a empezar) D / Prueba Dos / Otra Banda · Disco de Prueba / 0:20 / Más o
+  cambia (A continuación, A la cola, A una lista) Más opciones
+  cambia (Banda Surco) D / Prueba Uno / Banda Surco · Disco de Prueba / 0:20 / Más 
+  cambia (A continuación, A la cola, A una lista) Más opciones
+  cambia (Artista, Año, BPM) Ordenar
+  cambia (Todo a la cola, Todo a una lista) Más
+  (ya no está) S / Prueba Tres / Tercera Banda / Favorita / Reproducir o pa
+  cambia (Añadida a favoritas, Deshacer) Favorita
+  cambia       Reproducir o pausar
+  (ya no está) Siguiente
+== Menú de canción: no se llegó a la pantalla (camino ['Biblioteca', 'Canciones', '@Más opciones'])
+== Etiquetas: 11 tocables
+  cambia (1 canción · 0 min, 4 grupos, A – Z) Artista / 4 / Cuarta Banda · Otra Banda · Tercera Banda
+  cambia (1 canción · 0 min, 4 grupos, A – Z) Artista del álbum / 4 / Cuarta Banda · Otra Banda · Tercera 
+  cambia (2 grupos, A – Z, Atrás) Álbum / 2 / surco · Disco de Prueba
+  cambia (1 canción · 0 min, 2 canciones · 0 min, 3 grupos) Género / 3 / Desconocido · Jazz · Rock
+  cambia (1 canción · 0 min, 2 grupos, A – Z) Estado de ánimo / 2 / tres96 · zorzal
+  cambia (1 canción · 0 min, 1 grupo, A – Z) Sello / 1 / sellonorte
+  cambia (1 canción · 0 min, 1987, 2 canciones · 0 min) Año / 3 / Sin año · 1987 · 2019
+  cambia (1 canción · 0 min, 1980 – 1989, 2 canciones · 0 min) Década / 3 / Sin año · 1980 – 1989 · 2010 – 2019
+  cambia (0:07, Aleatorio, Altavoz del móvil) D / Prueba Uno / Banda Surco / Favorita / Reproducir o pausa
+  cambia (Deshacer, Quitada de favoritas) Favorita
+  cambia (Sin año · 1980 – 1989 · 2010 – 2019, Sin año · 1987 · 2019) Reproducir o pausar
+== Grupo (Género): 11 tocables
+  NADA         A – Z
+  cambia       Más canciones
+  cambia (0:20, Aleatorio, Más) Jazz / 1 canción · 0 min / Reproducir
+  cambia (Otra Banda, Prueba Dos) Reproducir
+  cambia (0:20, Aleatorio, Banda Surco) Rock / 1 canción · 0 min / Reproducir
+  cambia (Banda Surco, Prueba Uno) Reproducir
+  cambia (0:20, Aleatorio, Cuarta Banda · surco) Desconocido / 2 canciones · 0 min / Reproducir
+  cambia (Cuarta Banda, Prueba Cuatro, S) Reproducir
+  (ya no está) D / Prueba Uno / Banda Surco / Favorita / Reproducir o pausa
+  cambia (Deshacer, Quitada de favoritas) Favorita
+  cambia       Reproducir o pausar
+== Listas: 11 tocables
+  cambia (Cancelar, Cerrar hoja, Controlador de arrastre) Lista nueva
+  cambia (0 canciones · 0 min, Aleatorio, Atrás) Favoritas / 0 canciones
+  cambia (0:20, 4 canciones · 1 min, Aleatorio) Más escuchadas / 4 canciones
+  cambia (0:20, 4 canciones · 1 min, Aleatorio) Escuchadas hace poco / 4 canciones
+  cambia (0:20, 4 canciones · 1 min, Aleatorio) Añadidas hace poco / 4 canciones
+  cambia (0 canciones · 0 min, Aleatorio, Atrás) Sin escuchar / 0 canciones
+  abre com.google.android.documentsui Importar lista M3U / De otro reproductor o de un ordenador
+  cambia (0:19, Aleatorio, Altavoz del móvil) S / Prueba Cuatro / Cuarta Banda / Favorita / Reproducir o p
+  cambia (1 canción, Añadida a favoritas, Deshacer) Favorita
+  cambia (Prueba Tres, Tercera Banda) Reproducir o pausar
+  (ya no está) Siguiente
+== Favoritas: 9 tocables
+  cambia       Reproducir
+  suena (la reproducción cambió) Aleatorio
+  suena (la reproducción cambió) S / Prueba Cuatro / Cuarta Banda · surco / 0:20 / Más opcion
+  cambia (A continuación, A la cola, A una lista) Más opciones
+  cambia (Artista, Año, BPM) Ordenar
+  cambia (Todo a la cola, Todo a una lista) Más
+  (ya no está) S / Prueba Tres / Tercera Banda / Favorita / Reproducir o pa
+  cambia (0 canciones · 0 min, Deshacer, Nada por aquí todavía.) Favorita
+  cambia       Reproducir o pausar
+== Buscar: 3 tocables
+  cambia (0 CANCIONES ENCONTRADAS, Borrar, v) S / Prueba Cuatro / Cuarta Banda / Favorita / Reproducir o p
+  cambia (0:20, 4 CANCIONES ENCONTRADAS, Banda Surco · Disco de Prueba) Favorita
+  cambia (0 CANCIONES ENCONTRADAS, Borrar, m) Reproducir o pausar
+== Ajustes: 9 tocables
+  cambia (4 de 4 canciones lo tienen (de sus etiquetas o medido por Surco); con él todo suena 6 dB más bajo para no saturar., Altavoz del móvil, Apagado) Sonido / Ecualizador, ReplayGain y calidad de salida
+  cambia (1,00× · tono mantenido, 12 s, 2 s) Reproducción / Fundidos, velocidad, temporizador y silencios
+  cambia (< 1 min, < 30 s, Analizar BPM, tonalidad y volumen) Biblioteca / Carpetas, letras de internet y audios cortos
+  cambia (Azul, Barra con forma de onda, Cobre) Interfaz / Color, Inicio, detalles técnicos y pantalla
+  cambia (1, 12, 2) Tus escuchas / Lo que más suena, en cifras
+  cambia (Formatos, MP3, AAC, FLAC, ALAC, Opus, Vorbis y WAV (también en coma flotante). Letras de la etiqueta LYRICS o de un .lrc al lado., Privacidad) Acerca de Surco / Privacidad y versión
+  cambia (0:03, Aleatorio, Altavoz del móvil) S / Prueba Cuatro / Cuarta Banda / Favorita / Reproducir o p
+  cambia (Añadida a favoritas, Deshacer) Favorita
+  cambia       Reproducir o pausar
+== Ajustes · Sonido: 10 tocables
+  cambia (+15, +4, 0) Ecualizador y efectos / Apagado
+  NADA         Apagado
+  cambia (Salida: coma flotante 32 bits → coma flotante · 192 kHz · ReplayGain) Por pista
+  cambia       Por álbum
+  cambia       Un ecualizador para cada salida / Cada auricular, altavoz o 
+  NADA         Efectos de sonido del móvil / Xiaomi Sound, Dolby…: actúan d
+  cambia       Bit-perfect por USB / Con un DAC USB: cada canción a su frec
+  cambia (0:08, Aleatorio, Anterior) S / Prueba Cuatro / Cuarta Banda / Favorita / Reproducir o p
+  cambia (Deshacer, Quitada de favoritas) Favorita
+  cambia       Reproducir o pausar
+== Ecualizador: 9 tocables
+  cambia       Plano
+  cambia (+0.5, +2, +4) Graves
+  cambia (-1, Preamplificación -6,0 dB) Graves y agudos
+  cambia (+0.5, +6, Preamplificación -6,5 dB) Agudos
+  cambia (-6,5 dB, Poner a 0, Preamplificación) Preamplificación automática / Baja el volumen lo que suben l
+  cambia (Apagado) Usar el ecualizador
+  cambia (0:12, Aleatorio, Altavoz del móvil) S / Prueba Cuatro / Cuarta Banda / Favorita / Reproducir o p
+  cambia (Añadida a favoritas, Deshacer) Favorita
+  cambia       Reproducir o pausar
+== Ajustes · Reproducción: 13 tocables
+  NADA         No
+  cambia (Dentro del mismo disco no se funde: los directos y los discos conceptuales siguen de un tirón., Respetar los discos sin pausas) 2 s
+  cambia       4 s
+  cambia       6 s
+  cambia       8 s
+  cambia       12 s
+  cambia       Fundido al pausar y reanudar / Sin golpes de volumen al puls
+  cambia       Saltar silencios / Recorta los silencios largos dentro de la
+  cambia (1,00×, Cerrar hoja, Controlador de arrastre) Velocidad / 1,00× · tono mantenido
+  cambia (15 minutos, 30 minutos, 45 minutos) Temporizador de apagado / Pausa a los minutos que elijas o a
+  cambia (0:17, Aleatorio, Altavoz del móvil) S / Prueba Cuatro / Cuarta Banda / Favorita / Reproducir o p
+  cambia (Deshacer, Quitada de favoritas) Favorita
+  cambia       Reproducir o pausar
+== Ajustes · Biblioteca: 11 tocables
+  NADA         No
+  cambia       < 30 s
+  cambia       < 1 min
+  cambia (Acerca de Surco, Ajustes, Color, Inicio, detalles técnicos y pantalla) Volver a leer todas las etiquetas / Útil si has editado etiq
+  cambia       Analizar BPM, tonalidad y volumen / Para las canciones a las
+  cambia       Letras de internet (LRCLIB) / Si una canción no trae letra, 
+  abre com.google.android.documentsui Guardar copia de seguridad / Favoritas, listas, escuchas, aj
+  abre com.google.android.documentsui Restaurar copia… / Sustituye lo de este móvil por una copia 
+  cambia (0:19, Aleatorio, Altavoz del móvil) S / Prueba Cuatro / Cuarta Banda / Favorita / Reproducir o p
+  cambia (Añadida a favoritas, Deshacer) Favorita
+  cambia       Reproducir o pausar
+== Ajustes · Interfaz: 14 tocables
+  cambia       Azul
+  cambia       Verde
+  cambia       Rosa
+  cambia       Violeta
+  cambia       Ámbar
+  NADA         Color fijo
+  cambia       Del disco
+  cambia       Del sistema
+  cambia       Detalles técnicos / Formato, bits, frecuencia y cómo sale el
+  cambia       Barra con forma de onda / La forma de la canción en «Sonando
+  cambia       Pantalla encendida / Mientras «Sonando» está abierta (para l
+  cambia (0:19, Aleatorio, Anterior) S / Prueba Cuatro / Cuarta Banda / Favorita / Reproducir o p
+  cambia (Deshacer, Quitada de favoritas) Favorita
+  cambia       Reproducir o pausar
+== Ajustes · Tus escuchas: 12 tocables
+  cambia (0 canciones · 0 min, Aleatorio, Artista) 1 / Cuarta Banda / 4
+  cambia (0 canciones · 0 min, Aleatorio, Artista) 2 / Otra Banda / 4
+  cambia (0 canciones · 0 min, Aleatorio, Artista) 3 / Banda Surco / 3
+  cambia (0 canciones · 0 min, Aleatorio, Artista) 4 / Tercera Banda / 1
+  suena (estado 2 → 3) 1 / Prueba Cuatro / 4
+  cambia (D)   2 / Prueba Dos / 4
+  cambia       3 / Prueba Uno / 3
+  cambia (S)   4 / Prueba Tres / 1
+  cambia (13)  Enviar escuchas a ListenBrainz
+  (ya no está) S / Prueba Cuatro / Cuarta Banda / Favorita / Reproducir o p
+  cambia (Añadida a favoritas, Deshacer) Favorita
+  cambia       Reproducir o pausar
+== Ajustes · Acerca de: 3 tocables
+  cambia (0:00, Aleatorio, Anterior) S / Prueba Tres / Tercera Banda / Favorita / Reproducir o pa
+  cambia (Deshacer, Quitada de favoritas) Favorita
+  cambia       Reproducir o pausar
+== Sonando: 11 tocables
+  cambia (0 canciones · 0 min, Ajustes, Biblioteca) Cerrar
+  cambia (Altavoces, teles y receptores de esta wifi, Buscando…, Cerrar hoja) Enviar a un altavoz o una tele
+  cambia (A continuación, A la cola, A una lista) Más
+  cambia (0 canciones · 0 min, Artista, Atrás) Tercera Banda — surco
+  cambia (Añadida a favoritas, Deshacer, Quitar de favoritas) Favorita
+  cambia       Aleatorio
+  suena (estado 2 → 3) Anterior
+  suena (estado 3 → 2) Reproducir o pausar
+  suena (la reproducción cambió) Repetir
+  cambia (Esta canción no tiene letra.
+
+Surco lee la etiqueta LYRICS del archivo (también en LRC sincronizado) y un .lrc con el mismo nombre; en lrclib.net tampoco está.) Letra / Letra
+  cambia (1 canción · 0 min, Cerrar hoja, Controlador de arrastre) Cola / Cola
+== Sonando · Más: 10 tocables
+  cambia (0:12, Aleatorio, Anterior) Cerrar hoja
+  cambia (+0.5, +15, +2) Ecualizador
+  cambia (15 minutos, 30 minutos, 45 minutos) Temporizador
+  cambia (1,00×, Hecho, Mantener el tono) Velocidad
+  cambia (0:12, Aleatorio, Anterior) A continuación
+  cambia (0:12, Aleatorio, Anterior) A la cola
+  cambia (0:00, Aleatorio, Anterior) Radio de la canción
+  cambia (+ Lista nueva…, Añadir a una lista, Cancelar) A una lista
+  (ya no está) Quitar favorita
+  cambia (0 canciones · 0 min, Aleatorio, Atrás) Ir al álbum
+== Cola: 10 tocables
+  cambia (0:11, Aleatorio, Anterior) Cerrar hoja
+  cambia (Cancelar, Guardar la cola como lista, Nombre) Guardar
+  cambia (1 canción · 0 min) Vaciar
+  (ya no está) Mover / S / Prueba Tres / Tercera Banda / Quitar de la cola
+  (ya no está) Quitar de la cola
+  suena (estado 2 → 3) Mover / D / Prueba Uno / Banda Surco
+  (ya no está) Mover / D / Prueba Dos / Otra Banda / Quitar de la cola
+  (ya no está) Quitar de la cola
+  (ya no está) Mover / S / Prueba Cuatro / Cuarta Banda / Quitar de la cola
+  (ya no está) Quitar de la cola
+
+207 botones pulsados · 0 caídas · 7 sin efecto visible
+  sin efecto: Biblioteca · Álbumes › A–Z
+  sin efecto: Grupo (Género) › A – Z
+  sin efecto: Ajustes · Sonido › Apagado
+  sin efecto: Ajustes · Sonido › Efectos de sonido del móvil / Xiaomi Sound, Dolby…: actúan d
+  sin efecto: Ajustes · Reproducción › No
+  sin efecto: Ajustes · Biblioteca › No
+  sin efecto: Ajustes · Interfaz › Color fijo

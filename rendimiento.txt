@@ -1,0 +1,11 @@
+MediaStore: 10004 canciones (esperadas 10004) en 66 s
+arranque en frío (biblioteca sin leer): 2790 ms
+lectura de etiquetas de 10004 canciones: 507 s (con el arranque)
+  etiquetas: 10001 canciones en 495891 ms con 4 lectores; leer 195 ms por canción (suma 1957814 ms)
+arranque en frío (con caché): 2025 ms
+desplazar 15 veces la lista: Total frames rendered: 63, Janky frames: 62 (98.41%), 90th percentile: 200ms, 99th percentile: 250ms
+memoria: TOTAL PSS:   143395            TOTAL RSS:   249960       TOTAL SWAP PSS:      379
+  desglose: Java Heap 27332 · Native Heap 23340 · Code 4536 · Stack 2540 · Graphics 0 · Private Other 74584 · System 11063 · 
+memoria tras soltar: TOTAL PSS:   149355            TOTAL RSS:   258672       TOTAL SWAP PSS:      206
+  desglose: Java Heap 28208 · Native Heap 23492 · Code 4540 · Stack 2564 · Graphics 0 · Private Other 79280 · System 11271 · 
+sin caídas ni ANR

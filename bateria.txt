@@ -1,0 +1,7 @@
+en pausa, pantalla apagada: 0.2 % de un núcleo (52 ms de procesador en 30 s)
+MP3 320 kbps sonando, pantalla apagada: 7.4 % de un núcleo (4426 ms de procesador en 60 s)
+FLAC 24 bits/96 kHz sonando, pantalla apagada: 5.7 % de un núcleo (3405 ms de procesador en 60 s)
+FLAC 24/96 con ecualizador, pantalla apagada: 8.3 % de un núcleo (5008 ms de procesador en 60 s)
+FLAC sonando con Surco abierto y la pantalla encendida: 20.4 % de un núcleo (6116 ms de procesador en 30 s)
+en pausa otra vez, Surco en segundo plano: 0.2 % de un núcleo (56 ms de procesador en 30 s)
+(build de depuración compilado con -m speed; emulador x86_64 sin audio real)
