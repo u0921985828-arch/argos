@@ -66,6 +66,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -402,7 +403,10 @@ fun SongRow(t: Track, number: Int?, playing: Boolean, onClick: () -> Unit, onLon
 
 @Composable
 fun TopBar(title: String, subtitle: String, onBack: (() -> Unit)?, actions: @Composable RowScope.() -> Unit = {}) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    // Por encima de lo que se desplaza debajo: Compose quita a cada nodo para TalkBack lo que tapa
+    // otro pintado después, y un elemento medio salido de la lista (sin recortar en semántica)
+    // dejaba «Atrás» y el interruptor del ecualizador en 37 dp con la letra grande.
+    Row(Modifier.zIndex(1f).fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.library_back)) }
         else Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
